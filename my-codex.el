@@ -6,6 +6,10 @@
 (require 'compile)
 (require 'easymenu)
 
+(with-eval-after-load 'vterm
+  (define-key vterm-mode-map (kbd "S-<insert>") #'vterm-yank)
+  (define-key vterm-mode-map (kbd "C-c C-t") #'vterm-copy-mode))
+
 (defgroup my-codex nil
   "Customisation options for the Codex development tool."
   :group 'convenience
@@ -61,12 +65,13 @@
       (project-root project)
     default-directory))
 
-(defun my/codex-two-column-layout-with-command (codex-command)
-  "Open a two-column layout and run CODEX-COMMAND in vterm if not running."
+(defun my/codex-two-column-layout-with-command (codex-command &optional focus-term)
+  "Open a two-column layout and run CODEX-COMMAND in vterm if not running.
+If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
   (let ((root (my/codex-project-root)))
     (run-at-time
      0.05 nil
-     (lambda (cmd root-dir)
+     (lambda (cmd root-dir f-term)
        (let ((required-width (+ my/codex-left-width my/codex-min-right-width))
              (existing-buf (get-buffer my/codex-buffer-name))
              (default-directory root-dir))
@@ -99,8 +104,10 @@
                  (vterm-send-string cmd)
                  (vterm-send-return))))
 
-           (select-window edit-window))))
-     codex-command root)))
+           ;; Only switch focus back to the editor if f-term wasn't requested
+           (unless f-term
+             (select-window edit-window)))))
+     codex-command root focus-term)))
 
 (defun my/codex-read-only ()
   "Show Codex, starting it in read-only mode if needed."
@@ -113,9 +120,9 @@
   (my/codex-two-column-layout-with-command my/codex-workspace-command))
 
 (defun my/codex-resume ()
-  "Show Codex, resuming a previous session if needed."
+  "Show Codex, resuming a previous session if needed and focusing the window."
   (interactive)
-  (my/codex-two-column-layout-with-command my/codex-resume-command))
+  (my/codex-two-column-layout-with-command my/codex-resume-command t))
 
 (defun my/codex-buffer ()
   "Return the Codex vterm buffer, or raise an error."
