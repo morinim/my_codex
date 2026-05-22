@@ -35,7 +35,7 @@ The goal isn't to replace Emacs or the usual development workflow. Codex stays c
 
 - Emacs with lexical binding support.
 - [`vterm`](https://github.com/akermu/emacs-libvterm).
-- OpenAI Codex CLI available as `codex`.
+- OpenAI [Codex CLI][codex] available as `codex`.
 - Git, for the Git-related commands.
 
 The package uses standard Emacs libraries:
@@ -240,4 +240,6 @@ This is usually more reliable and keeps the interaction cleaner.
 
 
 
-[license]: https://github.com/morinim/my_codex/blob/master/LICENSE
+[codex]: https://github.com/openai/codex
+[license]: https://github.com/morinim/my_codex/blob/main/LICENSE
+[mpl2]: https://www.mozilla.org/MPL/2.0/
