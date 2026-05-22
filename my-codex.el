@@ -176,10 +176,8 @@
 (defun my/git-repository-p ()
   "Return non-nil if `default-directory' is inside a Git repository."
   (and (executable-find "git")
-       (let ((status (call-process "git" nil 0 nil
-                                   "rev-parse" "--is-inside-work-tree")))
-         (and (integerp status)
-              (zerop status)))))
+       (with-temp-buffer
+         (zerop (call-process "git" nil t nil "rev-parse" "--is-inside-work-tree")))))
 
 (defun my/ensure-git-repository ()
   "Raise an error unless `default-directory' is inside a Git repository."
