@@ -64,20 +64,17 @@
 (defun my/codex-two-column-layout-with-command (codex-command)
   "Open a two-column layout and run CODEX-COMMAND in vterm if not running."
   (let ((root (my/codex-project-root)))
-    ;; Defer the entire layout engine to ensure the GUI menu loop has finished collapsing
     (run-at-time
-     0 nil
+     0.05 nil
      (lambda (cmd root-dir)
        (let ((required-width (+ my/codex-left-width my/codex-min-right-width))
              (existing-buf (get-buffer my/codex-buffer-name))
              (default-directory root-dir))
 
+         ;; Request the resize; if it finishes late, condition-case catches it safely below
          (when (< (frame-width) required-width)
            (set-frame-width (selected-frame) required-width)
            (redisplay t))
-
-         (when (< (frame-width) required-width)
-           (user-error "Frame is too narrow: need at least %d columns" required-width))
 
          (when (and existing-buf
                     (not (get-buffer-process existing-buf)))
@@ -87,9 +84,11 @@
          (delete-other-windows)
 
          (let ((edit-window (selected-window))
+               ;; Fall back to a normal split if the requested width is not available yet.
                (term-window (condition-case nil
                                 (split-window-right my/codex-left-width)
-                              (error (split-window-right)))))
+                              (error
+                               (split-window-right)))))
            (select-window term-window)
 
            (if (and existing-buf (get-buffer-process existing-buf))
