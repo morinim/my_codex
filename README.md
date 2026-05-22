@@ -2,7 +2,7 @@
 
 `my-codex.el` is a small Emacs integration for running the OpenAI Codex CLI inside a `vterm` buffer.
 
-It is designed for a simple two-column workflow:
+It's designed for a simple two-column workflow:
 
 - source code on the left, fixed to 80 columns;
 - Codex on the right, running inside Emacs;
@@ -16,7 +16,7 @@ The goal isn't to replace Emacs or the usual development workflow. Codex stays c
 
 - Start Codex in a two-column Emacs layout.
 - Keep the editing window at a configurable width.
-- Automatically resize the frame when it is too narrow.
+- Automatically resize the frame when it's too narrow.
 - Reuse an existing Codex `vterm` buffer when possible.
 - Start Codex in read-only or workspace-write mode.
 - Resume a previous Codex session.
