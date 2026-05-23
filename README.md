@@ -1,16 +1,26 @@
 # my-codex.el
 
+```
+┌───────────────┬───────────────┐
+│ code          │ codex         │
+│ 1  </>        │ >_            │
+│ 2  ─────      │ ─────────     │
+│ 3  ───────    │ ─────         │
+│ 4  }          │ ▌             │
+└───────────────┴───────────────┘
+```
+
+
 `my-codex.el` is a small Emacs integration for running the OpenAI Codex CLI inside a `vterm` buffer.
 
-It's designed for a simple two-column workflow:
+It is designed around a simple two-column workflow:
 
-- source code on the left, fixed to 80 columns;
+- source code on the left, fixed at 80 columns;
 - Codex on the right, running inside Emacs;
 - read-only mode by default;
 - explicit commands for reviewing files, diffs, staged changes, compiler errors, and commit messages.
 
-The goal isn't to replace Emacs or the usual development workflow. Codex stays close at hand as an interactive assistant, while Emacs remains the main editing and review environment.
-
+The goal is not to replace Emacs or your usual development workflow. Instead, Codex stays close at hand as an interactive assistant, while Emacs remains the main environment for editing, reviewing, and understanding code.
 
 ## Features
 
@@ -48,22 +58,29 @@ The package uses standard Emacs libraries:
 
 ## Installation
 
+## Installation
+
 Clone the repository somewhere in your Emacs load path, for example:
 
 ```sh
-git clone https://github.com/morinim/my_codex/my-codex.el.git ~/.emacs.d/lisp/my-codex.el
+git clone https://github.com/morinim/my_codex.git ~/.emacs.d/lisp/my_codex
 ```
 
 Then add it to your Emacs configuration:
 
-```
-(add-to-list 'load-path "~/.emacs.d/lisp/my-codex.el")
+```elisp
+(add-to-list 'load-path "~/.emacs.d/lisp/my_codex")
 (require 'my-codex)
 ```
 
-Alternatively, copy `my-codex.el` directly into your personal Emacs configuration directory and load it from there.
+Alternatively, copy `my-codex.el` directly into a directory that is already in your Emacs `load-path`, then load it with:
 
-Basic usage
+```elisp
+(require 'my-codex)
+```
+
+
+## Basic usage
 
 Press:
 
