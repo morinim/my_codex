@@ -28,7 +28,9 @@ Codex stays close at hand as an assistant, while Emacs remains the main environm
 - Reuse an existing Codex `vterm` buffer.
 - Start Codex in read-only or workspace-write mode.
 - Resume a previous Codex session.
-- Send the selected region to Codex.
+- Send selected code to Codex with a directional shortcut.
+- Insert selected Codex text back into the coding window.
+- Toggle focus between the coding window and the Codex terminal.
 - Ask Codex to inspect the current file.
 - Review current or staged Git diffs.
 - Draft commit messages from staged changes.
@@ -100,17 +102,20 @@ Workspace-write mode allows Codex to modify files, while still asking for approv
 
 The package installs a prefix map on `F8`.
 
-| Key  | Command | Description |
-| ---  | --- | --- |
-| F8 o | `my/codex-read-only` | Start Codex in read-only mode |
-| F8 w | `my/codex-workspace` | Start Codex with workspace-write access |
+| Key | Command | Description |
+| --- | --- | --- |
+| F8 o | `my/codex-read-only` | Show/start Codex in read-only mode |
+| F8 w | `my/codex-workspace` | Show/start Codex with workspace-write access |
 | F8 r | `my/codex-resume` | Resume a previous Codex session |
-| F8 s | `my/codex-send-region` | Send the selected region |
+| F8 s | `my/codex-send-region` | Send the selected region to Codex |
+| F8 Right | `my/codex-send-region` | Directional shortcut for sending selected code to Codex |
+| F8 Left | `my/codex-insert-selection-into-code` | Insert selected Codex text into the coding window |
+| F8 TAB | `my/codex-toggle-focus` | Toggle focus between code and Codex |
 | F8 f | `my/codex-send-current-file` | Ask Codex to inspect the current file |
 | F8 g | `my/codex-send-git-diff` | Ask Codex to review the current Git diff |
 | F8 G | `my/codex-send-git-staged-diff` | Ask Codex to review the staged Git diff |
-| F8 m | `my/codex-commit-message-from-diff` | Draft a commit message |
-| F8 e | `my/codex-explain-region-as-error` | Explain a selected error |
+| F8 m | `my/codex-commit-message-from-diff` | Draft a commit message from staged changes |
+| F8 e | `my/codex-explain-region-as-error` | Explain a selected compiler or test error |
 | F8 i | `my/codex-open-project-instructions` | Open project instruction files |
 | F8 ? | `my/codex-help` | Show help |
 
@@ -119,6 +124,8 @@ The package also binds:
 | Key | Command | Description |
 | --- | --- | --- |
 | F7 | `my/codex-project-build` | Run the configured build command |
+| Shift Insert | `vterm-yank` | Paste into `vterm` |
+| C-c C-t | `vterm-copy-mode` | Enter `vterm` copy mode |
 
 ## Two-column layout
 
@@ -203,20 +210,27 @@ approvals_reviewer = "user"
 
 This allows Codex to inspect the project, but requires approval before modifying files.
 
+
 ## Typical workflow
 
 - Start Codex: `F8 o`
 - Inspect the current file: `F8 f`
+- Send selected code to Codex: `F8 Right`
+- Insert selected Codex text back into code: `F8 Left`
 - Review the current diff: `F8 g`
 - Review staged changes: `F8 G`
 - Draft a commit message: `F8 m`
 - Build the project: `F7`
 
+
 ## Notes
 
-Use `F8 s` for small snippets.
+Use `F8 s` / `F8 Right` for small snippets.
 
 For larger reviews, prefer `F8 f`, `F8 g`, or `F8 G`. These commands ask Codex to inspect files or Git diffs directly, instead of pasting large amounts of text into the terminal.
+
+Send/review commands expect a running Codex session. Start one first with `F8 o`, `F8 w`, or `F8 r`.
+
 
 ## Licence
 
