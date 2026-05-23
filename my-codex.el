@@ -239,25 +239,88 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
         (find-file (expand-file-name file root))
       (user-error "No project instruction file found"))))
 
+(defun my/codex-back-to-code ()
+  "Move focus to the most likely coding window."
+  (interactive)
+  (let ((codex-window (get-buffer-window my/codex-buffer-name t)))
+    (unless codex-window
+      (user-error "No visible Codex window"))
+    (let ((code-window (next-window codex-window nil t)))
+      (if (and code-window
+               (not (eq code-window codex-window)))
+          (select-window code-window)
+        (user-error "No coding window found")))))
+
+(defun my/codex-toggle-focus ()
+  "Toggle focus between the Codex vterm and the coding window."
+  (interactive)
+  (let ((codex-window (get-buffer-window my/codex-buffer-name t)))
+    (cond
+     ((not codex-window)
+      (user-error "No visible Codex window"))
+     ((eq (selected-window) codex-window)
+      (my/codex-back-to-code))
+     (t
+      (select-window codex-window)))))
+
+(defun my/codex-code-window ()
+  "Return the most likely coding window associated with Codex."
+  (let ((codex-window (get-buffer-window my/codex-buffer-name t)))
+    (unless codex-window
+      (user-error "No visible Codex window"))
+    (let ((code-window (next-window codex-window nil t)))
+      (unless (and code-window
+                   (not (eq code-window codex-window)))
+        (user-error "No coding window found"))
+      code-window)))
+
+(defun my/codex-selected-text ()
+  "Return selected text from the Codex buffer."
+  (unless (eq (current-buffer) (get-buffer my/codex-buffer-name))
+    (user-error "Current buffer is not the Codex buffer"))
+
+  (unless (use-region-p)
+    (user-error "No active region"))
+
+  (filter-buffer-substring (region-beginning) (region-end)))
+
+(defun my/codex-insert-selection-into-code ()
+  "Insert selected Codex text into the coding window."
+  (interactive)
+  (let ((text (my/codex-selected-text))
+        (code-window (my/codex-code-window)))
+    (with-selected-window code-window
+      (unless (bolp)
+        (newline))
+      (insert text)
+      (unless (bolp)
+        (newline)))))
+
 (defun my/codex-help ()
   "Show Codex key bindings."
   (interactive)
   (message
-   "Codex: F7=build, F8 o=show/start read-only, w=show/start workspace, r=resume, s=send region, f=file, g=diff, G=staged diff, m=commit message, e=explain error, i=instructions, ?=help"))
+   "Codex: F7=build, F8 o=show/start read-only, w=show/start workspace, r=resume, s/right=send region, left=insert selected Codex text, f=file, g=diff, G=staged diff, m=commit message, e=explain error, i=instructions, TAB=toggle focus, ?=help"))
 
 (define-prefix-command 'my/codex-map)
 (global-set-key (kbd "<f8>") 'my/codex-map)
+
+(define-key vterm-mode-map (kbd "<f8>") 'my/codex-map)
 
 (define-key my/codex-map (kbd "o") #'my/codex-read-only)
 (define-key my/codex-map (kbd "w") #'my/codex-workspace)
 (define-key my/codex-map (kbd "r") #'my/codex-resume)
 (define-key my/codex-map (kbd "s") #'my/codex-send-region)
+(define-key my/codex-map (kbd "<right>") #'my/codex-send-region)
+(define-key my/codex-map (kbd "<left>") #'my/codex-insert-selection-into-code)
 (define-key my/codex-map (kbd "f") #'my/codex-send-current-file)
 (define-key my/codex-map (kbd "g") #'my/codex-send-git-diff)
 (define-key my/codex-map (kbd "G") #'my/codex-send-git-staged-diff)
 (define-key my/codex-map (kbd "m") #'my/codex-commit-message-from-diff)
 (define-key my/codex-map (kbd "e") #'my/codex-explain-region-as-error)
 (define-key my/codex-map (kbd "i") #'my/codex-open-project-instructions)
+(define-key my/codex-map (kbd "TAB") #'my/codex-toggle-focus)
+(define-key my/codex-map (kbd "<tab>") #'my/codex-toggle-focus)
 (define-key my/codex-map (kbd "?") #'my/codex-help)
 
 (defun my/codex-project-build ()
