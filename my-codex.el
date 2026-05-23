@@ -1,14 +1,12 @@
 ;;; my-codex.el --- Codex integration -*- lexical-binding: t; -*-
 
-(require 'seq)
-(require 'project)
-(require 'vterm)
 (require 'compile)
 (require 'easymenu)
+(require 'project)
+(require 'seq)
+(require 'subr-x)
 
-(with-eval-after-load 'vterm
-  (define-key vterm-mode-map (kbd "S-<insert>") #'vterm-yank)
-  (define-key vterm-mode-map (kbd "C-c C-t") #'vterm-copy-mode))
+;; No (require 'vterm) here. It will be auto-loaded on demand!
 
 (defgroup my-codex nil
   "Customisation options for the Codex development tool."
@@ -72,6 +70,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
     (run-at-time
      0.05 nil
      (lambda (cmd root-dir f-term)
+       (require 'vterm)
        (let ((required-width (+ my/codex-left-width my/codex-min-right-width))
              (existing-buf (get-buffer my/codex-buffer-name))
              (default-directory root-dir))
@@ -140,6 +139,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
     (run-at-time
      0 nil
      (lambda (buf str)
+       (require 'vterm)
        (when (buffer-live-p buf)
          (if-let ((window (get-buffer-window buf t)))
              (select-window window)
@@ -152,13 +152,21 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
      buffer prompt)))
 
 (defun my/codex-send-region (beg end)
-  "Send the selected region to the Codex vterm buffer."
+  "Send the selected region to the Codex vterm buffer with exact file context."
   (interactive "r")
   (unless (use-region-p)
     (user-error "No active region"))
-  (my/codex-send-prompt
-   (format "Please review this code and report findings:\n\n%s"
-           (buffer-substring-no-properties beg end))))
+  (let* ((root (my/codex-project-root))
+         (file (when buffer-file-name (file-relative-name buffer-file-name root)))
+         (line-start (line-number-at-pos beg))
+         (line-end (line-number-at-pos (max beg (1- end))))
+         (context (if file
+                      (format "In file `%s` (lines %d-%d):" file line-start line-end)
+                    "From an unnamed buffer:")))
+    (my/codex-send-prompt
+     (format "%s\n\nPlease review this code and report findings:\n\n%s"
+             context
+             (buffer-substring-no-properties beg end)))))
 
 (defun my/save-current-buffer-if-file ()
   "Save the current file-visiting buffer if it has unsaved changes."
@@ -296,20 +304,25 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
       (unless (bolp)
         (newline)))))
 
+(defun my/codex-ask (prompt)
+  "Prompt the user in the minibuffer and send the query straight to Codex."
+  (interactive "sAsk Codex: ")
+  (when (string-empty-p (string-trim prompt))
+    (user-error "Prompt cannot be empty"))
+  (my/codex-send-prompt prompt))
+
 (defun my/codex-help ()
   "Show Codex key bindings."
   (interactive)
   (message
-   "Codex: F7=build, F8 o=show/start read-only, w=show/start workspace, r=resume, s/right=send region, left=insert selected Codex text, f=file, g=diff, G=staged diff, m=commit message, e=explain error, i=instructions, TAB=toggle focus, ?=help"))
+   "Codex: F7=build, F8 o=show/start read-only, w=show/start workspace, r=resume, a=ask, s/right=send region, left=insert selected Codex text, f=file, g=diff, G=staged diff, m=commit message, e=explain error, i=instructions, TAB=toggle focus, ?=help"))
 
 (define-prefix-command 'my/codex-map)
-(global-set-key (kbd "<f8>") 'my/codex-map)
-
-(define-key vterm-mode-map (kbd "<f8>") 'my/codex-map)
 
 (define-key my/codex-map (kbd "o") #'my/codex-read-only)
 (define-key my/codex-map (kbd "w") #'my/codex-workspace)
 (define-key my/codex-map (kbd "r") #'my/codex-resume)
+(define-key my/codex-map (kbd "a") #'my/codex-ask)
 (define-key my/codex-map (kbd "s") #'my/codex-send-region)
 (define-key my/codex-map (kbd "<right>") #'my/codex-send-region)
 (define-key my/codex-map (kbd "<left>") #'my/codex-insert-selection-into-code)
@@ -323,13 +336,29 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
 (define-key my/codex-map (kbd "<tab>") #'my/codex-toggle-focus)
 (define-key my/codex-map (kbd "?") #'my/codex-help)
 
+(with-eval-after-load 'vterm
+  (define-key vterm-mode-map (kbd "S-<insert>") #'vterm-yank)
+  (define-key vterm-mode-map (kbd "C-c C-t") #'vterm-copy-mode)
+  (define-key vterm-mode-map (kbd "<f8>") 'my/codex-map))
+
 (defun my/codex-project-build ()
   "Run the project build command with `compile'."
   (interactive)
   (let ((default-directory (my/codex-project-root)))
     (compile my/codex-project-build-command)))
 
-(global-set-key (kbd "<f7>") #'my/codex-project-build)
+(defvar my-codex-global-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "<f7>") #'my/codex-project-build)
+    (define-key map (kbd "<f8>") 'my/codex-map)
+    map)
+  "Keymap for `my-codex-global-mode'.")
+
+(define-minor-mode my-codex-global-mode
+  "Global minor mode for seamless Codex integration."
+  :global t
+  :group 'my-codex
+  :keymap my-codex-global-mode-map)
 
 (easy-menu-define my/codex-menu nil
   "Menu for Codex commands."
@@ -340,6 +369,8 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
      :help "Show Codex, starting it with workspace write access if needed"]
     ["Resume session" my/codex-resume
      :help "Resume a previous Codex session"]
+	["Ask Codex..." my/codex-ask
+	 :help "Prompt for a question and send it to Codex"]
     "---"
     ["Send selected region" my/codex-send-region
      :active (use-region-p)
