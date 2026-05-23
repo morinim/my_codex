@@ -63,19 +63,28 @@
       (project-root project)
     default-directory))
 
+(defun my/codex-resize-window-body-width (window target-width)
+  "Resize WINDOW so its body is TARGET-WIDTH columns, if possible."
+  (dotimes (_ 5)
+    (let ((delta (- target-width (window-body-width window))))
+      (unless (zerop delta)
+        (ignore-errors
+          (window-resize window delta t t))))))
+
 (defun my/codex-two-column-layout-with-command (codex-command &optional focus-term)
   "Open a two-column layout and run CODEX-COMMAND in vterm if not running.
 If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
   (let ((root (my/codex-project-root)))
     (run-at-time
      0.05 nil
-     (lambda (cmd root-dir f-term)
+     (lambda (cmd root-dir focus-term)
        (require 'vterm)
        (let ((required-width (+ my/codex-left-width my/codex-min-right-width))
              (existing-buf (get-buffer my/codex-buffer-name))
              (default-directory root-dir))
 
-         ;; Request the resize; if it finishes late, condition-case catches it safely below
+         ;; Request a wider frame if needed. The exact window body width is
+         ;; adjusted after splitting.
          (when (< (frame-width) required-width)
            (set-frame-width (selected-frame) required-width)
            (redisplay t))
@@ -87,12 +96,13 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
 
          (delete-other-windows)
 
-         (let ((edit-window (selected-window))
-               ;; Fall back to a normal split if the requested width is not available yet.
-               (term-window (condition-case nil
-                                (split-window-right my/codex-left-width)
-                              (error
-                               (split-window-right)))))
+         (let* ((edit-window (selected-window))
+                (term-window (split-window-right)))
+           ;; Make the actual editable text area 80 columns, not just the
+           ;; total Emacs window width.
+           (my/codex-resize-window-body-width
+            edit-window my/codex-left-width)
+
            (select-window term-window)
 
            (if (and existing-buf (get-buffer-process existing-buf))
@@ -103,8 +113,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
                  (vterm-send-string cmd)
                  (vterm-send-return))))
 
-           ;; Only switch focus back to the editor if f-term wasn't requested
-           (unless f-term
+           (unless focus-term
              (select-window edit-window)))))
      codex-command root focus-term)))
 
