@@ -6,7 +6,14 @@
 (require 'seq)
 (require 'subr-x)
 
-;; No (require 'vterm) here. It will be auto-loaded on demand!
+;; `vterm' is loaded lazily, only when Codex is opened or used.
+
+(declare-function vterm "vterm")
+(declare-function vterm-send-string "vterm")
+(declare-function vterm-send-return "vterm")
+(declare-function vterm-yank "vterm")
+(declare-function vterm-copy-mode "vterm")
+(defvar vterm-mode-map)
 
 (defgroup my-codex nil
   "Customisation options for the Codex development tool."
@@ -37,7 +44,7 @@
   :group 'my-codex)
 
 (defcustom my/codex-left-width 80
-  "Width of the editing window in the Codex two-column layout."
+  "Width of the editing window text area in the Codex two-column layout."
   :type 'natnum
   :group 'my-codex)
 
@@ -63,6 +70,14 @@
       (project-root project)
     default-directory))
 
+(defun my/codex-current-buffer-name ()
+  "Return a project-specific buffer name for the Codex session."
+  (if-let ((project (project-current)))
+      (format "*codex:%s*"
+              (file-name-nondirectory
+               (directory-file-name (project-root project))))
+    my/codex-buffer-name))
+
 (defun my/codex-resize-window-body-width (window target-width)
   "Resize WINDOW so its body is TARGET-WIDTH columns, if possible."
   (dotimes (_ 5)
@@ -79,12 +94,16 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
      0.05 nil
      (lambda (cmd root-dir focus-term)
        (require 'vterm)
-       (let ((required-width (+ my/codex-left-width my/codex-min-right-width))
-             (existing-buf (get-buffer my/codex-buffer-name))
-             (default-directory root-dir))
+       (let* ((decorations-padding 8)
+              (required-width (+ my/codex-left-width
+                                 my/codex-min-right-width
+                                 decorations-padding))
+              ;; Compute the project-specific buffer name under the captured project root.
+              (default-directory root-dir)
+              (buffer-name (my/codex-current-buffer-name))
+              (existing-buf (get-buffer buffer-name)))
 
-         ;; Request a wider frame if needed. The exact window body width is
-         ;; adjusted after splitting.
+         ;; Request a wider frame first; the exact code width is fixed after splitting.
          (when (< (frame-width) required-width)
            (set-frame-width (selected-frame) required-width)
            (redisplay t))
@@ -98,8 +117,8 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
 
          (let* ((edit-window (selected-window))
                 (term-window (split-window-right)))
-           ;; Make the actual editable text area 80 columns, not just the
-           ;; total Emacs window width.
+
+           ;; Make the actual editable text area match `my/codex-left-width'.
            (my/codex-resize-window-body-width
             edit-window my/codex-left-width)
 
@@ -107,7 +126,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
 
            (if (and existing-buf (get-buffer-process existing-buf))
                (switch-to-buffer existing-buf)
-             (let ((buffer (vterm my/codex-buffer-name)))
+             (let ((buffer (vterm buffer-name)))
                (with-current-buffer buffer
                  (goto-char (point-max))
                  (vterm-send-string cmd)
@@ -133,12 +152,13 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
   (my/codex-two-column-layout-with-command my/codex-resume-command t))
 
 (defun my/codex-buffer ()
-  "Return the Codex vterm buffer, or raise an error."
-  (let ((buffer (get-buffer my/codex-buffer-name)))
+  "Return the current project's Codex vterm buffer, or raise an error."
+  (let* ((buffer-name (my/codex-current-buffer-name))
+         (buffer (get-buffer buffer-name)))
     (unless buffer
-      (user-error "No %s buffer found" my/codex-buffer-name))
+      (user-error "No %s buffer found" buffer-name))
     (unless (get-buffer-process buffer)
-      (user-error "No running Codex process in %s" my/codex-buffer-name))
+      (user-error "No running Codex process in %s" buffer-name))
     buffer))
 
 (defun my/codex-send-prompt (prompt)
@@ -149,15 +169,16 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
      0 nil
      (lambda (buf str)
        (require 'vterm)
-       (when (buffer-live-p buf)
-         (if-let ((window (get-buffer-window buf t)))
-             (select-window window)
-           (pop-to-buffer buf))
-         (redisplay t)
-         (with-current-buffer buf
-           (goto-char (point-max))
-           (vterm-send-string str)
-           (vterm-send-return))))
+       (with-demoted-errors "Codex send error: %S"
+         (when (buffer-live-p buf)
+           (if-let ((window (get-buffer-window buf t)))
+               (select-window window)
+             (pop-to-buffer buf))
+           (redisplay t)
+           (with-current-buffer buf
+             (goto-char (point-max))
+             (vterm-send-string str)
+             (vterm-send-return)))))
      buffer prompt)))
 
 (defun my/codex-send-region (beg end)
@@ -259,7 +280,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
 (defun my/codex-back-to-code ()
   "Move focus to the most likely coding window."
   (interactive)
-  (let ((codex-window (get-buffer-window my/codex-buffer-name t)))
+  (let ((codex-window (get-buffer-window (my/codex-current-buffer-name) t)))
     (unless codex-window
       (user-error "No visible Codex window"))
     (let ((code-window (next-window codex-window nil t)))
@@ -271,7 +292,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
 (defun my/codex-toggle-focus ()
   "Toggle focus between the Codex vterm and the coding window."
   (interactive)
-  (let ((codex-window (get-buffer-window my/codex-buffer-name t)))
+  (let ((codex-window (get-buffer-window (my/codex-current-buffer-name) t)))
     (cond
      ((not codex-window)
       (user-error "No visible Codex window"))
@@ -282,7 +303,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
 
 (defun my/codex-code-window ()
   "Return the most likely coding window associated with Codex."
-  (let ((codex-window (get-buffer-window my/codex-buffer-name t)))
+  (let ((codex-window (get-buffer-window (my/codex-current-buffer-name) t)))
     (unless codex-window
       (user-error "No visible Codex window"))
     (let ((code-window (next-window codex-window nil t)))
@@ -292,9 +313,10 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
       code-window)))
 
 (defun my/codex-selected-text ()
-  "Return selected text from the Codex buffer."
-  (unless (eq (current-buffer) (get-buffer my/codex-buffer-name))
-    (user-error "Current buffer is not the Codex buffer"))
+  "Return selected text from the current project's Codex buffer."
+  (let ((codex-buffer (get-buffer (my/codex-current-buffer-name))))
+    (unless (eq (current-buffer) codex-buffer)
+      (user-error "Current buffer is not the Codex buffer")))
 
   (unless (use-region-p)
     (user-error "No active region"))
@@ -378,8 +400,8 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
      :help "Show Codex, starting it with workspace write access if needed"]
     ["Resume session" my/codex-resume
      :help "Resume a previous Codex session"]
-	["Ask Codex..." my/codex-ask
-	 :help "Prompt for a question and send it to Codex"]
+    ["Ask Codex..." my/codex-ask
+     :help "Prompt for a question and send it to Codex"]
     "---"
     ["Send selected region" my/codex-send-region
      :active (use-region-p)
