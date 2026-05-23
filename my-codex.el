@@ -420,6 +420,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
     map)
   "Keymap for `my-codex-global-mode'.")
 
+;;;###autoload
 (define-minor-mode my-codex-global-mode
   "Global minor mode for seamless Codex integration."
   :global t
