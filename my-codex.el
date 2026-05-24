@@ -35,8 +35,7 @@
 (declare-function vterm-send-return "vterm")
 (declare-function vterm-yank "vterm")
 (declare-function vterm-copy-mode "vterm")
-(defvar vterm-mode-map nil
-  "Keymap used by `vterm-mode'.")
+(defvar vterm-mode-map)
 
 (defgroup my-codex nil
   "Customisation options for the Codex development tool."
@@ -407,9 +406,10 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
   "?"       #'my/codex-help)
 
 (with-eval-after-load 'vterm
-  (keymap-set vterm-mode-map "S-<insert>" #'vterm-yank)
-  (keymap-set vterm-mode-map "C-c C-t"   #'vterm-copy-mode)
-  (keymap-set vterm-mode-map "<f8>"      my/codex-map))
+  (when (boundp 'vterm-mode-map)
+    (keymap-set vterm-mode-map "S-<insert>" #'vterm-yank)
+    (keymap-set vterm-mode-map "C-c C-t"    #'vterm-copy-mode)
+    (keymap-set vterm-mode-map "<f8>"      my/codex-map)))
 
 (defun my/codex-project-build ()
   "Run the project build command with `compile'."
