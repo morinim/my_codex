@@ -1,5 +1,28 @@
 ;;; my-codex.el --- Codex integration -*- lexical-binding: t; -*-
 
+;; Copyright (C) 2026 Manlio Morini
+
+;; Author: Manlio Morini
+;; Keywords: lisp, tools
+;; URL: https://github.com/morinim/my_codex
+;; Version: 0.1.0
+;; Package-Requires: ((emacs "29.1") (vterm "0"))
+
+;; This file is not part of GNU Emacs.
+
+;; This Source Code Form is subject to the terms of the Mozilla Public
+;; License, v. 2.0. If a copy of the MPL was not distributed with this
+;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+;;; Commentary:
+
+;; my-codex.el runs the OpenAI Codex CLI inside an Emacs vterm buffer.
+;; It provides a two-column workflow, project-specific Codex sessions,
+;; helpers for Git diffs, selected regions, current files, compiler errors,
+;; and a configurable project build command.
+
+;;; Code:
+
 (require 'compile)
 (require 'easymenu)
 (require 'project)
@@ -92,12 +115,11 @@
                     (and (buffer-local-value 'buffer-file-name buf)
                          (buffer-modified-p buf)))
                   (project-buffers project))
-    ;; Fallback context if you are working outside an official project root
+    ;; Outside project, limit the warning to buffers under `default-directory'.
     (let ((root (file-truename default-directory)))
       (seq-filter (lambda (buf)
-                    (let ((file (buffer-file-name buf)))
-                      (and file
-                           (buffer-modified-p buf)
+                    (when-let ((file (buffer-file-name buf)))
+                      (and (buffer-modified-p buf)
                            (file-in-directory-p (file-truename file) root))))
                   (buffer-list)))))
 
