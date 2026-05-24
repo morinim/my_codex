@@ -35,7 +35,8 @@
 (declare-function vterm-send-return "vterm")
 (declare-function vterm-yank "vterm")
 (declare-function vterm-copy-mode "vterm")
-(defvar vterm-mode-map)
+(defvar vterm-mode-map nil
+  "Keymap used by `vterm-mode'.")
 
 (defgroup my-codex nil
   "Customisation options for the Codex development tool."
@@ -96,16 +97,18 @@
 
 (defun my/codex-project-root ()
   "Return the current project root, or `default-directory' if not in a project."
-  (if-let ((project (project-current)))
-      (project-root project)
-    default-directory))
+  (file-name-as-directory
+   (if-let ((project (project-current)))
+       (project-root project)
+     default-directory)))
 
 (defun my/codex-current-buffer-name ()
   "Return a project-specific buffer name for the Codex session."
-  (if-let ((project (project-current)))
-      (format "*codex:%s*"
-              (file-name-nondirectory
-               (directory-file-name (project-root project))))
+  (if-let* ((project (project-current))
+            (root (project-root project))
+            (name (file-name-nondirectory
+                   (directory-file-name root))))
+      (format "*codex:%s*" name)
     my/codex-buffer-name))
 
 (defun my/codex-modified-project-buffers ()
@@ -127,8 +130,10 @@
   "Display a non-blocking warning if project buffers have unsaved changes."
   (when my/codex-warn-about-unsaved-project-buffers
     (when-let ((buffers (my/codex-modified-project-buffers)))
-      (message "Codex warning: %d modified project buffer(s) not saved; disk context may be stale"
-               (length buffers)))))
+      (message "Codex warning: unsaved buffer(s): %s"
+               (string-join
+                (mapcar #'buffer-name buffers)
+                ", ")))))
 
 (defun my/codex-two-column-layout-with-command (codex-command &optional focus-term)
   "Open a two-column layout and run CODEX-COMMAND in vterm if not running.
@@ -220,16 +225,14 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
   (my/codex-warn-about-unsaved-project-buffers)
   (let ((buffer (my/codex-buffer)))
     (require 'vterm)
-    (with-demoted-errors "Codex send error: %S"
-      (when (buffer-live-p buffer)
-        (if-let ((window (get-buffer-window buffer t)))
-            (select-window window)
-          (pop-to-buffer buffer))
-        (redisplay t)
-        (with-current-buffer buffer
-          (goto-char (point-max))
-          (vterm-send-string prompt)
-          (vterm-send-return))))))
+    (if-let ((window (get-buffer-window buffer t)))
+        (select-window window)
+      (pop-to-buffer buffer))
+    (redisplay t)
+    (with-current-buffer buffer
+      (goto-char (point-max))
+      (vterm-send-string prompt)
+      (vterm-send-return))))
 
 (defun my/codex-send-region (beg end)
   "Send the selected region to the Codex vterm buffer with exact file context."
@@ -261,42 +264,40 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
      (format "Please inspect `%s` directly and report findings. Do not edit it unless I explicitly ask.\n"
              file))))
 
-(defun my/git-repository-p ()
+(defun my/codex--git-repository-p ()
   "Return non-nil if `default-directory' is inside a Git repository."
   (and (executable-find "git")
-       (let ((status (call-process "git" nil nil nil
-                                   "rev-parse" "--is-inside-work-tree")))
-         (and (integerp status)
-              (zerop status)))))
+       (zerop (process-file "git" nil nil nil
+                            "rev-parse" "--is-inside-work-tree"))))
 
-(defun my/ensure-git-repository ()
+(defun my/codex--ensure-git-repository ()
   "Raise an error unless `default-directory' is inside a Git repository."
-  (unless (my/git-repository-p)
+  (unless (my/codex--git-repository-p)
     (user-error "Not inside a Git repository (or Git executable missing)")))
+
+(defun my/codex--send-git-prompt (prompt)
+  "Send PROMPT to Codex from the project root after checking Git."
+  (let ((default-directory (my/codex-project-root)))
+    (my/codex--ensure-git-repository)
+    (my/codex-send-prompt prompt)))
 
 (defun my/codex-send-git-diff ()
   "Ask Codex to review the current Git diff."
   (interactive)
-  (let ((default-directory (my/codex-project-root)))
-    (my/ensure-git-repository)
-    (my/codex-send-prompt
-     "Please review the current Git diff using `git diff -- .`. Focus on correctness, regressions, edge cases, naming, and maintainability. Do not edit files unless I explicitly ask.\n")))
+  (my/codex--send-git-prompt
+   "Please review the current Git diff using `git diff -- .`. Focus on correctness, regressions, edge cases, naming, and maintainability. Do not edit files unless I explicitly ask.\n"))
 
 (defun my/codex-send-git-staged-diff ()
   "Ask Codex to review the staged Git diff."
   (interactive)
-  (let ((default-directory (my/codex-project-root)))
-    (my/ensure-git-repository)
-    (my/codex-send-prompt
-     "Please review the staged Git diff using `git diff --cached -- .`. Focus on correctness, regressions, edge cases, and commit readiness. Do not edit files unless I explicitly ask.\n")))
+  (my/codex--send-git-prompt
+   "Please review the staged Git diff using `git diff --cached -- .`. Focus on correctness, regressions, edge cases, and commit readiness. Do not edit files unless I explicitly ask.\n"))
 
 (defun my/codex-commit-message-from-diff ()
   "Ask Codex to draft a commit message from the staged Git diff."
   (interactive)
-  (let ((default-directory (my/codex-project-root)))
-    (my/ensure-git-repository)
-    (my/codex-send-prompt
-     "Please inspect the staged Git diff using `git diff --cached -- .` and write a concise but comprehensive conventional commit message. Use an imperative subject and a short explanatory body when useful. Do not edit files.\n")))
+  (my/codex--send-git-prompt
+   "Please inspect the staged Git diff using `git diff --cached -- .` and write a concise but comprehensive conventional commit message. Use an imperative subject and a short explanatory body when useful. Do not edit files.\n"))
 
 (defun my/codex-explain-region-as-error ()
   "Ask Codex to explain the selected compiler or test error."
@@ -351,11 +352,12 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
 (defun my/codex-selected-text ()
   "Return selected text from the current project's Codex buffer."
   (let ((codex-buffer (get-buffer (my/codex-current-buffer-name))))
-    (unless (eq (current-buffer) codex-buffer)
-      (user-error "Current buffer is not the Codex buffer")))
-  (unless (use-region-p)
-    (user-error "No active region"))
-  (filter-buffer-substring (region-beginning) (region-end)))
+    (unless codex-buffer
+      (user-error "No Codex buffer found for this project"))
+    (with-current-buffer codex-buffer
+      (unless (use-region-p)
+        (user-error "No active region selected in the Codex buffer"))
+      (filter-buffer-substring (region-beginning) (region-end)))))
 
 (defun my/codex-insert-selection-into-code ()
   "Insert selected Codex text into the coding window."
@@ -366,7 +368,8 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
       (unless (bolp)
         (newline))
       (insert text)
-      (unless (bolp)
+      (unless (or (bolp)
+                  (string-suffix-p "\n" text))
         (newline)))))
 
 (defun my/codex-ask (prompt)
