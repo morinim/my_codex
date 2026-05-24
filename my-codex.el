@@ -3,7 +3,7 @@
 ;; Copyright (C) 2026 Manlio Morini
 
 ;; Author: Manlio Morini
-;; Keywords: lisp, tools
+;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0"))
@@ -12,7 +12,7 @@
 
 ;; This Source Code Form is subject to the terms of the Mozilla Public
 ;; License, v. 2.0. If a copy of the MPL was not distributed with this
-;; file, You can obtain one at http://mozilla.org/MPL/2.0/.
+;; file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 ;;; Commentary:
 
@@ -149,26 +149,26 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
       (kill-buffer existing-buf)
       (setq existing-buf nil))
 
-    ;; Capture layout only if the target session buffer is not currently displayed
+    ;; Capture layout only if the target session buffer is not currently displayed.
     (unless (get-buffer-window buffer-name t)
       (setq my/codex--saved-window-configuration (current-window-configuration)))
 
     (delete-other-windows)
     (let* ((edit-window (selected-window))
-           ;; Leverage built-in split sizing logic contextually
            (term-window (condition-case nil
                             (split-window-right my/codex-left-width)
                           (error
                            (user-error "Frame is too narrow for Codex layout")))))
 
-      ;; Deterministic single-pass alignment adjust for fringes/scrollbars
+      ;; Adjust the editing window to the requested body width.
       (let ((delta (- my/codex-left-width (window-body-width edit-window))))
         (unless (zerop delta)
-          (ignore-errors (window-resize edit-window delta t t))))
+          (when (window-resizable-p edit-window delta t t)
+            (window-resize edit-window delta t t))))
 
       (select-window term-window)
       (if (and existing-buf (get-buffer-process existing-buf))
-          (switch-to-buffer existing-buf)
+          (set-window-buffer term-window existing-buf)
         (let ((buffer (vterm buffer-name)))
           (with-current-buffer buffer
             (when-let ((proc (get-buffer-process buffer)))
@@ -372,7 +372,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
 (defun my/codex-ask (prompt)
   "Prompt the user in the minibuffer and send the query straight to Codex."
   (interactive "sAsk Codex: ")
-  (when (string-empty-p (string-trim prompt))
+  (when (string-blank-p prompt)
     (user-error "Prompt cannot be empty"))
   (my/codex-send-prompt prompt))
 
@@ -382,7 +382,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
   (message
    "Codex: F7=build, F8 o=show/start read-only, w=show/start workspace, r=resume, q=restore layout, a=ask, s/right=send region, left=insert selected Codex text, f=file, g=diff, G=staged diff, m=commit message, e=explain error, i=instructions, TAB=toggle focus, ?=help"))
 
-;; Native Emacs 29+ declarative keymap declaration layout
+;; Prefix keymap for Codex commands.
 (defvar-keymap my/codex-map
   :doc "Prefix keymap for Codex commands."
   "o"       #'my/codex-read-only
@@ -404,9 +404,9 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
   "?"       #'my/codex-help)
 
 (with-eval-after-load 'vterm
-  (define-key vterm-mode-map (kbd "S-<insert>") #'vterm-yank)
-  (define-key vterm-mode-map (kbd "C-c C-t") #'vterm-copy-mode)
-  (define-key vterm-mode-map (kbd "<f8>") my/codex-map))
+  (keymap-set vterm-mode-map "S-<insert>" #'vterm-yank)
+  (keymap-set vterm-mode-map "C-c C-t"   #'vterm-copy-mode)
+  (keymap-set vterm-mode-map "<f8>"      my/codex-map))
 
 (defun my/codex-project-build ()
   "Run the project build command with `compile'."
@@ -418,13 +418,6 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
   :doc "Keymap for `my-codex-global-mode'."
   "<f7>" #'my/codex-project-build
   "<f8>" my/codex-map)
-
-;;;###autoload
-(define-minor-mode my-codex-global-mode
-  "Global minor mode for seamless Codex integration."
-  :global t
-  :group 'my-codex
-  :keymap my-codex-global-mode-map)
 
 (easy-menu-define my/codex-menu nil
   "Menu for Codex commands."
@@ -465,7 +458,17 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
     ["Compile project" my/codex-project-build
      :help "Run the project build command"]))
 
-(easy-menu-add-item nil '("Tools") my/codex-menu)
+;;;###autoload
+(define-minor-mode my-codex-global-mode
+  "Global minor mode for seamless Codex integration."
+  :global t
+  :group 'my-codex
+  :keymap my-codex-global-mode-map
+  (if my-codex-global-mode
+      (keymap-set global-map
+                  "<menu-bar> <tools> <codex>"
+                  (cons "Codex" my/codex-menu))
+    (keymap-unset global-map "<menu-bar> <tools> <codex>" t)))
 
 (provide 'my-codex)
 
