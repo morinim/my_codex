@@ -160,7 +160,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
                           (error
                            (user-error "Frame is too narrow for Codex layout")))))
 
-      ;; Adjust the editing window to the requested body width.
+      ;; Adjust once for fringes, scrollbars, and dividers.
       (let ((delta (- my/codex-left-width (window-body-width edit-window))))
         (unless (zerop delta)
           (when (window-resizable-p edit-window delta t t)
