@@ -349,27 +349,24 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
       (select-window codex-window)))))
 
 (defun my/codex-selected-text ()
-  "Return selected text from the current project's Codex buffer."
-  (let ((codex-buffer (get-buffer (my/codex-current-buffer-name))))
-    (unless codex-buffer
-      (user-error "No Codex buffer found for this project"))
-    (with-current-buffer codex-buffer
+  "Return selected text from the visible Codex window."
+  (let ((codex-window (get-buffer-window (my/codex-current-buffer-name) t)))
+    (unless codex-window
+      (user-error "No visible Codex window"))
+    (with-selected-window codex-window
       (unless (use-region-p)
         (user-error "No active region selected in the Codex buffer"))
-      (filter-buffer-substring (region-beginning) (region-end)))))
+      (filter-buffer-substring
+       (region-beginning)
+       (region-end)))))
 
 (defun my/codex-insert-selection-into-code ()
   "Insert selected Codex text into the coding window."
   (interactive)
   (let ((text (my/codex-selected-text))
         (code-window (my/codex-code-window)))
-    (with-selected-window code-window
-      (unless (bolp)
-        (newline))
-      (insert text)
-      (unless (or (bolp)
-                  (string-suffix-p "\n" text))
-        (newline)))))
+    (select-window code-window)
+    (insert text)))
 
 (defun my/codex-ask (prompt)
   "Prompt the user in the minibuffer and send the query straight to Codex."
