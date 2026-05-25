@@ -116,6 +116,12 @@
   "Return shell text that runs COMMAND, then exits with its status."
   (format "(%s); exit $?" command))
 
+(defun my-codex--safe-root-name (root)
+  "Return a buffer-name-safe representation of ROOT."
+  (replace-regexp-in-string
+   "[^[:alnum:]._-]+" "!"
+   (directory-file-name (file-truename root))))
+
 (defun my-codex-project-root ()
   "Return the current project root, or `default-directory' if not in a project."
   (file-name-as-directory
@@ -126,11 +132,8 @@
 (defun my-codex-current-buffer-name ()
   "Return a project-specific buffer name for the Codex session."
   (if-let* ((project (project-current))
-            (root (file-truename (project-root project))))
-      (format "*codex:%s*"
-              (replace-regexp-in-string
-               "[^[:alnum:]._-]+" "!"
-               (directory-file-name root)))
+            (root (project-root project)))
+      (format "*codex:%s*" (my-codex--safe-root-name root))
     my-codex-buffer-name))
 
 (defun my-codex-modified-project-buffers ()
@@ -385,17 +388,36 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
     (my-codex--ensure-git-repository)
     (my-codex-send-prompt prompt)))
 
+(defun my-codex--git-diff-review-prompt ()
+  "Return the prompt for reviewing the current Git diff."
+  "Please review the current Git diff using `git diff -- .`. Focus on correctness, regressions, edge cases, naming, and maintainability. Do not edit files unless I explicitly ask.\n")
+
+(defun my-codex--git-staged-diff-review-prompt ()
+  "Return the prompt for reviewing the staged Git diff."
+  "Please review the staged Git diff using `git diff --cached -- .`. Focus on correctness, regressions, edge cases, and commit readiness. Do not edit files unless I explicitly ask.\n")
+
+(defun my-codex--commit-message-prompt ()
+  "Return the prompt for drafting a commit message from staged changes."
+  (format "Please inspect the staged Git diff using `git diff --cached -- .` and write a concise but comprehensive conventional commit message.
+
+Put only the final commit message between these exact markers:
+
+BEGIN_COMMIT_MESSAGE
+<commit message here>
+END_COMMIT_MESSAGE
+
+Use an imperative subject and a short explanatory body when useful. Limit each line to %d columns. Do not edit files.\n"
+          my-codex-commit-message-fill-column))
+
 (defun my-codex-send-git-diff ()
   "Ask Codex to review the current Git diff."
   (interactive)
-  (my-codex--send-git-prompt
-   "Please review the current Git diff using `git diff -- .`. Focus on correctness, regressions, edge cases, naming, and maintainability. Do not edit files unless I explicitly ask.\n"))
+  (my-codex--send-git-prompt (my-codex--git-diff-review-prompt)))
 
 (defun my-codex-send-git-staged-diff ()
   "Ask Codex to review the staged Git diff."
   (interactive)
-  (my-codex--send-git-prompt
-   "Please review the staged Git diff using `git diff --cached -- .`. Focus on correctness, regressions, edge cases, and commit readiness. Do not edit files unless I explicitly ask.\n"))
+  (my-codex--send-git-prompt (my-codex--git-staged-diff-review-prompt)))
 
 (defun my-codex-commit-message-from-diff ()
   "Ask Codex to draft a commit message from the staged Git diff."
@@ -409,17 +431,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
     (setq my-codex--commit-message-request-marker
           (with-current-buffer buffer
             (copy-marker (point-max)))))
-  (my-codex--send-git-prompt
-   (format "Please inspect the staged Git diff using `git diff --cached -- .` and write a concise but comprehensive conventional commit message.
-
-Put only the final commit message between these exact markers:
-
-BEGIN_COMMIT_MESSAGE
-<commit message here>
-END_COMMIT_MESSAGE
-
-Use an imperative subject and a short explanatory body when useful. Limit each line to %d columns. Do not edit files.\n"
-           my-codex-commit-message-fill-column)))
+  (my-codex--send-git-prompt (my-codex--commit-message-prompt)))
 
 (defun my-codex-latest-commit-message-after (buffer start-point)
   "Return the commit message in BUFFER appearing after START-POINT, or nil."
@@ -452,10 +464,7 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
 
 (defun my-codex--commit-message-buffer-name (root)
   "Return the commit message buffer name for ROOT."
-  (format "*Codex commit message:%s*"
-          (replace-regexp-in-string
-           "[^[:alnum:]._-]+" "!"
-           (directory-file-name (file-truename root)))))
+  (format "*Codex commit message:%s*" (my-codex--safe-root-name root)))
 
 (defun my-codex--finish-git-commit ()
   "Commit staged changes using the current buffer as the commit message."
@@ -540,27 +549,31 @@ Kill COMMIT-BUFFER after a successful commit when it is non-nil."
       (with-current-buffer output-buffer
         (setq default-directory root)))))
 
+(defun my-codex--clear-marker (marker)
+  "Detach MARKER from its buffer when MARKER is a marker."
+  (when (markerp marker)
+    (set-marker marker nil)))
+
 (defun my-codex--wait-for-commit-message (buffer start-point root &optional attempts)
   "Poll BUFFER after START-POINT for a finished commit message.
 ROOT is the Git repository root used for the eventual commit.
 ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
   (let ((attempts (or attempts 0))
-        (max-attempts 120))
-    (if (> attempts max-attempts)
-        (progn
-          (when (markerp start-point)
-            (set-marker start-point nil))
-          (message "Timed out waiting for Codex commit message."))
-      (if-let ((msg (my-codex-latest-commit-message-after buffer start-point)))
-          (progn
-            (when (markerp start-point)
-              (set-marker start-point nil))
-            (my-codex-edit-git-commit-with-message msg root)
-            (message "Codex commit message is ready for editing."))
-        (run-with-timer
-         0.5 nil
-         #'my-codex--wait-for-commit-message
-         buffer start-point root (1+ attempts))))))
+        (max-attempts 120)
+        (msg (my-codex-latest-commit-message-after buffer start-point)))
+    (cond
+     ((> attempts max-attempts)
+      (my-codex--clear-marker start-point)
+      (message "Timed out waiting for Codex commit message."))
+     (msg
+      (my-codex--clear-marker start-point)
+      (my-codex-edit-git-commit-with-message msg root)
+      (message "Codex commit message is ready for editing."))
+     (t
+      (run-with-timer
+       0.5 nil
+       #'my-codex--wait-for-commit-message
+       buffer start-point root (1+ attempts))))))
 
 (defun my-codex-git-commit-with-latest-message ()
   "Edit a commit with the latest Codex message, or ask Codex for one and wait."
@@ -612,11 +625,14 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
         (find-file (expand-file-name file root))
       (user-error "No project instruction file found"))))
 
+(defun my-codex-visible-window ()
+  "Return the visible Codex window, or raise an error."
+  (or (get-buffer-window (my-codex-current-buffer-name) t)
+      (user-error "No visible Codex window")))
+
 (defun my-codex-code-window ()
   "Return the most likely coding window associated with Codex."
-  (let ((codex-window (get-buffer-window (my-codex-current-buffer-name) t)))
-    (unless codex-window
-      (user-error "No visible Codex window"))
+  (let ((codex-window (my-codex-visible-window)))
     (let ((code-window (next-window codex-window nil t)))
       (if (and code-window (not (eq code-window codex-window)))
           code-window
@@ -630,17 +646,14 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
 (defun my-codex-toggle-focus ()
   "Toggle focus between the Codex vterm and the coding window."
   (interactive)
-  (let ((codex-window (get-buffer-window (my-codex-current-buffer-name) t)))
+  (let ((codex-window (my-codex-visible-window)))
     (cond
-     ((not codex-window) (user-error "No visible Codex window"))
      ((eq (selected-window) codex-window) (my-codex-back-to-code))
      (t (select-window codex-window)))))
 
 (defun my-codex-selected-text ()
   "Return actively selected text from the visible Codex window."
-  (let ((codex-window (get-buffer-window (my-codex-current-buffer-name) t)))
-    (unless codex-window
-      (user-error "No visible Codex window"))
+  (let ((codex-window (my-codex-visible-window)))
     (with-selected-window codex-window
       (unless (use-region-p)
         (user-error "No active selection in the Codex buffer"))
