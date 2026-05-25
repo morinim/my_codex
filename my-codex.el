@@ -275,6 +275,13 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
      (format "Please inspect `%s` directly and report findings. Do not edit it unless I explicitly ask.\n"
              file))))
 
+(defun my-codex-clean-commit-message (message)
+  "Return MESSAGE with leading/trailing whitespace removed from each line."
+  (string-join
+   (mapcar #'string-trim
+           (split-string (string-trim message) "\n"))
+   "\n"))
+
 (defun my-codex--git-repository-p ()
   "Return non-nil if `default-directory' is inside a Git repository."
   (and (executable-find "git")
@@ -355,7 +362,7 @@ Use an imperative subject and a short explanatory body when useful. Do not edit 
   (let ((file (make-temp-file "my-codex-commit-" nil ".txt"))
         (output-buffer (get-buffer-create "*Codex git commit*")))
     (with-temp-file file
-      (insert (string-trim message) "\n"))
+      (insert (my-codex-clean-commit-message message) "\n"))
     (with-current-buffer output-buffer
       (read-only-mode -1)
       (erase-buffer))
