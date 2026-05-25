@@ -131,7 +131,7 @@
   "Return modified file-visiting buffers belonging to the current project."
   (if-let ((project (project-current)))
       (seq-filter (lambda (buf)
-                    (and (buffer-local-value 'buffer-file-name buf)
+                    (and (buffer-file-name buf)
                          (buffer-modified-p buf)))
                   (project-buffers project))
     (let ((root (file-truename default-directory)))
