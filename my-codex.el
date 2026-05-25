@@ -411,6 +411,8 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
   (when (boundp 'vterm-mode-map)
     (keymap-set vterm-mode-map "S-<insert>" #'vterm-yank)
     (keymap-set vterm-mode-map "C-c C-t"    #'vterm-copy-mode)
+    (keymap-set vterm-mode-map "<prior>"    #'scroll-down-command)
+    (keymap-set vterm-mode-map "<next>"     #'scroll-up-command)
     (keymap-set vterm-mode-map "<f8>"      my/codex-map)))
 
 (defun my/codex-project-build ()
