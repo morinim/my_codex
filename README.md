@@ -10,46 +10,35 @@
 └───────────────┴───────────────┘
 ```
 
-`my-codex.el` runs the OpenAI Codex CLI inside Emacs, using a `vterm` buffer.
+`my-codex.el` runs the OpenAI Codex CLI inside Emacs using `vterm`.
 
-It provides a simple two-column workflow:
-
-- code on the left;
-- Codex on the right;
-- read-only mode by default;
-- shortcuts for files, regions, Git diffs, errors, builds, and commit messages.
-
-Codex stays close at hand, while Emacs remains the main environment for editing and reviewing code.
-
+It keeps code on the left and Codex on the right, with small helpers for
+regions, files, Git diffs, build output, project instructions, and commit
+messages. Codex buffers are project-specific, so different projects keep
+separate sessions.
 
 ## Features
 
-- Start Codex in a two-column Emacs layout.
-- Reuse an existing Codex `vterm` buffer.
-- Start Codex in read-only or workspace-write mode.
-- Resume a previous Codex session.
-- Ask Codex a free-form question from the minibuffer.
-- Send selected code to Codex, including file and line context.
-- Insert selected Codex text back into the coding window.
-- Toggle focus between code and Codex.
-- Ask Codex to inspect the current file.
-- Review current or staged Git diffs.
-- Draft commit messages from staged changes.
+- Start Codex in read-only, workspace-write, or resume mode.
+- Use a two-column layout and restore the previous window layout.
+- Send selected code, the current file, Git diffs, or staged Git diffs.
+- Ask free-form questions from the minibuffer.
+- Draft a commit message from staged changes, then open an editable commit.
 - Explain selected compiler or test errors.
 - Open project instruction files such as `AGENTS.md`.
 - Run a configurable project build command.
-- Provide an Emacs menu under `Tools → Codex`.
-
+- Warn when project buffers have unsaved changes before sending prompts.
+- Enable `global-auto-revert-mode` when `my-codex-global-mode` starts.
+- Provide global keys and a `Tools -> Codex` menu.
 
 ## Requirements
 
-- Emacs with lexical binding support.
+- Emacs 29.1 or newer.
 - [`vterm`][vterm].
 - OpenAI [Codex CLI][codex] available as `codex`.
 - Git, for Git-related commands.
 
-`vterm` is loaded lazily, only when Codex is actually used.
-
+`vterm` is loaded lazily, only when Codex is used.
 
 ## Installation
 
@@ -59,7 +48,7 @@ Clone the repository somewhere in your Emacs load path:
 git clone https://github.com/morinim/my_codex.git ~/.emacs.d/lisp/my_codex
 ```
 
-Then add it to your Emacs configuration:
+Then add:
 
 ```elisp
 (add-to-list 'load-path "~/.emacs.d/lisp/my_codex")
@@ -67,96 +56,55 @@ Then add it to your Emacs configuration:
 (my-codex-global-mode 1)
 ```
 
-Alternatively, copy `my-codex.el` into a directory already in your `load-path`.
+## Basic Usage
 
-
-## Basic usage
-
-Start Codex in read-only mode:
+Start Codex first:
 
 ```text
-F8 o
+F8 o   start in read-only mode
+F8 w   start with workspace-write access
+F8 r   resume a previous session
 ```
 
-Start Codex with workspace-write access:
+Then use the `F8` prefix for everyday actions.
 
-```text
-F8 w
-```
-
-Resume a previous session:
-
-```text
-F8 r
-```
-
-Most commands expect a running Codex session. Start one first with `F8 o`, `F8 w`, or `F8 r`.
-
-
-## Key bindings
-
-The package installs these global bindings:
-
-| Key | Command | Description |
-| --- | ---     | ---         |
-| F7  | `my/codex-project-build` | Run the configured build command |
-| F8  | `my/codex-map` | Codex prefix key |
-
-The `F8` prefix provides:
+## Key Bindings
 
 | Key | Command | Description |
 | --- | --- | --- |
-| F8 o | `my/codex-read-only` | Show/start Codex in read-only mode |
-| F8 w | `my/codex-workspace` | Show/start Codex with workspace-write access |
-| F8 r | `my/codex-resume` | Resume a previous Codex session |
-| F8 a | `my/codex-ask` | Ask Codex a free-form question |
-| F8 s | `my/codex-send-region` | Send the selected region to Codex |
-| F8 Right | `my/codex-send-region` | Directional shortcut for sending selected code to Codex |
-| F8 Left | `my/codex-insert-selection-into-code` | Insert selected Codex text into the coding window |
-| F8 TAB | `my/codex-toggle-focus` | Toggle focus between code and Codex |
-| F8 f | `my/codex-send-current-file` | Ask Codex to inspect the current file |
-| F8 g | `my/codex-send-git-diff` | Ask Codex to review the current Git diff |
-| F8 G | `my/codex-send-git-staged-diff` | Ask Codex to review the staged Git diff |
-| F8 m | `my/codex-commit-message-from-diff` | Draft a commit message from staged changes |
-| F8 e | `my/codex-explain-region-as-error` | Explain a selected compiler or test error |
-| F8 i | `my/codex-open-project-instructions` | Open project instruction files |
-| F8 ? | `my/codex-help` | Show help |
+| F7 | `my-codex-project-build` | Run the project build command |
+| F8 | `my-codex-map` | Codex prefix key |
 
-Inside `vterm`, the package also adds:
+Prefix bindings:
 
 | Key | Command | Description |
 | --- | --- | --- |
-| F8 | `my/codex-map` | Use the Codex prefix inside vterm |
-| Shift Insert | `vterm-yank` | Paste into `vterm` |
-| C-c C-t | `vterm-copy-mode` | Enter `vterm` copy mode |
+| F8 o | `my-codex-read-only` | Show/start read-only Codex |
+| F8 w | `my-codex-workspace` | Show/start workspace-write Codex |
+| F8 r | `my-codex-resume` | Resume a Codex session |
+| F8 q | `my-codex-restore-layout` | Restore the previous window layout |
+| F8 a | `my-codex-ask` | Ask a free-form question |
+| F8 s | `my-codex-send-region` | Send the selected region |
+| F8 Right | `my-codex-send-region` | Send the selected region |
+| F8 Left | `my-codex-insert-selection-into-code` | Insert selected Codex text into code |
+| F8 TAB | `my-codex-toggle-focus` | Toggle focus between code and Codex |
+| F8 f | `my-codex-send-current-file` | Ask Codex to inspect the current file |
+| F8 g | `my-codex-send-git-diff` | Review the current Git diff |
+| F8 G | `my-codex-send-git-staged-diff` | Review the staged Git diff |
+| F8 m | `my-codex-commit-message-from-diff` | Draft a commit message |
+| F8 c | `my-codex-git-commit-with-latest-message` | Edit a commit using the latest drafted message |
+| F8 e | `my-codex-explain-region-as-error` | Explain a selected error |
+| F8 i | `my-codex-open-project-instructions` | Open project instructions |
+| F8 ? | `my-codex-help` | Show help |
 
+Inside `vterm`:
 
-## Two-column workflow
-
-The default layout is:
-
-```text
-+--------------------------------------+--------------------------------------+
-| Source code                          | Codex in vterm                       |
-| 80 columns                           |                                      |
-+--------------------------------------+--------------------------------------+
-```
-
-The left window defaults to 80 columns. Codex is opened on the right.
-
-A typical workflow is:
-
-```text
-F8 o       start Codex
-F8 Right   send selected code to Codex
-F8 TAB     toggle focus
-F8 Left    insert selected Codex text back into code
-F8 g       review current Git diff
-F8 G       review staged Git diff
-F8 m       draft commit message
-F7         build project
-```
-
+| Key | Command |
+| --- | --- |
+| F8 | Use the Codex prefix |
+| Shift Insert | Paste into `vterm` |
+| C-c C-t | Enter `vterm` copy mode |
+| Page Up / Page Down | Scroll the terminal buffer |
 
 ## Customisation
 
@@ -169,49 +117,27 @@ M-x customize-group RET my-codex RET
 Common options:
 
 ```elisp
-(setq my/codex-read-only-command
+(setq my-codex-read-only-command
       "codex --sandbox read-only --ask-for-approval on-request")
-
-(setq my/codex-workspace-command
+(setq my-codex-workspace-command
       "codex --sandbox workspace-write --ask-for-approval on-request")
+(setq my-codex-resume-command "codex resume")
 
-(setq my/codex-left-width 80)
-(setq my/codex-min-right-width 80)
+(setq my-codex-left-width 80)
+(setq my-codex-min-right-width 80)
 
-(setq my/codex-project-build-command "./setup_build")
+(setq my-codex-project-build-command "./setup_build")
+(setq my-codex-project-instruction-files
+      '("AGENTS.md" "CODEX.md" ".codex/instructions.md"))
+
+(setq my-codex-warn-about-unsaved-project-buffers t)
+(setq my-codex-enable-global-auto-revert t)
 ```
 
-For CMake or Ninja projects:
+## Suggested Codex Configuration
 
-```elisp
-(setq my/codex-project-build-command "cmake --build build")
-```
-
-or:
-
-```elisp
-(setq my/codex-project-build-command "ninja -C build")
-```
-
-Project instruction files are searched by `my/codex-open-project-instructions`.
-
-Default value:
-
-```elisp
-'("AGENTS.md" "CODEX.md" ".codex/instructions.md")
-```
-
-Example customisation:
-
-```elisp
-(setq my/codex-project-instruction-files
-      '("AGENTS.md" ".codex/instructions.md"))
-```
-
-
-## Suggested Codex configuration
-
-For a conservative default, configure Codex itself to use read-only mode and explicit approvals.
+For conservative defaults, configure Codex itself to use read-only mode and
+explicit approvals.
 
 In `~/.codex/config.toml`:
 
@@ -221,21 +147,17 @@ approval_policy = "on-request"
 approvals_reviewer = "user"
 ```
 
-
 ## Notes
 
-Use `F8 s` or `F8 Right` for small snippets.
+Use `F8 s` or `F8 Right` for small snippets. For larger reviews, prefer
+`F8 f`, `F8 g`, or `F8 G`, which ask Codex to inspect files or diffs directly.
 
-For larger reviews, prefer `F8 f`, `F8 g`, or `F8 G`. These commands ask Codex to inspect files or Git diffs directly, instead of pasting large amounts of text into the terminal.
-
-To copy text from Codex, use `C-c C-t` in the `vterm` buffer, select text, then use `F8 Left` to insert it into the coding window.
-
+To copy text from Codex, use `C-c C-t` in the `vterm` buffer, select text, then
+use `F8 Left` to insert it into the coding window.
 
 ## Licence
 
-[Mozilla Public License v2.0][mpl2], also available in the accompanying [LICENSE][license] file.
-
-
+[Mozilla Public License v2.0][mpl2], also available in [LICENSE][license].
 
 [codex]: https://github.com/openai/codex
 [license]: https://github.com/morinim/my_codex/blob/main/LICENSE
