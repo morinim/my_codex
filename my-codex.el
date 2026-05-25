@@ -400,12 +400,12 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
 (defun my-codex-commit-message-from-diff ()
   "Ask Codex to draft a commit message from the staged Git diff."
   (interactive)
-  (let ((buffer (my-codex-buffer))
-        (root (my-codex-project-root)))
-    (let ((default-directory root))
-      (my-codex--ensure-git-repository)
-      (setq my-codex--commit-message-request-signature
-            (my-codex--staged-diff-signature)))
+  (let* ((buffer (my-codex-buffer))
+         (root (my-codex-project-root))
+         (default-directory root))
+    (my-codex--ensure-git-repository)
+    (setq my-codex--commit-message-request-signature
+          (my-codex--staged-diff-signature))
     (setq my-codex--commit-message-request-marker
           (with-current-buffer buffer
             (copy-marker (point-max)))))
