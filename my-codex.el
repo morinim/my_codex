@@ -103,6 +103,13 @@
 (defvar my-codex--saved-window-configuration nil
   "Window layout configuration captured before opening Codex.")
 
+(defvar my-codex--auto-revert-enabled-by-mode nil
+  "Non-nil when `my-codex-global-mode' enabled `global-auto-revert-mode'.")
+
+(defun my-codex--shell-command-and-exit (command)
+  "Return shell text that runs COMMAND, then exits with its status."
+  (format "(%s); exit $?" command))
+
 (defun my-codex-project-root ()
   "Return the current project root, or `default-directory' if not in a project."
   (file-name-as-directory
@@ -186,7 +193,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
               (when-let ((proc (get-buffer-process buffer)))
                 (set-process-query-on-exit-flag proc nil))
               (goto-char (point-max))
-              (vterm-send-string codex-command)
+              (vterm-send-string (my-codex--shell-command-and-exit codex-command))
               (vterm-send-return)))))
       (unless focus-term
         (select-window edit-window)))))
@@ -417,7 +424,7 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
       (my-codex-latest-commit-message-after buffer nil))))
 
 (defun my-codex-git-commit-with-message (message root)
-  "Run `git commit --edit -F FILE' using Git's configured editor."
+  "Run `git commit -F FILE' with MESSAGE from ROOT."
   (let ((file (make-temp-file "my-codex-commit-" nil ".txt"))
         (output-buffer (get-buffer-create "*Codex git commit*")))
     (with-temp-file file
@@ -432,7 +439,6 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
              :buffer output-buffer
              :command (list "git"
                             "commit"
-                            "--edit"
                             "--cleanup=strip"
                             "--no-status"
                             "-F" file)
@@ -478,7 +484,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
             (when (markerp start-point)
               (set-marker start-point nil))
             (my-codex-git-commit-with-message msg root)
-            (message "Codex commit message is ready; opened Git editor."))
+            (message "Codex commit message is ready; committing."))
         (run-with-timer
          0.5 nil
          #'my-codex--wait-for-commit-message
@@ -493,7 +499,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
     (if-let ((message (my-codex-latest-commit-message)))
         (progn
           (my-codex-git-commit-with-message message root)
-          (message "Opened Git editor with latest Codex commit message."))
+          (message "Committing with latest Codex commit message."))
       (let* ((buffer (my-codex-buffer))
              (start-point (with-current-buffer buffer
                             (copy-marker (point-max)))))
@@ -652,7 +658,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
     ["Draft commit message" my-codex-commit-message-from-diff
      :help "Ask Codex to draft a commit message from the staged Git diff"]
     ["Commit with Codex message" my-codex-git-commit-with-latest-message
-     :help "Use the latest Codex commit message, or ask Codex for one, then open Git's editor"]
+     :help "Use the latest Codex commit message, or ask Codex for one, then commit"]
     "---"
     ["Open project instructions" my-codex-open-project-instructions
      :help "Open AGENTS.md, CODEX.md, or .codex/instructions.md"]
@@ -668,9 +674,15 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
   :global t
   :group 'my-codex
   :keymap my-codex-global-mode-map
-  (when (and my-codex-global-mode
-             my-codex-enable-global-auto-revert)
-    (global-auto-revert-mode 1)))
+  (if my-codex-global-mode
+      (when (and my-codex-enable-global-auto-revert
+                 (not my-codex--auto-revert-enabled-by-mode)
+                 (not (bound-and-true-p global-auto-revert-mode)))
+        (setq my-codex--auto-revert-enabled-by-mode t)
+        (global-auto-revert-mode 1))
+    (when my-codex--auto-revert-enabled-by-mode
+      (global-auto-revert-mode -1))
+    (setq my-codex--auto-revert-enabled-by-mode nil)))
 
 (provide 'my-codex)
 
