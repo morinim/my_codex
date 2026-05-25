@@ -106,6 +106,12 @@
 (defvar my-codex--auto-revert-enabled-by-mode nil
   "Non-nil when `my-codex-global-mode' enabled `global-auto-revert-mode'.")
 
+(defvar my-codex--commit-message-request-marker nil
+  "Marker for the start of the latest Codex commit message request.")
+
+(defvar my-codex--commit-message-request-signature nil
+  "Staged diff signature used for the latest Codex commit message request.")
+
 (defun my-codex--shell-command-and-exit (command)
   "Return shell text that runs COMMAND, then exits with its status."
   (format "(%s); exit $?" command))
@@ -364,6 +370,15 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
      ((eq status 1) t)
      (t (user-error "Unable to inspect staged Git changes")))))
 
+(defun my-codex--staged-diff-signature ()
+  "Return a hash of the staged Git diff for `default-directory'."
+  (with-temp-buffer
+    (let ((status (process-file "git" nil t nil
+                                "diff" "--cached" "--" ".")))
+      (unless (and (integerp status) (zerop status))
+        (user-error "Unable to inspect staged Git diff"))
+      (secure-hash 'sha1 (current-buffer)))))
+
 (defun my-codex--send-git-prompt (prompt)
   "Send PROMPT to Codex from the project root after checking Git."
   (let ((default-directory (my-codex-project-root)))
@@ -385,6 +400,15 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
 (defun my-codex-commit-message-from-diff ()
   "Ask Codex to draft a commit message from the staged Git diff."
   (interactive)
+  (let ((buffer (my-codex-buffer))
+        (root (my-codex-project-root)))
+    (let ((default-directory root))
+      (my-codex--ensure-git-repository)
+      (setq my-codex--commit-message-request-signature
+            (my-codex--staged-diff-signature)))
+    (setq my-codex--commit-message-request-marker
+          (with-current-buffer buffer
+            (copy-marker (point-max)))))
   (my-codex--send-git-prompt
    (format "Please inspect the staged Git diff using `git diff --cached -- .` and write a concise but comprehensive conventional commit message.
 
@@ -541,21 +565,32 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
 (defun my-codex-git-commit-with-latest-message ()
   "Edit a commit with the latest Codex message, or ask Codex for one and wait."
   (interactive)
-  (let ((root (my-codex-project-root)))
+  (let ((root (my-codex-project-root))
+        current-signature)
     (let ((default-directory root))
       (my-codex--ensure-git-repository)
       (unless (my-codex--staged-changes-p)
-        (user-error "No staged Git changes to commit")))
-    (if-let ((message (my-codex-latest-commit-message)))
-        (progn
-          (my-codex-edit-git-commit-with-message message root)
-          (message "Editing latest Codex commit message."))
-      (let* ((buffer (my-codex-buffer))
-             (start-point (with-current-buffer buffer
-                            (copy-marker (point-max)))))
-        (my-codex-commit-message-from-diff)
-        (my-codex--wait-for-commit-message buffer start-point root)
-        (message "Asked Codex to draft a commit message; waiting to open editor.")))))
+        (user-error "No staged Git changes to commit"))
+      (setq current-signature (my-codex--staged-diff-signature)))
+    (let* ((buffer (my-codex-buffer))
+           (marker my-codex--commit-message-request-marker)
+           (current-request-p
+            (and (markerp marker)
+                 (eq (marker-buffer marker) buffer)
+                 (equal my-codex--commit-message-request-signature
+                        current-signature))))
+      (if current-request-p
+          (if-let ((message (my-codex-latest-commit-message-after buffer marker)))
+              (progn
+                (my-codex-edit-git-commit-with-message message root)
+                (message "Editing latest Codex commit message."))
+            (my-codex--wait-for-commit-message buffer marker root)
+            (message "Waiting for Codex commit message."))
+        (let ((start-point (with-current-buffer buffer
+                             (copy-marker (point-max)))))
+          (my-codex-commit-message-from-diff)
+          (my-codex--wait-for-commit-message buffer start-point root)
+          (message "Asked Codex to draft a commit message; waiting to open editor."))))))
 
 (defun my-codex-explain-region-as-error ()
   "Ask Codex to explain the selected compiler or test error."
