@@ -29,7 +29,7 @@ separate sessions.
 - Run a configurable project build command.
 - Warn when project buffers have unsaved changes before sending prompts.
 - Enable `global-auto-revert-mode` when `my-codex-global-mode` starts.
-- Provide global keys and a `Tools -> Codex` menu.
+- Provide global keys and a Codex menu.
 
 ## Requirements
 
@@ -92,10 +92,17 @@ Prefix bindings:
 | F8 g | `my-codex-send-git-diff` | Review the current Git diff |
 | F8 G | `my-codex-send-git-staged-diff` | Review the staged Git diff |
 | F8 m | `my-codex-commit-message-from-diff` | Draft a commit message |
-| F8 c | `my-codex-git-commit-with-latest-message` | Edit a commit using the latest drafted message |
+| F8 c | `my-codex-git-commit-with-latest-message` | Edit commit from latest draft |
 | F8 e | `my-codex-explain-region-as-error` | Explain a selected error |
 | F8 i | `my-codex-open-project-instructions` | Open project instructions |
 | F8 ? | `my-codex-help` | Show help |
+
+Commit message edit buffer:
+
+| Key | Command |
+| --- | --- |
+| C-c C-c | Commit staged changes with the edited message |
+| C-c C-k | Cancel the commit buffer |
 
 Inside `vterm`:
 
@@ -129,6 +136,7 @@ Common options:
 (setq my-codex-project-build-command "./setup_build")
 (setq my-codex-project-instruction-files
       '("AGENTS.md" "CODEX.md" ".codex/instructions.md"))
+(setq my-codex-commit-message-fill-column 76)
 
 (setq my-codex-warn-about-unsaved-project-buffers t)
 (setq my-codex-enable-global-auto-revert t)
