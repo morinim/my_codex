@@ -260,7 +260,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
       (vterm-send-return))))
 
 (defun my-codex-send-region (beg end)
-  "Send the selected region to the Codex vterm buffer with exact file context."
+  "Send the region between BEG and END to Codex with exact file context."
   (interactive "r")
   (unless (use-region-p)
     (user-error "No active region"))
@@ -659,7 +659,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
     (insert text)))
 
 (defun my-codex-ask (prompt)
-  "Prompt the user in the minibuffer and send the query straight to Codex."
+  "Read PROMPT in the minibuffer and send it straight to Codex."
   (interactive "sAsk Codex: ")
   (when (string-blank-p prompt)
     (user-error "Prompt cannot be empty"))
