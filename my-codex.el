@@ -91,6 +91,11 @@
   :type 'boolean
   :group 'my-codex)
 
+(defcustom my/codex-enable-global-auto-revert t
+  "When non-nil, enable `global-auto-revert-mode' with `my-codex-global-mode'."
+  :type 'boolean
+  :group 'my-codex)
+
 (defvar my/codex--saved-window-configuration nil
   "Window layout configuration captured before opening Codex.")
 
@@ -465,9 +470,12 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
   :group 'my-codex
   :keymap my-codex-global-mode-map
   (if my-codex-global-mode
-      (keymap-set global-map
-                  "<menu-bar> <tools> <codex>"
-                  (cons "Codex" my/codex-menu))
+      (progn
+        (when my/codex-enable-global-auto-revert
+          (global-auto-revert-mode 1))
+        (keymap-set global-map
+                    "<menu-bar> <tools> <codex>"
+                    (cons "Codex" my/codex-menu)))
     (keymap-unset global-map "<menu-bar> <tools> <codex>" t)))
 
 (provide 'my-codex)
