@@ -108,9 +108,11 @@
 (defun my/codex-current-buffer-name ()
   "Return a project-specific buffer name for the Codex session."
   (if-let* ((project (project-current))
-            (root (project-root project))
-            (name (file-name-nondirectory (directory-file-name root))))
-      (format "*codex:%s*" name)
+            (root (file-truename (project-root project))))
+      (format "*codex:%s*"
+              (replace-regexp-in-string
+               "[^[:alnum:]._-]+" "!"
+               (directory-file-name root)))
     my/codex-buffer-name))
 
 (defun my/codex-modified-project-buffers ()
@@ -146,8 +148,11 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
          (existing-buf (get-buffer buffer-name)))
 
     (when (< (frame-width) required-width)
-      (set-frame-width (selected-frame) required-width)
-      (redisplay t))
+      (condition-case nil
+          (progn
+            (set-frame-width (selected-frame) required-width)
+            (redisplay t))
+        (error nil)))
 
     (when (and existing-buf (not (get-buffer-process existing-buf)))
       (kill-buffer existing-buf)
@@ -170,14 +175,14 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
       (select-window term-window)
       (if (and existing-buf (get-buffer-process existing-buf))
           (set-window-buffer term-window existing-buf)
-        (let ((buffer (vterm buffer-name)))
-          (with-current-buffer buffer
-            (when-let ((proc (get-buffer-process buffer)))
-              (set-process-query-on-exit-flag proc nil))
-            (goto-char (point-max))
-            (vterm-send-string codex-command)
-            (vterm-send-return))))
-
+        (let ((default-directory (my/codex-project-root)))
+          (let ((buffer (vterm buffer-name)))
+            (with-current-buffer buffer
+              (when-let ((proc (get-buffer-process buffer)))
+                (set-process-query-on-exit-flag proc nil))
+              (goto-char (point-max))
+              (vterm-send-string codex-command)
+              (vterm-send-return)))))
       (unless focus-term
         (select-window edit-window)))))
 
@@ -288,12 +293,12 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
   (interactive)
   (if-let ((message (my/codex-latest-commit-message)))
       (let ((default-directory (my/codex-project-root)))
+        (when (string-blank-p message)
+          (user-error "Commit message is empty"))
         (my/codex--ensure-git-repository)
         (let ((file (make-temp-file "my-codex-commit-" nil ".txt")))
           (unwind-protect
               (progn
-                (when (string-blank-p message)
-                  (user-error "Commit message is empty"))
                 (with-temp-file file
                   (insert message "\n"))
                 (let ((buffer (get-buffer-create "*my-codex-git-commit*")))
@@ -495,7 +500,7 @@ Use an imperative subject and a short explanatory body when useful. Do not edit 
     ["Draft commit message" my/codex-commit-message-from-diff
      :help "Ask Codex to draft a commit message from the staged Git diff"]
     ["Commit with drafted message" my/codex-git-commit-with-latest-message
-     :help "Open git commit with the latest Codex-drafted message or draft one"]
+     :help "Commit staged changes with the latest Codex-drafted message or draft one"]
     "---"
     ["Open project instructions" my/codex-open-project-instructions
      :help "Open AGENTS.md, CODEX.md, or .codex/instructions.md"]
