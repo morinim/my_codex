@@ -85,6 +85,11 @@
   :type 'string
   :group 'my-codex)
 
+(defcustom my-codex-commit-message-fill-column 76
+  "Maximum line width for generated commit messages."
+  :type 'natnum
+  :group 'my-codex)
+
 (defcustom my-codex-warn-about-unsaved-project-buffers t
   "When non-nil, warn before sending prompts if project buffers are unsaved."
   :type 'boolean
@@ -276,11 +281,16 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
              file))))
 
 (defun my-codex-clean-commit-message (message)
-  "Return MESSAGE with leading/trailing whitespace removed from each line."
-  (string-join
-   (mapcar #'string-trim
-           (split-string (string-trim message) "\n"))
-   "\n"))
+  "Return MESSAGE trimmed and filled for use as a Git commit message."
+  (with-temp-buffer
+    (insert
+     (string-join
+      (mapcar #'string-trim
+              (split-string (string-trim message) "\n"))
+      "\n"))
+    (let ((fill-column my-codex-commit-message-fill-column))
+      (fill-region (point-min) (point-max)))
+    (buffer-string)))
 
 (defun my-codex--git-repository-p ()
   "Return non-nil if `default-directory' is inside a Git repository."
@@ -316,7 +326,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
   "Ask Codex to draft a commit message from the staged Git diff."
   (interactive)
   (my-codex--send-git-prompt
-   "Please inspect the staged Git diff using `git diff --cached -- .` and write a concise but comprehensive conventional commit message.
+   (format "Please inspect the staged Git diff using `git diff --cached -- .` and write a concise but comprehensive conventional commit message.
 
 Put only the final commit message between these exact markers:
 
@@ -324,7 +334,8 @@ BEGIN_COMMIT_MESSAGE
 <commit message here>
 END_COMMIT_MESSAGE
 
-Use an imperative subject and a short explanatory body when useful. Do not edit files.\n"))
+Use an imperative subject and a short explanatory body when useful. Limit each line to %d columns. Do not edit files.\n"
+           my-codex-commit-message-fill-column)))
 
 (defun my-codex-latest-commit-message-after (buffer start-point)
   "Return the commit message in BUFFER appearing after START-POINT, or nil."
