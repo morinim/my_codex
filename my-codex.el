@@ -355,7 +355,7 @@ Use an imperative subject and a short explanatory body when useful. Do not edit 
   (let ((file (make-temp-file "my-codex-commit-" nil ".txt"))
         (output-buffer (get-buffer-create "*Codex git commit*")))
     (with-temp-file file
-      (insert message "\n"))
+      (insert (string-trim message) "\n"))
     (with-current-buffer output-buffer
       (read-only-mode -1)
       (erase-buffer))
@@ -364,25 +364,37 @@ Use an imperative subject and a short explanatory body when useful. Do not edit 
             (make-process
              :name "my-codex-git-commit"
              :buffer output-buffer
-             :command (list "git" "commit" "--edit" "-F" file)
+             :command (list "git"
+                            "commit"
+                            "--edit"
+                            "--cleanup=strip"
+                            "--no-status"
+                            "-F" file)
              :connection-type 'pipe
              :noquery t
              :sentinel
              (lambda (proc event)
                (when (memq (process-status proc) '(exit signal))
-                 (ignore-errors
-                   (delete-file file))
-                 (with-current-buffer (process-buffer proc)
-                   (goto-char (point-max))
-                   (insert (format "\nProcess %s %s"
-                                   (process-name proc)
-                                   (string-trim event))))
-                 (message "Git commit finished with status %s"
-                          (process-exit-status proc)))))))
+                 (let ((status (process-exit-status proc))
+                       (buffer (process-buffer proc)))
+                   (ignore-errors
+                     (delete-file file))
+                   (if (zerop status)
+                       (progn
+                         (when (buffer-live-p buffer)
+                           (kill-buffer buffer))
+                         (message "Git commit finished successfully."))
+                     (when (buffer-live-p buffer)
+                       (with-current-buffer buffer
+                         (goto-char (point-max))
+                         (insert (format "\nProcess %s %s"
+                                         (process-name proc)
+                                         (string-trim event))))
+                       (display-buffer buffer))
+                     (message "Git commit failed with status %s" status))))))))
       (set-process-query-on-exit-flag process nil)
       (with-current-buffer output-buffer
-        (setq default-directory root))
-      (display-buffer output-buffer))))
+        (setq default-directory root)))))
 
 (defun my-codex--wait-for-commit-message (buffer start-point root &optional attempts)
   "Poll BUFFER after START-POINT for a finished commit message.
