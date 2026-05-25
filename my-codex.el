@@ -280,17 +280,66 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
      (format "Please inspect `%s` directly and report findings. Do not edit it unless I explicitly ask.\n"
              file))))
 
-(defun my-codex-clean-commit-message (message)
-  "Return MESSAGE trimmed and filled for use as a Git commit message."
+(defun my-codex--commit-message-trailer-line-p (line)
+  "Return non-nil if LINE looks like a Git commit message trailer."
+  (string-match-p "\\`[[:alnum:]-]+: .+" line))
+
+(defun my-codex--commit-message-list-line-p (line)
+  "Return non-nil if LINE looks like a list item."
+  (string-match-p "\\`[[:space:]]*\\([-+*]\\|[0-9]+[.)]\\)[[:space:]]+" line))
+
+(defun my-codex--commit-message-preserve-line-p (line)
+  "Return non-nil if LINE should not be reflowed with surrounding text."
+  (or (string-match-p "\\`[[:space:]]+" line)
+      (my-codex--commit-message-trailer-line-p line)))
+
+(defun my-codex--fill-commit-message-text (text)
+  "Return TEXT filled to `my-codex-commit-message-fill-column'."
   (with-temp-buffer
-    (insert
-     (string-join
-      (mapcar #'string-trim
-              (split-string (string-trim message) "\n"))
-      "\n"))
+    (insert text)
     (let ((fill-column my-codex-commit-message-fill-column))
       (fill-region (point-min) (point-max)))
-    (buffer-string)))
+    (string-trim-right (buffer-string))))
+
+(defun my-codex--clean-commit-message-body-lines (lines)
+  "Return LINES trimmed and filled for a Git commit message body."
+  (let (result)
+    (while lines
+      (let ((line (car lines)))
+        (cond
+         ((string-blank-p line)
+          (push "" result)
+          (setq lines (cdr lines)))
+         ((my-codex--commit-message-list-line-p line)
+          (push (my-codex--fill-commit-message-text (string-trim-right line))
+                result)
+          (setq lines (cdr lines)))
+         ((my-codex--commit-message-preserve-line-p line)
+          (push (string-trim-right line) result)
+          (setq lines (cdr lines)))
+         (t
+          (let (paragraph)
+            (while (and lines
+                        (not (string-blank-p (car lines)))
+                        (not (my-codex--commit-message-list-line-p (car lines)))
+                        (not (my-codex--commit-message-preserve-line-p (car lines))))
+              (push (string-trim (car lines)) paragraph)
+              (setq lines (cdr lines)))
+            (push (my-codex--fill-commit-message-text
+                   (string-join (nreverse paragraph) " "))
+                  result))))))
+    (nreverse result)))
+
+(defun my-codex-clean-commit-message (message)
+  "Return MESSAGE trimmed and filled for use as a Git commit message."
+  (let ((message (string-trim message)))
+    (if (string-empty-p message)
+        ""
+      (let ((lines (split-string message "\n")))
+        (string-join
+         (cons (string-trim (car lines))
+               (my-codex--clean-commit-message-body-lines (cdr lines)))
+         "\n")))))
 
 (defun my-codex--git-repository-p ()
   "Return non-nil if `default-directory' is inside a Git repository."
