@@ -297,7 +297,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
 
 (defun my-codex--commit-message-preserve-line-p (line)
   "Return non-nil if LINE should not be reflowed with surrounding text."
-  (or (string-match-p "\\`[[:space:]]+" line)
+  (or (string-match-p "\\`\\([[:blank:]]\\{4,\\}\\|\t\\)" line)
       (my-codex--commit-message-trailer-line-p line)))
 
 (defun my-codex--fill-commit-message-text (text)
@@ -360,6 +360,15 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
   (unless (my-codex--git-repository-p)
     (user-error "Not inside a Git repository (or Git executable missing)")))
 
+(defun my-codex--staged-changes-p ()
+  "Return non-nil when `default-directory' has staged Git changes."
+  (let ((status (process-file "git" nil nil nil
+                              "diff" "--cached" "--quiet" "--" ".")))
+    (cond
+     ((eq status 0) nil)
+     ((eq status 1) t)
+     (t (user-error "Unable to inspect staged Git changes")))))
+
 (defun my-codex--send-git-prompt (prompt)
   "Send PROMPT to Codex from the project root after checking Git."
   (let ((default-directory (my-codex-project-root)))
@@ -420,11 +429,54 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
 (defun my-codex-latest-commit-message ()
   "Return the latest marked commit message from the current project's Codex buffer, or nil."
   (when-let ((buffer (get-buffer (my-codex-current-buffer-name))))
-    (when (get-buffer-process buffer)
-      (my-codex-latest-commit-message-after buffer nil))))
+    (my-codex-latest-commit-message-after buffer nil)))
 
-(defun my-codex-git-commit-with-message (message root)
-  "Run `git commit -F FILE' with MESSAGE from ROOT."
+(defun my-codex--commit-message-buffer-name (root)
+  "Return the commit message buffer name for ROOT."
+  (format "*Codex commit message:%s*"
+          (replace-regexp-in-string
+           "[^[:alnum:]._-]+" "!"
+           (directory-file-name (file-name-nondirectory
+                                 (directory-file-name root))))))
+
+(defun my-codex--finish-git-commit ()
+  "Commit staged changes using the current buffer as the commit message."
+  (interactive)
+  (let ((root default-directory)
+        (message (my-codex-clean-commit-message
+                  (buffer-substring-no-properties (point-min) (point-max)))))
+    (when (string-empty-p message)
+      (user-error "Commit message is empty"))
+    (my-codex-git-commit-with-message message root (current-buffer))))
+
+(defun my-codex--cancel-git-commit ()
+  "Cancel the current Codex commit message buffer."
+  (interactive)
+  (kill-buffer (current-buffer))
+  (message "Git commit canceled."))
+
+(defun my-codex-edit-git-commit-with-message (message root)
+  "Open an editable Git commit buffer with MESSAGE from ROOT."
+  (let ((buffer (get-buffer-create (my-codex--commit-message-buffer-name root))))
+    (pop-to-buffer buffer)
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (insert (my-codex-clean-commit-message message))
+      (goto-char (point-min)))
+    (setq default-directory root)
+    (text-mode)
+    (setq-local header-line-format
+                "Edit commit message.  C-c C-c commits staged changes; C-c C-k cancels.")
+    (let ((map (make-sparse-keymap)))
+      (set-keymap-parent map (current-local-map))
+      (keymap-set map "C-c C-c" #'my-codex--finish-git-commit)
+      (keymap-set map "C-c C-k" #'my-codex--cancel-git-commit)
+      (use-local-map map))
+    (message "Edit the commit message, then press C-c C-c to commit.")))
+
+(defun my-codex-git-commit-with-message (message root &optional commit-buffer)
+  "Run `git commit -F FILE' with MESSAGE from ROOT.
+Kill COMMIT-BUFFER after a successful commit when it is non-nil."
   (let ((file (make-temp-file "my-codex-commit-" nil ".txt"))
         (output-buffer (get-buffer-create "*Codex git commit*")))
     (with-temp-file file
@@ -453,6 +505,8 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
                      (delete-file file))
                    (if (zerop status)
                        (progn
+                         (when (buffer-live-p commit-buffer)
+                           (kill-buffer commit-buffer))
                          (when (buffer-live-p buffer)
                            (kill-buffer buffer))
                          (message "Git commit finished successfully."))
@@ -483,29 +537,31 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
           (progn
             (when (markerp start-point)
               (set-marker start-point nil))
-            (my-codex-git-commit-with-message msg root)
-            (message "Codex commit message is ready; committing."))
+            (my-codex-edit-git-commit-with-message msg root)
+            (message "Codex commit message is ready for editing."))
         (run-with-timer
          0.5 nil
          #'my-codex--wait-for-commit-message
          buffer start-point root (1+ attempts))))))
 
 (defun my-codex-git-commit-with-latest-message ()
-  "Commit with the latest Codex message, or ask Codex for one and wait."
+  "Edit a commit with the latest Codex message, or ask Codex for one and wait."
   (interactive)
   (let ((root (my-codex-project-root)))
     (let ((default-directory root))
-      (my-codex--ensure-git-repository))
+      (my-codex--ensure-git-repository)
+      (unless (my-codex--staged-changes-p)
+        (user-error "No staged Git changes to commit")))
     (if-let ((message (my-codex-latest-commit-message)))
         (progn
-          (my-codex-git-commit-with-message message root)
-          (message "Committing with latest Codex commit message."))
+          (my-codex-edit-git-commit-with-message message root)
+          (message "Editing latest Codex commit message."))
       (let* ((buffer (my-codex-buffer))
              (start-point (with-current-buffer buffer
                             (copy-marker (point-max)))))
         (my-codex-commit-message-from-diff)
         (my-codex--wait-for-commit-message buffer start-point root)
-        (message "Asked Codex to draft a commit message; waiting for it.")))))
+        (message "Asked Codex to draft a commit message; waiting to open editor.")))))
 
 (defun my-codex-explain-region-as-error ()
   "Ask Codex to explain the selected compiler or test error."
@@ -584,7 +640,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
   "Show Codex key bindings."
   (interactive)
   (message
-   "Codex: F7=build, F8 o=show/start read-only, w=show/start workspace, r=resume, q=restore layout, a=ask, s/right=send region, left=insert selected Codex text, f=file, g=diff, G=staged diff, m=draft commit message, c=commit with Codex message, e=explain error, i=instructions, TAB=toggle focus, ?=help"))
+   "Codex: F7=build, F8 o=show/start read-only, w=show/start workspace, r=resume, q=restore layout, a=ask, s/right=send region, left=insert selected Codex text, f=file, g=diff, G=staged diff, m=draft commit message, c=edit commit with Codex message, e=explain error, i=instructions, TAB=toggle focus, ?=help"))
 
 ;; Prefix keymap for Codex commands.
 (defvar-keymap my-codex-map
@@ -657,8 +713,8 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
      :help "Ask Codex to review the staged Git diff"]
     ["Draft commit message" my-codex-commit-message-from-diff
      :help "Ask Codex to draft a commit message from the staged Git diff"]
-    ["Commit with Codex message" my-codex-git-commit-with-latest-message
-     :help "Use the latest Codex commit message, or ask Codex for one, then commit"]
+    ["Edit commit with Codex message" my-codex-git-commit-with-latest-message
+     :help "Use the latest Codex commit message, or ask Codex for one, then edit before committing"]
     "---"
     ["Open project instructions" my-codex-open-project-instructions
      :help "Open AGENTS.md, CODEX.md, or .codex/instructions.md"]
