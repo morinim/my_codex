@@ -351,11 +351,10 @@ Use an imperative subject and a short explanatory body when useful. Do not edit 
                       msg)))))))))))
 
 (defun my-codex-latest-commit-message ()
-  "Return the latest marked commit message from the Codex buffers, or nil."
-  (seq-some
-   (lambda (buffer)
-     (my-codex-latest-commit-message-after buffer nil))
-   (my-codex--codex-buffers)))
+  "Return the latest marked commit message from the current project's Codex buffer, or nil."
+  (when-let ((buffer (get-buffer (my-codex-current-buffer-name))))
+    (when (get-buffer-process buffer)
+      (my-codex-latest-commit-message-after buffer nil))))
 
 (defun my-codex-git-commit-with-message (message root)
   "Run `git commit --edit -F FILE' using Git's configured editor."
