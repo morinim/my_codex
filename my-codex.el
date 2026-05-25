@@ -253,17 +253,6 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
       (vterm-send-string prompt)
       (vterm-send-return))))
 
-(defun my-codex--codex-buffers ()
-  "Return Codex buffers, preferring the current project's buffer."
-  (let ((current (get-buffer (my-codex-current-buffer-name)))
-        (codex-buffers
-         (seq-filter
-          (lambda (buffer)
-            (string-match-p "\\`\\*codex\\(?::.*\\)?\\*\\'"
-                            (buffer-name buffer)))
-          (buffer-list))))
-    (delete-dups (delq nil (cons current codex-buffers)))))
-
 (defun my-codex-send-region (beg end)
   "Send the selected region to the Codex vterm buffer with exact file context."
   (interactive "r")
