@@ -95,11 +95,6 @@
   :type 'boolean
   :group 'my-codex)
 
-(defcustom my-codex-commit-vterm-buffer-name "*Codex git commit*"
-  "Name of the vterm buffer used for interactive Git commits."
-  :type 'string
-  :group 'my-codex)
-
 (defvar my-codex--saved-window-configuration nil
   "Window layout configuration captured before opening Codex.")
 
@@ -326,19 +321,27 @@ Use an imperative subject and a short explanatory body when useful. Do not edit 
 
 (defun my-codex-latest-commit-message-after (buffer start-point)
   "Return the commit message in BUFFER appearing after START-POINT, or nil."
-  (with-current-buffer buffer
-    (save-excursion
-      (goto-char (point-max))
-      ;; Relaxed regex to bypass terminal formatting quirks.
-      (when (re-search-backward "BEGIN_COMMIT_MESSAGE" start-point t)
-        (let ((beg (match-end 0)))
-          (when (re-search-forward "END_COMMIT_MESSAGE" nil t)
-            (let ((msg (string-trim
-                        (buffer-substring-no-properties
-                         beg
-                         (match-beginning 0)))))
-              (unless (member msg '("" "..." "<commit message here>"))
-                msg))))))))
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (save-restriction
+        (widen)
+        (save-excursion
+          (goto-char (point-max))
+          (let ((bound (when (and start-point
+                                  (integer-or-marker-p start-point)
+                                  (<= (point-min) start-point)
+                                  (< start-point (point)))
+                         start-point)))
+            ;; Relaxed regex to bypass terminal formatting quirks.
+            (when (re-search-backward "BEGIN_COMMIT_MESSAGE" bound t)
+              (let ((beg (match-end 0)))
+                (when (re-search-forward "END_COMMIT_MESSAGE" nil t)
+                  (let ((msg (string-trim
+                              (buffer-substring-no-properties
+                               beg
+                               (match-beginning 0)))))
+                    (unless (member msg '("" "..." "<commit message here>"))
+                      msg)))))))))))
 
 (defun my-codex-latest-commit-message ()
   "Return the latest marked commit message from the Codex buffers, or nil."
@@ -347,27 +350,39 @@ Use an imperative subject and a short explanatory body when useful. Do not edit 
      (my-codex-latest-commit-message-after buffer nil))
    (my-codex--codex-buffers)))
 
-(defun my-codex-git-commit-with-message-in-vterm (message root)
-  "Run `git commit --edit -F FILE' in a vterm using MESSAGE and ROOT."
-  (require 'vterm)
-  (let ((file (make-temp-file "my-codex-commit-" nil ".txt")))
+(defun my-codex-git-commit-with-message (message root)
+  "Run `git commit --edit -F FILE' using Git's configured editor."
+  (let ((file (make-temp-file "my-codex-commit-" nil ".txt"))
+        (output-buffer (get-buffer-create "*Codex git commit*")))
     (with-temp-file file
       (insert message "\n"))
+    (with-current-buffer output-buffer
+      (read-only-mode -1)
+      (erase-buffer))
     (let* ((default-directory root)
-           (dead-buffer (get-buffer my-codex-commit-vterm-buffer-name))
-           (command (mapconcat #'shell-quote-argument
-                               (list "git" "commit" "--edit" "-F" file)
-                               " ")))
-      (when (and dead-buffer
-                 (not (get-buffer-process dead-buffer)))
-        (kill-buffer dead-buffer))
-      (let ((buffer (vterm my-codex-commit-vterm-buffer-name)))
-        (with-current-buffer buffer
-          (when-let ((proc (get-buffer-process buffer)))
-            (set-process-query-on-exit-flag proc nil))
-          (goto-char (point-max))
-          (vterm-send-string command)
-          (vterm-send-return))))))
+           (process
+            (make-process
+             :name "my-codex-git-commit"
+             :buffer output-buffer
+             :command (list "git" "commit" "--edit" "-F" file)
+             :connection-type 'pipe
+             :noquery t
+             :sentinel
+             (lambda (proc event)
+               (when (memq (process-status proc) '(exit signal))
+                 (ignore-errors
+                   (delete-file file))
+                 (with-current-buffer (process-buffer proc)
+                   (goto-char (point-max))
+                   (insert (format "\nProcess %s %s"
+                                   (process-name proc)
+                                   (string-trim event))))
+                 (message "Git commit finished with status %s"
+                          (process-exit-status proc)))))))
+      (set-process-query-on-exit-flag process nil)
+      (with-current-buffer output-buffer
+        (setq default-directory root))
+      (display-buffer output-buffer))))
 
 (defun my-codex--wait-for-commit-message (buffer start-point root &optional attempts)
   "Poll BUFFER after START-POINT for a finished commit message.
@@ -384,7 +399,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
           (progn
             (when (markerp start-point)
               (set-marker start-point nil))
-            (my-codex-git-commit-with-message-in-vterm msg root)
+            (my-codex-git-commit-with-message msg root)
             (message "Codex commit message is ready; opened Git editor."))
         (run-with-timer
          0.5 nil
@@ -399,7 +414,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
       (my-codex--ensure-git-repository))
     (if-let ((message (my-codex-latest-commit-message)))
         (progn
-          (my-codex-git-commit-with-message-in-vterm message root)
+          (my-codex-git-commit-with-message message root)
           (message "Opened Git editor with latest Codex commit message."))
       (let* ((buffer (my-codex-buffer))
              (start-point (with-current-buffer buffer
