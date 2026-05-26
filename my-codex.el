@@ -364,6 +364,79 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
   (unless (my-codex--git-repository-p)
     (user-error "Not inside a Git repository (or Git executable missing)")))
 
+(defun my-codex--git-comment-char (root)
+  "Return Git's commit comment character for ROOT."
+  (let* ((default-directory root)
+         (value (with-temp-buffer
+                  (when (zerop (process-file "git" nil t nil
+                                             "config" "--get"
+                                             "core.commentChar"))
+                    (string-trim (buffer-string))))))
+    (if (and value
+             (not (string-empty-p value))
+             (not (string= value "auto")))
+        (substring value 0 1)
+      "#")))
+
+(defconst my-codex--commit-template-begin "MY_CODEX_COMMIT_TEMPLATE_BEGIN"
+  "Marker for the start of an inserted commit template section.")
+
+(defconst my-codex--commit-template-end "MY_CODEX_COMMIT_TEMPLATE_END"
+  "Marker for the end of an inserted commit template section.")
+
+(defun my-codex--strip-commit-template-section (message)
+  "Return MESSAGE without an inserted commit template section."
+  (with-temp-buffer
+    (insert message)
+    (goto-char (point-min))
+    (while (re-search-forward
+            (regexp-quote my-codex--commit-template-begin) nil t)
+      (let ((beg (line-beginning-position)))
+        (if (re-search-forward
+             (regexp-quote my-codex--commit-template-end) nil t)
+            (delete-region beg (min (point-max) (1+ (line-end-position))))
+          (delete-region beg (point-max)))))
+    (buffer-string)))
+
+(defun my-codex--git-commit-template (root)
+  "Return Git commit template contents for ROOT, or nil."
+  (let* ((default-directory root)
+         (path (with-temp-buffer
+                 (when (zerop (process-file "git" nil t nil
+                                            "config" "--path" "--get"
+                                            "commit.template"))
+                   (string-trim (buffer-string))))))
+    (when (and path
+               (not (string-empty-p path))
+               (file-readable-p path))
+      (with-temp-buffer
+        (insert-file-contents path)
+        (string-trim-right (buffer-string))))))
+
+(defun my-codex--comment-commit-template (template comment-char)
+  "Return TEMPLATE as Git COMMENT-CHAR comment lines."
+  (mapconcat
+   (lambda (line)
+     (cond
+      ((string-empty-p line)
+       comment-char)
+      ((string-prefix-p comment-char line)
+       line)
+      (t
+       (concat comment-char " " line))))
+   (split-string template "\n")
+   "\n"))
+
+(defun my-codex--commit-template-section (template comment-char)
+  "Return TEMPLATE as a marked Git COMMENT-CHAR comment section."
+  (my-codex--comment-commit-template
+   (string-join
+    (list my-codex--commit-template-begin
+          template
+          my-codex--commit-template-end)
+    "\n")
+   comment-char))
+
 (defun my-codex--staged-changes-p ()
   "Return non-nil when `default-directory' has staged Git changes."
   (let ((status (process-file "git" nil nil nil
@@ -476,9 +549,10 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
 (defun my-codex--finish-git-commit ()
   "Commit staged changes using the current buffer as the commit message."
   (interactive)
-  (let ((root default-directory)
-        (message (my-codex-clean-commit-message
-                  (buffer-substring-no-properties (point-min) (point-max)))))
+  (let* ((root default-directory)
+         (raw-message (buffer-substring-no-properties (point-min) (point-max)))
+         (message (my-codex-clean-commit-message
+                   (my-codex--strip-commit-template-section raw-message))))
     (when (string-empty-p message)
       (user-error "Commit message is empty"))
     (my-codex-git-commit-with-message message root (current-buffer))))
@@ -496,11 +570,16 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
     (let ((inhibit-read-only t))
       (erase-buffer)
       (insert (my-codex-clean-commit-message message))
+      (when-let ((template (my-codex--git-commit-template root)))
+        (insert "\n\n")
+        (insert (my-codex--commit-template-section
+                 template
+                 (my-codex--git-comment-char root))))
       (goto-char (point-min)))
     (setq default-directory root)
     (text-mode)
     (setq-local header-line-format
-                "Edit commit message.  C-c C-c commits staged changes; C-c C-k cancels.")
+                "Edit commit message. C-c C-c commits staged changes; C-c C-k cancels.")
     (let ((map (make-sparse-keymap)))
       (set-keymap-parent map (current-local-map))
       (keymap-set map "C-c C-c" #'my-codex--finish-git-commit)
