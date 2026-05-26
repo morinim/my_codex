@@ -441,26 +441,33 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
         (widen)
         (save-excursion
           (goto-char (point-max))
-          (let ((bound (when (and start-point
-                                  (integer-or-marker-p start-point)
-                                  (<= (point-min) start-point)
-                                  (< start-point (point)))
-                         start-point)))
-            ;; Relaxed regex to bypass terminal formatting quirks.
-            (when (re-search-backward "BEGIN_COMMIT_MESSAGE" bound t)
-              (let ((beg (match-end 0)))
-                (when (re-search-forward "END_COMMIT_MESSAGE" nil t)
-                  (let ((msg (string-trim
-                              (buffer-substring-no-properties
-                               beg
-                               (match-beginning 0)))))
-                    (unless (member msg '("" "..." "<commit message here>"))
-                      msg)))))))))))
+          (let* ((valid-start-point-p
+                  (and start-point
+                       (integer-or-marker-p start-point)
+                       (or (not (markerp start-point))
+                           (eq (marker-buffer start-point) buffer))
+                       (<= (point-min) start-point)
+                       (< start-point (point))))
+                 (bound (when valid-start-point-p start-point)))
+            (when (or (null start-point) bound)
+              ;; Relaxed regex to bypass terminal formatting quirks.
+              (when (re-search-backward "BEGIN_COMMIT_MESSAGE" bound t)
+                (let ((beg (match-end 0)))
+                  (when (re-search-forward "END_COMMIT_MESSAGE" nil t)
+                    (let ((msg (string-trim
+                                (buffer-substring-no-properties
+                                 beg
+                                 (match-beginning 0)))))
+                      (unless (member msg '("" "..." "<commit message here>"))
+                        msg))))))))))))
 
 (defun my-codex-latest-commit-message ()
-  "Return the latest marked commit message from the current project's Codex buffer, or nil."
-  (when-let ((buffer (get-buffer (my-codex-current-buffer-name))))
-    (my-codex-latest-commit-message-after buffer nil)))
+  "Return the latest requested commit message from the current Codex buffer, or nil."
+  (when-let* ((buffer (get-buffer (my-codex-current-buffer-name)))
+              (marker my-codex--commit-message-request-marker)
+              ((markerp marker))
+              ((eq (marker-buffer marker) buffer)))
+    (my-codex-latest-commit-message-after buffer marker)))
 
 (defun my-codex--commit-message-buffer-name (root)
   "Return the commit message buffer name for ROOT."
