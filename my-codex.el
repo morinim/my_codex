@@ -499,6 +499,8 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
          (root (my-codex-project-root))
          (default-directory root))
     (my-codex--ensure-git-repository)
+    (unless (my-codex--staged-changes-p)
+      (user-error "No staged Git changes to draft a commit message from"))
     (setq my-codex--commit-message-request-signature
           (my-codex--staged-diff-signature))
     (setq my-codex--commit-message-request-marker
