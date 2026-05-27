@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.2.0
+;; Version: 0.3.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -179,39 +179,48 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
       (kill-buffer existing-buf)
       (setq existing-buf nil))
 
-    (unless (get-buffer-window buffer-name t)
-      (setq my-codex--saved-window-configuration (current-window-configuration)))
+    (let ((existing-window-in-frame
+           (and existing-buf
+                (get-buffer-window existing-buf))))
+      (unless existing-window-in-frame
+        (setq my-codex--saved-window-configuration
+              (current-window-configuration)))
 
-    (let ((layout-before-delete (current-window-configuration)))
-      (condition-case err
-          (progn
-            (delete-other-windows)
-            (let* ((edit-window (selected-window))
-                   (term-window (condition-case nil
-                                    (split-window-right my-codex-left-width)
-                                  (error
-                                   (user-error "Frame is too narrow for Codex layout"))))
-                   (delta (- my-codex-left-width (window-body-width edit-window))))
+      (let ((layout-before-delete (current-window-configuration)))
+        (condition-case err
+            (progn
+              (delete-other-windows)
+              (let* ((edit-window (selected-window))
+                     (term-window
+                      (condition-case nil
+                          (split-window-right my-codex-left-width)
+                        (error
+                         (user-error "Frame is too narrow for Codex layout"))))
+                     (delta (- my-codex-left-width
+                               (window-body-width edit-window))))
 
-              (when (and (not (zerop delta)) (window-resizable-p edit-window delta t t))
-                (window-resize edit-window delta t t))
+                (when (and (not (zerop delta))
+                           (window-resizable-p edit-window delta t t))
+                  (window-resize edit-window delta t t))
 
-              (select-window term-window)
-              (if (and existing-buf (get-buffer-process existing-buf))
-                  (set-window-buffer term-window existing-buf)
-                (let ((default-directory (my-codex-project-root)))
-                  (let ((buffer (vterm buffer-name)))
-                    (with-current-buffer buffer
-                      (when-let ((proc (get-buffer-process buffer)))
-                        (set-process-query-on-exit-flag proc nil))
-                      (goto-char (point-max))
-                      (vterm-send-string (my-codex--shell-command-and-exit codex-command))
-                      (vterm-send-return)))))
-              (unless focus-term
-                (select-window edit-window))))
-        (error
-         (set-window-configuration layout-before-delete)
-         (signal (car err) (cdr err)))))))
+                (select-window term-window)
+                (if (and existing-buf (get-buffer-process existing-buf))
+                    (set-window-buffer term-window existing-buf)
+                  (let ((default-directory (my-codex-project-root)))
+                    (let ((buffer (vterm buffer-name)))
+                      (with-current-buffer buffer
+                        (when-let ((proc (get-buffer-process buffer)))
+                          (set-process-query-on-exit-flag proc nil))
+                        (goto-char (point-max))
+                        (vterm-send-string
+                         (my-codex--shell-command-and-exit codex-command))
+                        (vterm-send-return)))))
+
+                (unless focus-term
+                  (select-window edit-window))))
+          (error
+           (set-window-configuration layout-before-delete)
+           (signal (car err) (cdr err))))))))
 
 (defun my-codex-restore-layout ()
   "Restore the window layout configuration used before Codex was opened."
