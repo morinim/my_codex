@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.4.1
+;; Version: 0.5.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -97,6 +97,11 @@
 
 (defcustom my-codex-enable-global-auto-revert t
   "When non-nil, enable `global-auto-revert-mode' with `my-codex-global-mode'."
+  :type 'boolean
+  :group 'my-codex)
+
+(defcustom my-codex-enable-session-links t
+  "When non-nil, make URLs and file references clickable in Codex buffers."
   :type 'boolean
   :group 'my-codex)
 
@@ -226,6 +231,8 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
                       (with-current-buffer buffer
                         (unless (derived-mode-p 'vterm-mode)
                           (vterm-mode))
+                        (when my-codex-enable-session-links
+                          (my-codex-session-links-mode 1))
                         (let ((proc (get-buffer-process buffer)))
                           (unless (process-live-p proc)
                             (user-error "Failed to start vterm process in %s"
@@ -277,6 +284,190 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
     (unless (get-buffer-process buffer)
       (user-error "No running Codex process in %s" buffer-name))
     buffer))
+
+(defvar my-codex-session-link-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [mouse-1] #'my-codex-open-session-link-at-event)
+    (define-key map (kbd "RET") #'my-codex-open-session-link-at-point)
+    map)
+  "Keymap used for clickable Codex session links.")
+
+(defconst my-codex--url-regexp
+  "\\_<https?://[^[:space:]<>()\"'.,;:!?]+\\(?:[.,;:!?]*[^[:space:]<>()\"'.,;:!?]\\)*"
+  "Regexp matching HTTP and HTTPS URLs.")
+
+(defconst my-codex--file-reference-regexp
+  (concat
+   "\\(?1:\\(?:[[:alnum:]_.@+-]+/\\)*[[:alnum:]_.@+-]+\\.[[:alnum:]_.@+-]+\\)"
+   "\\(?:"
+   ":\\(?2:[0-9]+\\)\\(?::\\(?3:[0-9]+\\)\\)?"
+   "\\|"
+   ":L\\(?4:[0-9]+\\)\\(?:-L?\\(?5:[0-9]+\\)\\)?"
+   "\\|"
+   "#L\\(?6:[0-9]+\\)\\(?:-L?\\(?7:[0-9]+\\)\\)?"
+   "\\)")
+  "Regexp matching in-repository file references.
+
+Supported forms include:
+
+  src/foo.el:42
+  src/foo.el:42:7
+  src/foo.el:L42-L60
+  src/foo.el#L42-L60")
+
+(defun my-codex--add-session-link (beg end type target)
+  "Add a clickable Codex session link from BEG to END.
+TYPE is one of `url' or `file'.  TARGET is link-specific data."
+  (add-text-properties
+   beg end
+   `(mouse-face highlight
+     help-echo "mouse-1 or RET: open link"
+     keymap ,my-codex-session-link-map
+     my-codex-session-link-type ,type
+     my-codex-session-link-target ,target
+     font-lock-face link)))
+
+(defun my-codex-open-session-link-at-event (event)
+  "Open the Codex session link clicked by EVENT."
+  (interactive "e")
+  (let* ((end (event-end event))
+         (window (posn-window end))
+         (pos (posn-point end)))
+    (with-current-buffer (window-buffer window)
+      (my-codex-open-session-link-at-position pos))))
+
+(defun my-codex-open-session-link-at-point ()
+  "Open the Codex session link at point."
+  (interactive)
+  (my-codex-open-session-link-at-position (point)))
+
+(defun my-codex-open-session-link-at-position (pos)
+  "Open the Codex session link at POS."
+  (let ((type (get-text-property pos 'my-codex-session-link-type))
+        (target (get-text-property pos 'my-codex-session-link-target)))
+    (pcase type
+      ('url
+       (browse-url target))
+      ('file
+       (my-codex-open-file-reference target))
+      (_
+       (user-error "No Codex session link at point")))))
+
+(defun my-codex-open-file-reference (target)
+  "Open file reference TARGET.
+TARGET is a plist containing :file, :line, :column, and :end-line."
+  (let* ((root (my-codex-project-root))
+         (file (plist-get target :file))
+         (line (plist-get target :line))
+         (column (plist-get target :column)))
+    (unless (my-codex--valid-file-reference-target-p target)
+      (user-error "File does not exist: %s" file))
+    (find-file-other-window (expand-file-name file root))
+    (when line
+      (goto-char (point-min))
+      (forward-line (1- line)))
+    (when column
+      (move-to-column (1- column)))))
+
+(defun my-codex--file-reference-target-at-match ()
+  "Return a plist describing the current file-reference regexp match."
+  (let ((file (match-string-no-properties 1))
+        (line-str (or (match-string-no-properties 2)
+                      (match-string-no-properties 4)
+                      (match-string-no-properties 6)))
+        (column-str (match-string-no-properties 3))
+        (end-line-str (or (match-string-no-properties 5)
+                          (match-string-no-properties 7))))
+    (list :file file
+          :line (when line-str
+                  (string-to-number line-str))
+          :column (when column-str
+                    (string-to-number column-str))
+          :end-line (when end-line-str
+                      (string-to-number end-line-str)))))
+
+(defun my-codex--valid-file-reference-target-p (target)
+  "Return non-nil if TARGET refers to a readable in-project file."
+  (let* ((root (file-truename (my-codex-project-root)))
+         (file (plist-get target :file)))
+    (and file
+         (not (file-name-absolute-p file))
+         (let ((path (expand-file-name file root)))
+           (and (file-readable-p path)
+                (file-in-directory-p (file-truename path) root))))))
+
+(defun my-codex--line-bounds (beg end)
+  "Return a cons of line-expanded bounds around BEG and END."
+  (save-excursion
+    (cons
+     (progn
+       (goto-char beg)
+       (line-beginning-position))
+     (progn
+       (goto-char end)
+       (line-end-position)))))
+
+(defun my-codex--clear-session-links (beg end)
+  "Remove Codex session link properties between BEG and END."
+  (remove-text-properties
+   beg end
+   '(mouse-face nil
+     help-echo nil
+     keymap nil
+     my-codex-session-link-type nil
+     my-codex-session-link-target nil
+     font-lock-face nil)))
+
+(defun my-codex--linkify-session-region (beg end &optional _len)
+  "Add Codex session links in the region from BEG to END."
+  (when my-codex-session-links-mode
+    (pcase-let ((`(,rbeg . ,rend) (my-codex--line-bounds beg end)))
+      (let ((inhibit-read-only t)
+            (inhibit-modification-hooks t))
+        (my-codex--clear-session-links rbeg rend)
+
+        ;; URLs first, so file-like text inside URLs is not also linkified.
+        (save-excursion
+          (goto-char rbeg)
+          (while (re-search-forward my-codex--url-regexp rend t)
+            (my-codex--add-session-link
+             (match-beginning 0)
+             (match-end 0)
+             'url
+             (match-string-no-properties 0))))
+
+        ;; File references.
+        (save-excursion
+          (goto-char rbeg)
+          (while (re-search-forward my-codex--file-reference-regexp rend t)
+            (unless (get-text-property (match-beginning 0)
+                                       'my-codex-session-link-type)
+              (let ((target (my-codex--file-reference-target-at-match))
+                    (match-beg (match-beginning 0))
+                    (match-end (match-end 0)))
+                (when (save-match-data
+                        (my-codex--valid-file-reference-target-p target))
+                  (my-codex--add-session-link
+                   match-beg
+                   match-end
+                   'file
+                   target))))))))))
+
+(define-minor-mode my-codex-session-links-mode
+  "Make URLs and in-repository file references clickable in Codex buffers."
+  :lighter " Links"
+  (if my-codex-session-links-mode
+      (progn
+        (add-hook 'after-change-functions
+                  #'my-codex--linkify-session-region
+                  nil t)
+        (my-codex--linkify-session-region (point-min) (point-max)))
+    (remove-hook 'after-change-functions
+                 #'my-codex--linkify-session-region
+                 t)
+    (let ((inhibit-read-only t)
+          (inhibit-modification-hooks t))
+      (my-codex--clear-session-links (point-min) (point-max)))))
 
 (defun my-codex-send-prompt (prompt)
   "Send PROMPT to the Codex vterm buffer and show it."
