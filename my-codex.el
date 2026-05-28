@@ -29,7 +29,7 @@
 (require 'seq)
 (require 'subr-x)
 
-(declare-function vterm "vterm")
+(declare-function vterm-mode "vterm")
 (declare-function vterm-send-string "vterm")
 (declare-function vterm-send-return "vterm")
 (declare-function vterm-yank "vterm")
@@ -207,14 +207,17 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
                 (if (and existing-buf (get-buffer-process existing-buf))
                     (set-window-buffer term-window existing-buf)
                   (let ((default-directory (my-codex-project-root)))
-                    (let ((buffer (vterm buffer-name)))
+                    (let ((buffer (get-buffer-create buffer-name)))
                       (with-current-buffer buffer
+                        (unless (derived-mode-p 'vterm-mode)
+                          (vterm-mode))
                         (when-let (proc (get-buffer-process buffer))
                           (set-process-query-on-exit-flag proc nil))
                         (goto-char (point-max))
                         (vterm-send-string
                          (my-codex--shell-command-and-exit codex-command))
-                        (vterm-send-return)))))
+                        (vterm-send-return))
+                      (set-window-buffer term-window buffer))))
 
                 (unless focus-term
                   (select-window edit-window))))
