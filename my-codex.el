@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.4.0
+;; Version: 0.4.1
 ;; Package-Requires: ((emacs "29.1") (vterm "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -162,16 +162,17 @@
 If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
   (require 'vterm)
   (let* ((decorations-padding 8)
-         (required-width (+ my-codex-left-width
-                            my-codex-min-right-width
-                            decorations-padding))
+         (required-window-width (+ my-codex-left-width
+                                   my-codex-min-right-width))
+         (required-frame-width (+ required-window-width
+                                  decorations-padding))
          (buffer-name (my-codex-current-buffer-name))
          (existing-buf (get-buffer buffer-name)))
 
-    (when (< (frame-width) required-width)
+    (when (< (frame-width) required-frame-width)
       (condition-case nil
           (progn
-            (set-frame-width (selected-frame) required-width)
+            (set-frame-width (selected-frame) required-frame-width)
             (redisplay t))
         (error nil)))
 
@@ -184,6 +185,11 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
            (and existing-buf
                 (get-buffer-window existing-buf))))
       (unless existing-window-in-frame
+        (when (< (window-total-width (selected-window))
+                 required-window-width)
+          (user-error
+           "Selected window is too narrow for Codex layout (%d columns required)"
+           required-window-width))
         (setq my-codex--saved-window-configuration
               (current-window-configuration)))
 
