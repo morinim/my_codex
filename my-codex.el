@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.6.0
+;; Version: 0.7.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -28,6 +28,7 @@
 (require 'project)
 (require 'seq)
 (require 'subr-x)
+(require 'transient)
 
 (autoload 'vterm-mode "vterm" nil t)
 (autoload 'vterm-send-string "vterm")
@@ -1119,13 +1120,38 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
   "<tab>"   #'my-codex-toggle-focus
   "?"       #'my-codex-help)
 
+(transient-define-prefix my-codex-transient ()
+  "Show Codex commands."
+  [["Session"
+    ("o" "Read-only" my-codex-read-only)
+    ("w" "Workspace" my-codex-workspace)
+    ("r" "Resume" my-codex-resume)
+    ("q" "Restore layout" my-codex-restore-layout)
+    ("TAB" "Toggle focus" my-codex-toggle-focus)]
+   ["Send"
+    ("a" "Ask" my-codex-ask)
+    ("s" "Region" my-codex-send-region)
+    ("<right>" "Region" my-codex-send-region)
+    ("<left>" "Insert selection" my-codex-insert-selection-into-code)
+    ("f" "Current file" my-codex-send-current-file)
+    ("p" "Project overview" my-codex-send-project-overview)]
+   ["Git"
+    ("g" "Review diff" my-codex-send-git-diff)
+    ("G" "Review staged diff" my-codex-send-git-staged-diff)
+    ("m" "Draft commit message" my-codex-commit-message-from-diff)
+    ("c" "Commit with Codex message" my-codex-git-commit-with-latest-message)]
+   ["Context"
+    ("e" "Explain error" my-codex-explain-region-as-error)
+    ("i" "Project instructions" my-codex-open-project-instructions)
+    ("?" "Key binding help" my-codex-help)]])
+
 (with-eval-after-load 'vterm
   (when (boundp 'vterm-mode-map)
     (keymap-set vterm-mode-map "S-<insert>" #'vterm-yank)
     (keymap-set vterm-mode-map "C-c C-t"    #'vterm-copy-mode)
     (keymap-set vterm-mode-map "<prior>"    #'scroll-down-command)
     (keymap-set vterm-mode-map "<next>"     #'scroll-up-command)
-    (keymap-set vterm-mode-map "<f8>"       my-codex-map)))
+    (keymap-set vterm-mode-map "<f8>"       #'my-codex-transient)))
 
 (defun my-codex-project-build ()
   "Run the project build command with `compile'."
@@ -1136,7 +1162,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
 (defvar-keymap my-codex-global-mode-map
   :doc "Keymap for `my-codex-global-mode'."
   "<f7>" #'my-codex-project-build
-  "<f8>" my-codex-map)
+  "<f8>" #'my-codex-transient)
 
 (easy-menu-define my-codex-menu my-codex-global-mode-map
   "Menu for Codex commands."
