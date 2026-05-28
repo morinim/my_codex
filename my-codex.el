@@ -539,9 +539,11 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
                 (let ((beg (match-end 0)))
                   (when (re-search-forward "END_COMMIT_MESSAGE" nil t)
                     (let ((msg (string-trim
-                                (buffer-substring-no-properties
-                                 beg
-                                 (match-beginning 0)))))
+                                (replace-regexp-in-string
+                                 "\r" ""
+                                 (buffer-substring-no-properties
+                                  beg
+                                  (match-beginning 0))))))
                       (unless (member msg '("" "..." "<commit message here>"))
                         msg))))))))))))
 
