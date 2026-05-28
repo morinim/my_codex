@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.5.1
+;; Version: 0.6.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -105,6 +105,11 @@ When nil, use `compile-command'."
 (defcustom my-codex-enable-session-links t
   "When non-nil, make URLs and file references clickable in Codex buffers."
   :type 'boolean
+  :group 'my-codex)
+
+(defcustom my-codex-project-overview-max-files 200
+  "Maximum number of project files to include in a project overview prompt."
+  :type 'natnum
   :group 'my-codex)
 
 (defvar my-codex--saved-window-configuration nil
@@ -585,6 +590,91 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
   (unless (my-codex--git-repository-p)
     (user-error "Not inside a Git repository (or Git executable missing)")))
 
+(defun my-codex--process-output-lines (program &rest args)
+  "Return PROGRAM output lines for ARGS, or nil when PROGRAM fails."
+  (with-temp-buffer
+    (when (eq 0 (apply #'process-file program nil t nil args))
+      (split-string (string-trim-right (buffer-string)) "\n" t))))
+
+(defun my-codex--project-files (root)
+  "Return project files relative to ROOT."
+  (let ((default-directory root))
+    (let ((files
+           (if (my-codex--git-repository-p)
+               (my-codex--process-output-lines "git" "ls-files")
+             (when-let (project (project-current nil root))
+               (mapcar (lambda (file)
+                         (file-relative-name file root))
+                       (project-files project))))))
+      (sort (or files nil) #'string<))))
+
+(defun my-codex--truncate-lines (lines max-lines)
+  "Return LINES as text truncated to MAX-LINES with a notice when needed."
+  (let ((line-count (length lines)))
+    (if (> line-count max-lines)
+        (concat (string-join (seq-take lines max-lines) "\n")
+                (format "\n... [truncated %d additional lines]"
+                        (- line-count max-lines)))
+      (string-join lines "\n"))))
+
+(defun my-codex--git-status-text (root)
+  "Return compact Git status text for ROOT."
+  (let ((default-directory root))
+    (if (my-codex--git-repository-p)
+        (let ((lines (my-codex--process-output-lines "git" "status" "--short")))
+          (if lines
+              (string-join lines "\n")
+            "Clean working tree"))
+      "Not a Git repository.")))
+
+(defun my-codex--unsaved-project-buffer-text (root)
+  "Return text describing unsaved modified project buffers under ROOT."
+  (let ((buffers (my-codex-modified-project-buffers)))
+    (if buffers
+        (string-join
+         (mapcar (lambda (buf)
+                   (file-relative-name (buffer-file-name buf) root))
+                 buffers)
+         "\n")
+      "No unsaved modified project buffers.")))
+
+(defun my-codex-send-project-overview ()
+  "Send a compact summary of the current project structure to Codex."
+  (interactive)
+  (let* ((root (my-codex-project-root))
+         (default-directory root)
+         (files (my-codex--project-files root))
+         (files-text
+          (if files
+              (my-codex--truncate-lines
+               files
+               my-codex-project-overview-max-files)
+            "No project files found.")))
+    (my-codex-send-prompt
+     (format "Here is the current state and structure of my project. Use this as orientation context for subsequent requests. Do not inspect files, generate code, or make changes solely because of this message.
+
+**Project root:** `%s`
+
+**Git status:**
+```text
+%s
+```
+
+**Unsaved modified project buffers:**
+```text
+%s
+```
+
+**Project files:**
+```text
+%s
+```
+"
+             root
+             (my-codex--git-status-text root)
+             (my-codex--unsaved-project-buffer-text root)
+             files-text))))
+
 (defun my-codex--git-comment-char (root)
   "Return Git's commit comment character for ROOT."
   (let* ((default-directory root)
@@ -1004,7 +1094,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
   "Show Codex key bindings."
   (interactive)
   (message
-   "Codex: F7=build, F8 o=show/start read-only, w=show/start workspace, r=resume, q=restore layout, a=ask, s/right=send region, left=insert selected Codex text, f=file, g=diff, G=staged diff, m=draft commit message, c=edit commit with Codex message, e=explain error, i=instructions, TAB=toggle focus, ?=help"))
+   "Codex: F7=build, F8 o=show/start read-only, w=show/start workspace, r=resume, q=restore layout, a=ask, s/right=send region, left=insert selected Codex text, f=file, g=diff, G=staged diff, m=draft commit message, c=edit commit with Codex message, e=explain error, i=instructions, p=project overview, TAB=toggle focus, ?=help"))
 
 ;; Prefix keymap for Codex commands.
 (defvar-keymap my-codex-map
@@ -1024,6 +1114,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
   "c"       #'my-codex-git-commit-with-latest-message
   "e"       #'my-codex-explain-region-as-error
   "i"       #'my-codex-open-project-instructions
+  "p"       #'my-codex-send-project-overview
   "TAB"     #'my-codex-toggle-focus
   "<tab>"   #'my-codex-toggle-focus
   "?"       #'my-codex-help)
@@ -1082,6 +1173,8 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
     "---"
     ["Open project instructions" my-codex-open-project-instructions
      :help "Open AGENTS.md, CODEX.md, or .codex/instructions.md"]
+    ["Send project overview" my-codex-send-project-overview
+     :help "Send Codex a compact summary of the current project structure"]
     ["Show key bindings" my-codex-help
      :help "Show Codex key bindings"]
     "---"

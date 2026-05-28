@@ -26,6 +26,7 @@ separate sessions.
 - Draft a commit message from staged changes, then open an editable commit.
 - Explain selected compiler or test errors.
 - Open project instruction files such as `AGENTS.md`.
+- Send a compact project overview for Codex orientation.
 - Run a configurable project build command.
 - Open clickable URLs and in-project file references from Codex output.
 - Warn when project buffers have unsaved changes before sending prompts.
@@ -96,6 +97,7 @@ Prefix bindings:
 | F8 c | `my-codex-git-commit-with-latest-message` | Edit commit from latest draft |
 | F8 e | `my-codex-explain-region-as-error` | Explain a selected error |
 | F8 i | `my-codex-open-project-instructions` | Open project instructions |
+| F8 p | `my-codex-send-project-overview` | Send project structure and state |
 | F8 ? | `my-codex-help` | Show help |
 
 Commit message edit buffer:
@@ -139,6 +141,7 @@ Common options:
 (setq my-codex-project-instruction-files
       '("AGENTS.md" "CODEX.md" ".codex/instructions.md"))
 (setq my-codex-commit-message-fill-column 76)
+(setq my-codex-project-overview-max-files 200)
 
 (setq my-codex-warn-about-unsaved-project-buffers t)
 (setq my-codex-enable-global-auto-revert t)
