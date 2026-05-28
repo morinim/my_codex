@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.5.0
+;; Version: 0.5.1
 ;; Package-Requires: ((emacs "29.1") (vterm "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -80,9 +80,11 @@
   :type '(repeat string)
   :group 'my-codex)
 
-(defcustom my-codex-project-build-command "./setup_build"
-  "Command used to build the current project."
-  :type 'string
+(defcustom my-codex-project-build-command nil
+  "Command used to build the current project.
+When nil, use `compile-command'."
+  :type '(choice (const :tag "Use compile-command" nil)
+                 string)
   :group 'my-codex)
 
 (defcustom my-codex-commit-message-fill-column 76
@@ -1038,7 +1040,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
   "Run the project build command with `compile'."
   (interactive)
   (let ((default-directory (my-codex-project-root)))
-    (compile my-codex-project-build-command)))
+    (compile (or my-codex-project-build-command compile-command))))
 
 (defvar-keymap my-codex-global-mode-map
   :doc "Keymap for `my-codex-global-mode'."
