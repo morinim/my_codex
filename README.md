@@ -27,6 +27,7 @@ separate sessions.
 - Explain selected compiler or test errors.
 - Open project instruction files such as `AGENTS.md`.
 - Run a configurable project build command.
+- Open clickable URLs and in-project file references from Codex output.
 - Warn when project buffers have unsaved changes before sending prompts.
 - Enable `global-auto-revert-mode` when `my-codex-global-mode` starts.
 - Provide global keys and a Codex menu.
@@ -109,6 +110,7 @@ Inside `vterm`:
 | Key | Command |
 | --- | --- |
 | F8 | Use the Codex prefix |
+| RET / mouse-1 | Open a clickable URL or file reference |
 | Shift Insert | Paste into `vterm` |
 | C-c C-t | Enter `vterm` copy mode |
 | Page Up / Page Down | Scroll the terminal buffer |
@@ -140,6 +142,7 @@ Common options:
 
 (setq my-codex-warn-about-unsaved-project-buffers t)
 (setq my-codex-enable-global-auto-revert t)
+(setq my-codex-enable-session-links t)
 ```
 
 ## Suggested Codex Configuration
@@ -162,6 +165,9 @@ Use `F8 s` or `F8 Right` for small snippets. For larger reviews, prefer
 
 To copy text from Codex, use `C-c C-t` in the `vterm` buffer, select text, then
 use `F8 Left` to insert it into the coding window.
+
+Clickable file references are limited to readable files inside the current
+project.
 
 ## Licence
 
