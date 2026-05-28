@@ -125,7 +125,7 @@
 (defun my-codex-project-root ()
   "Return the current project root, or `default-directory' if not in a project."
   (file-name-as-directory
-   (if-let ((project (project-current)))
+   (if-let (project (project-current))
        (project-root project)
      default-directory)))
 
@@ -138,14 +138,14 @@
 
 (defun my-codex-modified-project-buffers ()
   "Return modified file-visiting buffers belonging to the current project."
-  (if-let ((project (project-current)))
+  (if-let (project (project-current))
       (seq-filter (lambda (buf)
                     (and (buffer-file-name buf)
                          (buffer-modified-p buf)))
                   (project-buffers project))
     (let ((root (file-truename default-directory)))
       (seq-filter (lambda (buf)
-                    (when-let ((file (buffer-file-name buf)))
+                    (when-let (file (buffer-file-name buf))
                       (and (buffer-modified-p buf)
                            (file-in-directory-p (file-truename file) root))))
                   (buffer-list)))))
@@ -153,7 +153,7 @@
 (defun my-codex-warn-about-unsaved-project-buffers ()
   "Display a non-blocking warning if project buffers have unsaved changes."
   (when my-codex-warn-about-unsaved-project-buffers
-    (when-let ((buffers (my-codex-modified-project-buffers)))
+    (when-let (buffers (my-codex-modified-project-buffers))
       (message "Codex warning: unsaved buffer(s): %s"
                (string-join (mapcar #'buffer-name buffers) ", ")))))
 
@@ -209,7 +209,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
                   (let ((default-directory (my-codex-project-root)))
                     (let ((buffer (vterm buffer-name)))
                       (with-current-buffer buffer
-                        (when-let ((proc (get-buffer-process buffer)))
+                        (when-let (proc (get-buffer-process buffer))
                           (set-process-query-on-exit-flag proc nil))
                         (goto-char (point-max))
                         (vterm-send-string
@@ -262,7 +262,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
   (my-codex-warn-about-unsaved-project-buffers)
   (require 'vterm)
   (let ((buffer (my-codex-buffer)))
-    (if-let ((window (get-buffer-window buffer t)))
+    (if-let (window (get-buffer-window buffer t))
         (select-window window)
       (pop-to-buffer buffer))
     (redisplay t)
@@ -595,7 +595,7 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
     (let ((inhibit-read-only t))
       (erase-buffer)
       (insert (my-codex-clean-commit-message message))
-      (when-let ((template (my-codex--git-commit-template root)))
+      (when-let (template (my-codex--git-commit-template root))
         (insert "\n\n")
         (insert (my-codex--commit-template-section
                  template
@@ -704,7 +704,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
                  (equal my-codex--commit-message-request-signature
                         current-signature))))
       (if current-request-p
-          (if-let ((message (my-codex-latest-commit-message-after buffer marker)))
+          (if-let (message (my-codex-latest-commit-message-after buffer marker))
               (progn
                 (my-codex-edit-git-commit-with-message message root)
                 (message "Editing latest Codex commit message."))
