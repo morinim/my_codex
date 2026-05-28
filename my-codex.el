@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.3.1
+;; Version: 0.3.2
 ;; Package-Requires: ((emacs "29.1") (vterm "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -605,10 +605,9 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
     (text-mode)
     (setq-local header-line-format
                 "Edit commit message. C-c C-c commits staged changes; C-c C-k cancels.")
-    (let ((map (make-sparse-keymap)))
-      (set-keymap-parent map (current-local-map))
-      (keymap-set map "C-c C-c" #'my-codex--finish-git-commit)
-      (keymap-set map "C-c C-k" #'my-codex--cancel-git-commit)
+    (let ((map (define-keymap :parent (current-local-map)
+                 "C-c C-c" #'my-codex--finish-git-commit
+                 "C-c C-k" #'my-codex--cancel-git-commit)))
       (use-local-map map))
     (message "Edit the commit message, then press C-c C-c to commit.")))
 
