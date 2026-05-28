@@ -29,11 +29,11 @@
 (require 'seq)
 (require 'subr-x)
 
-(declare-function vterm-mode "vterm")
-(declare-function vterm-send-string "vterm")
-(declare-function vterm-send-return "vterm")
-(declare-function vterm-yank "vterm")
-(declare-function vterm-copy-mode "vterm")
+(autoload 'vterm-mode "vterm" nil t)
+(autoload 'vterm-send-string "vterm")
+(autoload 'vterm-send-return "vterm")
+(autoload 'vterm-yank "vterm" nil t)
+(autoload 'vterm-copy-mode "vterm" nil t)
 (defvar vterm-mode-map)
 
 (defgroup my-codex nil
@@ -165,7 +165,6 @@
 (defun my-codex-two-column-layout-with-command (codex-command &optional focus-term)
   "Open a two-column layout and run CODEX-COMMAND in vterm if not running.
 If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
-  (require 'vterm)
   (let* ((decorations-padding 8)
          (required-window-width (+ my-codex-left-width
                                    my-codex-min-right-width))
@@ -472,7 +471,6 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
 (defun my-codex-send-prompt (prompt)
   "Send PROMPT to the Codex vterm buffer and show it."
   (my-codex-warn-about-unsaved-project-buffers)
-  (require 'vterm)
   (let ((buffer (my-codex-buffer)))
     (if-let (window (get-buffer-window buffer t))
         (select-window window)
