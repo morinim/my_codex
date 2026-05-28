@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.3.0
+;; Version: 0.3.1
 ;; Package-Requires: ((emacs "29.1") (vterm "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -517,6 +517,14 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
             (copy-marker (point-max)))))
   (my-codex--send-git-prompt (my-codex--commit-message-prompt)))
 
+(defun my-codex--terminal-marker-regexp (marker)
+  "Return a regexp matching MARKER with terminal whitespace artefacts."
+  (mapconcat
+   (lambda (char)
+     (regexp-quote (char-to-string char)))
+   marker
+   "[[:space:]\r]*"))
+
 (defun my-codex-latest-commit-message-after (buffer start-point)
   "Return the commit message in BUFFER appearing after START-POINT, or nil."
   (when (buffer-live-p buffer)
@@ -535,9 +543,13 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
                  (bound (when valid-start-point-p start-point)))
             (when (or (null start-point) bound)
               ;; Relaxed regex to bypass terminal formatting quirks.
-              (when (re-search-backward "BEGIN_COMMIT_MESSAGE" bound t)
+              (when (re-search-backward
+                     (my-codex--terminal-marker-regexp "BEGIN_COMMIT_MESSAGE")
+                     bound t)
                 (let ((beg (match-end 0)))
-                  (when (re-search-forward "END_COMMIT_MESSAGE" nil t)
+                  (when (re-search-forward
+                         (my-codex--terminal-marker-regexp "END_COMMIT_MESSAGE")
+                         nil t)
                     (let ((msg (string-trim
                                 (replace-regexp-in-string
                                  "\r" ""
