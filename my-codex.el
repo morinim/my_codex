@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.3.2
+;; Version: 0.3.3
 ;; Package-Requires: ((emacs "29.1") (vterm "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -175,7 +175,8 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
             (redisplay t))
         (error nil)))
 
-    (when (and existing-buf (not (get-buffer-process existing-buf)))
+    (when (and existing-buf
+               (not (process-live-p (get-buffer-process existing-buf))))
       (kill-buffer existing-buf)
       (setq existing-buf nil))
 
@@ -204,19 +205,23 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
                   (window-resize edit-window delta t t))
 
                 (select-window term-window)
-                (if (and existing-buf (get-buffer-process existing-buf))
+                (if (and existing-buf
+                         (process-live-p (get-buffer-process existing-buf)))
                     (set-window-buffer term-window existing-buf)
                   (let ((default-directory (my-codex-project-root)))
                     (let ((buffer (get-buffer-create buffer-name)))
                       (with-current-buffer buffer
                         (unless (derived-mode-p 'vterm-mode)
                           (vterm-mode))
-                        (when-let (proc (get-buffer-process buffer))
-                          (set-process-query-on-exit-flag proc nil))
-                        (goto-char (point-max))
-                        (vterm-send-string
-                         (my-codex--shell-command-and-exit codex-command))
-                        (vterm-send-return))
+                        (let ((proc (get-buffer-process buffer)))
+                          (unless (process-live-p proc)
+                            (user-error "Failed to start vterm process in %s"
+                                        buffer-name))
+                          (set-process-query-on-exit-flag proc nil)
+                          (goto-char (point-max))
+                          (vterm-send-string
+                           (my-codex--shell-command-and-exit codex-command))
+                          (vterm-send-return)))
                       (set-window-buffer term-window buffer))))
 
                 (unless focus-term
