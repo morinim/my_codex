@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.3.3
+;; Version: 0.4.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -187,20 +187,27 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
         (setq my-codex--saved-window-configuration
               (current-window-configuration)))
 
-      (let ((layout-before-delete (current-window-configuration)))
+      (let ((layout-before-change (current-window-configuration)))
         (condition-case err
             (progn
-              (delete-other-windows)
-              (let* ((edit-window (selected-window))
+              (let* ((created-term-window nil)
+                     (edit-window (selected-window))
                      (term-window
-                      (condition-case nil
-                          (split-window-right my-codex-left-width)
-                        (error
-                         (user-error "Frame is too narrow for Codex layout"))))
+                      (or existing-window-in-frame
+                          (condition-case nil
+                              (prog1
+                                  (split-window edit-window
+                                                my-codex-left-width
+                                                'right)
+                                (setq created-term-window t))
+                            (error
+                             (user-error
+                              "Selected window is too narrow for Codex layout")))))
                      (delta (- my-codex-left-width
                                (window-body-width edit-window))))
 
-                (when (and (not (zerop delta))
+                (when (and created-term-window
+                           (not (zerop delta))
                            (window-resizable-p edit-window delta t t))
                   (window-resize edit-window delta t t))
 
@@ -227,7 +234,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
                 (unless focus-term
                   (select-window edit-window))))
           (error
-           (set-window-configuration layout-before-delete)
+           (set-window-configuration layout-before-change)
            (signal (car err) (cdr err))))))))
 
 (defun my-codex-restore-layout ()
