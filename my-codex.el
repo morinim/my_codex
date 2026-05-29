@@ -111,7 +111,12 @@ When nil, use `compile-command'."
   :group 'my-codex)
 
 (defcustom my-codex-project-overview-max-files 200
-  "Maximum number of project files to include in a project overview prompt."
+  "Maximum project file count before project overviews use a tree summary."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-project-overview-tree-max-entries 25
+  "Maximum entries shown for each directory in project overview tree summaries."
   :type 'natnum
   :group 'my-codex)
 
@@ -754,6 +759,73 @@ When FORCE is non-nil, always preview PROMPT."
                         (- line-count max-lines)))
       (string-join lines "\n"))))
 
+(defun my-codex--file-count-label (count)
+  "Return a human-readable file count label for COUNT."
+  (format "%d %s" count (if (= count 1) "file" "files")))
+
+(defun my-codex--project-tree-lines (files)
+  "Return a compact tree summary for project FILES."
+  (let ((max-entries my-codex-project-overview-tree-max-entries))
+    (cl-labels
+        ((split-file (file)
+           (split-string file "/" t))
+         (group-paths (paths)
+           (let ((groups nil))
+             (dolist (path paths)
+               (when-let ((name (car path)))
+                 (let ((cell (assoc name groups)))
+                   (if cell
+                       (setcdr cell (cons (cdr path) (cdr cell)))
+                     (push (cons name (list (cdr path))) groups)))))
+             (sort groups (lambda (a b) (string< (car a) (car b))))))
+         (render-paths (paths depth indent)
+           (let* ((groups (group-paths paths))
+                  (root-level (string-empty-p indent))
+                  (shown (if root-level
+                             groups
+                           (seq-take groups max-entries)))
+                  (hidden (if root-level
+                              0
+                            (- (length groups) (length shown))))
+                  (lines nil))
+             (dolist (group shown)
+               (let* ((name (car group))
+                      (tails (cdr group))
+                      (child-tails (seq-filter #'identity tails)))
+                 (if child-tails
+                     (progn
+                       (push (format "%s%s/ (%s)"
+                                     indent
+                                     name
+                                     (my-codex--file-count-label
+                                      (length child-tails)))
+                             lines)
+                       (if (> depth 1)
+                           (setq lines
+                                 (append (reverse (render-paths
+                                                   child-tails
+                                                   (1- depth)
+                                                   (concat indent "  ")))
+                                         lines))
+                         (push (format "%s  ..." indent) lines)))
+                   (push (format "%s%s" indent name) lines))))
+             (when (> hidden 0)
+               (push (format "%s... (%d more entries)" indent hidden) lines))
+             (reverse lines))))
+      (render-paths (mapcar #'split-file files) 2 ""))))
+
+(defun my-codex--project-files-text (files)
+  "Return project FILES text for a project overview prompt."
+  (cond
+   ((not files)
+    "No project files found.")
+   ((> (length files) my-codex-project-overview-max-files)
+    (format "Project has %d files; showing a compact tree summary:\n%s"
+            (length files)
+            (string-join (my-codex--project-tree-lines files) "\n")))
+   (t
+    (string-join files "\n"))))
+
 (defun my-codex--git-status-text (root)
   "Return compact Git status text for ROOT."
   (let ((default-directory root))
@@ -781,12 +853,7 @@ When FORCE is non-nil, always preview PROMPT."
   (let* ((root (my-codex-project-root))
          (default-directory root)
          (files (my-codex--project-files root))
-         (files-text
-          (if files
-              (my-codex--truncate-lines
-               files
-               my-codex-project-overview-max-files)
-            "No project files found.")))
+         (files-text (my-codex--project-files-text files)))
     (my-codex--preview-and-send-prompt
      (format "Here is the current state and structure of my project. Use this as orientation context for subsequent requests. Do not inspect files, generate code, or make changes solely because of this message.
 

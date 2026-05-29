@@ -146,6 +146,7 @@ Common options:
       '("AGENTS.md" "CODEX.md" ".codex/instructions.md"))
 (setq my-codex-commit-message-fill-column 76)
 (setq my-codex-project-overview-max-files 200)
+(setq my-codex-project-overview-tree-max-entries 25)
 (setq my-codex-prompt-preview-threshold 10000)
 (setq my-codex-symbol-context-lines 10)
 
@@ -167,6 +168,11 @@ supports project file completion when the current line starts with `@`. Type
 Long generated prompts open an editable `*Codex prompt preview*` buffer with a
 short explanation before sending. Press `C-c C-c` to send the edited prompt, or
 `C-c C-k` to cancel. Project overview prompts always use this preview.
+
+For projects with more files than `my-codex-project-overview-max-files`, the
+project overview uses a compact tree summary instead of a long flat file list.
+`my-codex-project-overview-tree-max-entries` controls how many entries are shown
+for each directory in that summary.
 
 ## Suggested Codex Configuration
 
