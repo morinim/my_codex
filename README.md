@@ -146,7 +146,7 @@ Common options:
       '("AGENTS.md" "CODEX.md" ".codex/instructions.md"))
 (setq my-codex-commit-message-fill-column 76)
 (setq my-codex-project-overview-max-files 200)
-(setq my-codex-prompt-preview-threshold 2000)
+(setq my-codex-prompt-preview-threshold 10000)
 (setq my-codex-symbol-context-lines 10)
 
 (setq my-codex-prompt-presets

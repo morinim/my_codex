@@ -115,7 +115,7 @@ When nil, use `compile-command'."
   :type 'natnum
   :group 'my-codex)
 
-(defcustom my-codex-prompt-preview-threshold 2000
+(defcustom my-codex-prompt-preview-threshold 10000
   "Show an editable preview before sending prompts longer than this.
 Set this to nil to disable automatic prompt previews."
   :type '(choice (const :tag "Disable automatic previews" nil)
