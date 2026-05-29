@@ -21,11 +21,12 @@ separate sessions.
 
 - Start Codex in read-only, workspace-write, or resume mode.
 - Use a two-column layout and restore the previous window layout.
-- Send selected code, the current file, Git diffs, or staged Git diffs.
+- Send selected code, symbols, the current file, Git diffs, or staged Git
+  diffs.
 - Ask free-form questions from the minibuffer.
 - Ask from customisable prompt presets for common transformations.
 - Draft a commit message from staged changes, then open an editable commit.
-- Explain selected compiler or test errors.
+- Explain selected compiler/test errors or the symbol at point.
 - Open project instruction files such as `AGENTS.md`.
 - Send a compact project overview for Codex orientation.
 - Run a configurable project build command.
@@ -93,6 +94,7 @@ Prefix bindings:
 | F8 Left | `my-codex-insert-selection-into-code` | Insert selected Codex text into code |
 | F8 TAB | `my-codex-toggle-focus` | Toggle focus between code and Codex |
 | F8 f | `my-codex-send-current-file` | Ask Codex to inspect the current file |
+| F8 x | `my-codex-explain-symbol-at-point` | Explain the symbol at point |
 | F8 g | `my-codex-send-git-diff` | Review the current Git diff |
 | F8 G | `my-codex-send-git-staged-diff` | Review the staged Git diff |
 | F8 m | `my-codex-commit-message-from-diff` | Draft a commit message |
@@ -145,6 +147,7 @@ Common options:
 (setq my-codex-commit-message-fill-column 76)
 (setq my-codex-project-overview-max-files 200)
 (setq my-codex-prompt-preview-threshold 2000)
+(setq my-codex-symbol-context-lines 10)
 
 (setq my-codex-prompt-presets
       '(("Refactor" . "Review the following code and refactor it to improve readability and performance without changing its external behaviour.")
@@ -180,8 +183,9 @@ approvals_reviewer = "user"
 
 ## Notes
 
-Use `F8 s` or `F8 Right` for small snippets. For larger reviews, prefer
-`F8 f`, `F8 g`, or `F8 G`, which ask Codex to inspect files or diffs directly.
+Use `F8 s` or `F8 Right` for small snippets, and `F8 x` for a quick
+explanation of the symbol at point. For larger reviews, prefer `F8 f`, `F8 g`,
+or `F8 G`, which ask Codex to inspect files or diffs directly.
 
 To copy text from Codex, use `C-c C-t` in the `vterm` buffer, select text, then
 use `F8 Left` to insert it into the coding window.

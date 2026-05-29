@@ -29,6 +29,7 @@
 (require 'project)
 (require 'seq)
 (require 'subr-x)
+(require 'thingatpt)
 (require 'transient)
 
 (autoload 'vterm-mode "vterm" nil t)
@@ -119,6 +120,11 @@ When nil, use `compile-command'."
 Set this to nil to disable automatic prompt previews."
   :type '(choice (const :tag "Disable automatic previews" nil)
                  natnum)
+  :group 'my-codex)
+
+(defcustom my-codex-symbol-context-lines 10
+  "Number of surrounding lines to include when explaining a symbol."
+  :type 'natnum
   :group 'my-codex)
 
 (defcustom my-codex-prompt-presets
@@ -593,6 +599,49 @@ When FORCE is non-nil, always preview PROMPT."
     (my-codex-send-prompt
      (format "Please inspect `%s` directly and report findings. Do not edit it unless I explicitly ask.\n"
              file))))
+
+(defun my-codex--symbol-at-point ()
+  "Return the symbol at point, or raise a user error."
+  (let ((symbol (thing-at-point 'symbol t)))
+    (if (and symbol (not (string-blank-p symbol)))
+        symbol
+      (user-error "No symbol at point"))))
+
+(defun my-codex--line-context-around-point (context-lines)
+  "Return text around point spanning CONTEXT-LINES before and after."
+  (save-excursion
+    (save-restriction
+      (widen)
+      (let* ((line (line-number-at-pos))
+             (start-line (max 1 (- line context-lines)))
+             (end-line (+ line context-lines))
+             start end)
+        (goto-char (point-min))
+        (forward-line (1- start-line))
+        (setq start (line-beginning-position))
+        (goto-char (point-min))
+        (forward-line (1- end-line))
+        (setq end (line-end-position))
+        (buffer-substring-no-properties start end)))))
+
+(defun my-codex-explain-symbol-at-point ()
+  "Ask Codex to explain the symbol at point with nearby file context."
+  (interactive)
+  (unless buffer-file-name
+    (user-error "Current buffer is not visiting a file"))
+  (let* ((root (my-codex-project-root))
+         (file (file-relative-name buffer-file-name root))
+         (line (line-number-at-pos))
+         (symbol (my-codex--symbol-at-point))
+         (context (my-codex--line-context-around-point
+                   my-codex-symbol-context-lines)))
+    (my-codex--preview-and-send-prompt
+     (format (concat "In file `%s`, explain the role of symbol `%s` "
+                     "near line %d.\n\n"
+                     "Relevant context:\n\n"
+                     "```\n%s\n```\n\n"
+                     "Inspect the file directly if needed. Do not edit files.")
+             file symbol line context))))
 
 (defun my-codex--commit-message-trailer-line-p (line)
   "Return non-nil if LINE looks like a Git commit message trailer."
@@ -1273,7 +1322,7 @@ When a region is active, include exact file and line context for it."
   "Show Codex key bindings."
   (interactive)
   (message
-   "Codex: F7=build, F8 o=show/start read-only, w=show/start workspace, r=resume, q=restore layout, a=ask, A=preset menu, s/right=send region, left=insert selected Codex text, f=file, g=diff, G=staged diff, m=draft commit message, c=edit commit with Codex message, e=explain error, i=instructions, p=project overview, TAB=toggle focus, ?=help"))
+   "Codex: F7=build, F8 o=show/start read-only, w=show/start workspace, r=resume, q=restore layout, a=ask, A=preset menu, s/right=send region, left=insert selected Codex text, f=file, x=explain symbol, g=diff, G=staged diff, m=draft commit message, c=edit commit with Codex message, e=explain error, i=instructions, p=project overview, TAB=toggle focus, ?=help"))
 
 ;; Prefix keymap for Codex commands.
 (defvar-keymap my-codex-map
@@ -1288,6 +1337,7 @@ When a region is active, include exact file and line context for it."
   "<right>" #'my-codex-send-region
   "<left>"  #'my-codex-insert-selection-into-code
   "f"       #'my-codex-send-current-file
+  "x"       #'my-codex-explain-symbol-at-point
   "g"       #'my-codex-send-git-diff
   "G"       #'my-codex-send-git-staged-diff
   "m"       #'my-codex-commit-message-from-diff
@@ -1314,6 +1364,7 @@ When a region is active, include exact file and line context for it."
     ("<right>" "Region" my-codex-send-region)
     ("<left>" "Insert selection" my-codex-insert-selection-into-code)
     ("f" "Current file" my-codex-send-current-file)
+    ("x" "Explain symbol" my-codex-explain-symbol-at-point)
     ("p" "Project overview" my-codex-send-project-overview)]
    ["Git"
     ("g" "Review diff" my-codex-send-git-diff)
@@ -1366,6 +1417,9 @@ When a region is active, include exact file and line context for it."
     ["Explain selected error" my-codex-explain-region-as-error
      :active (use-region-p)
      :help "Ask Codex to explain the selected compiler/test error"]
+    ["Explain symbol at point" my-codex-explain-symbol-at-point
+     :active buffer-file-name
+     :help "Ask Codex to explain the symbol at point"]
     ["Inspect current file" my-codex-send-current-file
      :active buffer-file-name
      :help "Ask Codex to inspect the current file directly"]
