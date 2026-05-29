@@ -120,11 +120,9 @@ When nil, use `compile-command'."
   :type 'natnum
   :group 'my-codex)
 
-(defcustom my-codex-prompt-preview-threshold 10000
-  "Show an editable preview before sending prompts longer than this.
-Set this to nil or 0 to disable automatic prompt previews."
-  :type '(choice (const :tag "Disable automatic previews" nil)
-                 natnum)
+(defcustom my-codex-enable-prompt-preview nil
+  "When non-nil, show an editable preview before sending prompts."
+  :type 'boolean
   :group 'my-codex)
 
 (defcustom my-codex-symbol-context-lines 10
@@ -577,18 +575,11 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
       (select-window origin-window)))
   (message "Codex prompt canceled."))
 
-(defun my-codex--preview-and-send-prompt (prompt &optional force)
-  "Preview PROMPT before sending it to Codex when useful.
-When FORCE is non-nil, always preview PROMPT."
-  (if (or force
-          (and my-codex-prompt-preview-threshold
-               (> my-codex-prompt-preview-threshold 0)
-               (> (length prompt) my-codex-prompt-preview-threshold)))
+(defun my-codex--preview-and-send-prompt (prompt)
+  "Preview PROMPT before sending it to Codex when enabled."
+  (if my-codex-enable-prompt-preview
       (let* ((root (my-codex-project-root))
              (origin-window (selected-window))
-             (reason (if force
-                         "This prompt opens here for review before sending."
-                       "This prompt is long, so it opens here for review."))
              (buffer (get-buffer-create
                       (my-codex--prompt-preview-buffer-name root))))
         (my-codex--display-prompt-preview-buffer buffer)
@@ -600,8 +591,7 @@ When FORCE is non-nil, always preview PROMPT."
         (setq default-directory root)
         (setq-local my-codex--prompt-preview-origin-window origin-window)
         (setq-local header-line-format
-                    (concat reason
-                            " Edit if needed; C-c C-c sends to Codex,"
+                    (concat "Edit if needed; C-c C-c sends to Codex,"
                             " C-c C-k cancels."))
         (let ((map (define-keymap :parent (current-local-map)
                      "C-c C-c" #'my-codex--finish-prompt-preview
@@ -892,8 +882,7 @@ When FORCE is non-nil, always preview PROMPT."
              root
              (my-codex--git-status-text root)
              (my-codex--unsaved-project-buffer-text root)
-             files-text)
-     t)))
+             files-text))))
 
 (defun my-codex--git-comment-char (root)
   "Return Git's commit comment character for ROOT."

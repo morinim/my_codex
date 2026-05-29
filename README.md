@@ -147,7 +147,7 @@ Common options:
 (setq my-codex-commit-message-fill-column 76)
 (setq my-codex-project-overview-max-files 200)
 (setq my-codex-project-overview-tree-max-entries 25)
-(setq my-codex-prompt-preview-threshold 10000) ; nil or 0 disables previews
+(setq my-codex-enable-prompt-preview nil)
 (setq my-codex-symbol-context-lines 10)
 
 (setq my-codex-prompt-presets
@@ -165,10 +165,10 @@ In the prompt preset menu (`F8 A`), the `Additional instructions` minibuffer
 supports project file completion when the current line starts with `@`. Type
 `@` followed by part of a project-relative path, then press `TAB`.
 
-Long generated prompts open an editable `*Codex prompt preview*` buffer with a
-short explanation before sending. Press `C-c C-c` to send the edited prompt, or
-`C-c C-k` to cancel. When Codex is visible, previews open in the left-hand
-editing window. Project overview prompts always use this preview.
+When `my-codex-enable-prompt-preview` is non-nil, prompts open an editable
+`*Codex prompt preview*` buffer before sending. Press `C-c C-c` to send the
+edited prompt, or `C-c C-k` to cancel. When Codex is visible, previews open in
+the left-hand editing window.
 
 For projects with more files than `my-codex-project-overview-max-files`, the
 project overview uses a compact tree summary instead of a long flat file list.
