@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.7.0
+;; Version: 0.8.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -24,6 +24,7 @@
 ;;; Code:
 
 (require 'compile)
+(require 'cl-lib)
 (require 'easymenu)
 (require 'project)
 (require 'seq)
@@ -113,6 +114,16 @@ When nil, use `compile-command'."
   :type 'natnum
   :group 'my-codex)
 
+(defcustom my-codex-prompt-presets
+  '(("Refactor" . "Review the following code and refactor it to improve readability and performance without changing its external behaviour.")
+    ("Document" . "Write clear docstrings and comments for the following code. Avoid over-commenting obvious logic.")
+    ("Test" . "Write focused unit tests for the following code.")
+    ("Explain" . "Explain the following code clearly and concisely."))
+  "Prompt presets offered by `my-codex-ask-with-preset'.
+Each entry is a cons cell of the form (NAME . PROMPT)."
+  :type '(alist :key-type string :value-type string)
+  :group 'my-codex)
+
 (defvar my-codex--saved-window-configuration nil
   "Window layout configuration captured before opening Codex.")
 
@@ -173,89 +184,98 @@ When nil, use `compile-command'."
 (defun my-codex-two-column-layout-with-command (codex-command &optional focus-term)
   "Open a two-column layout and run CODEX-COMMAND in vterm if not running.
 If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
-  (let* ((decorations-padding 8)
-         (required-window-width (+ my-codex-left-width
-                                   my-codex-min-right-width))
-         (required-frame-width (+ required-window-width
-                                  decorations-padding))
-         (buffer-name (my-codex-current-buffer-name))
-         (existing-buf (get-buffer buffer-name)))
+  (cl-labels
+      ((live-buffer-p
+        (buffer)
+        (process-live-p (get-buffer-process buffer)))
+       (maybe-widen-frame
+        (width)
+        (when (< (frame-width) width)
+          (condition-case nil
+              (progn
+                (set-frame-width (selected-frame) width)
+                (redisplay t))
+            (error nil))))
+       (split-term-window
+        (edit-window)
+        (condition-case nil
+            (split-window edit-window my-codex-left-width 'right)
+          (error
+           (user-error "Selected window is too narrow for Codex layout"))))
+       (resize-edit-window
+        (edit-window)
+        (let ((delta (- my-codex-left-width
+                        (window-body-width edit-window))))
+          (when (and (not (zerop delta))
+                     (window-resizable-p edit-window delta t t))
+            (window-resize edit-window delta t t))))
+       (start-codex-buffer
+        (buffer-name)
+        (let* ((default-directory (my-codex-project-root))
+               (buffer (get-buffer-create buffer-name)))
+          (with-current-buffer buffer
+            (unless (derived-mode-p 'vterm-mode)
+              (vterm-mode))
+            (when my-codex-enable-session-links
+              (my-codex-session-links-mode 1))
+            (let ((proc (get-buffer-process buffer)))
+              (unless (process-live-p proc)
+                (user-error "Failed to start vterm process in %s"
+                            buffer-name))
+              (set-process-query-on-exit-flag proc nil)
+              (goto-char (point-max))
+              (vterm-send-string
+               (my-codex--shell-command-and-exit codex-command))
+              (vterm-send-return)))
+          buffer)))
+    (let* ((decorations-padding 8)
+           (required-window-width (+ my-codex-left-width
+                                     my-codex-min-right-width))
+           (required-frame-width (+ required-window-width
+                                    decorations-padding))
+           (buffer-name (my-codex-current-buffer-name))
+           (existing-buf (get-buffer buffer-name)))
+      (maybe-widen-frame required-frame-width)
 
-    (when (< (frame-width) required-frame-width)
-      (condition-case nil
-          (progn
-            (set-frame-width (selected-frame) required-frame-width)
-            (redisplay t))
-        (error nil)))
+      (when (and existing-buf
+                 (not (live-buffer-p existing-buf)))
+        (kill-buffer existing-buf)
+        (setq existing-buf nil))
 
-    (when (and existing-buf
-               (not (process-live-p (get-buffer-process existing-buf))))
-      (kill-buffer existing-buf)
-      (setq existing-buf nil))
+      (let ((existing-window-in-frame
+             (and existing-buf
+                  (get-buffer-window existing-buf))))
+        (unless existing-window-in-frame
+          (when (< (window-total-width (selected-window))
+                   required-window-width)
+            (user-error
+             "Selected window is too narrow for Codex layout (%d columns required)"
+             required-window-width))
+          (setq my-codex--saved-window-configuration
+                (current-window-configuration)))
 
-    (let ((existing-window-in-frame
-           (and existing-buf
-                (get-buffer-window existing-buf))))
-      (unless existing-window-in-frame
-        (when (< (window-total-width (selected-window))
-                 required-window-width)
-          (user-error
-           "Selected window is too narrow for Codex layout (%d columns required)"
-           required-window-width))
-        (setq my-codex--saved-window-configuration
-              (current-window-configuration)))
-
-      (let ((layout-before-change (current-window-configuration)))
-        (condition-case err
-            (progn
-              (let* ((created-term-window nil)
-                     (edit-window (selected-window))
-                     (term-window
-                      (or existing-window-in-frame
-                          (condition-case nil
-                              (prog1
-                                  (split-window edit-window
-                                                my-codex-left-width
-                                                'right)
-                                (setq created-term-window t))
-                            (error
-                             (user-error
-                              "Selected window is too narrow for Codex layout")))))
-                     (delta (- my-codex-left-width
-                               (window-body-width edit-window))))
-
-                (when (and created-term-window
-                           (not (zerop delta))
-                           (window-resizable-p edit-window delta t t))
-                  (window-resize edit-window delta t t))
+        (let ((layout-before-change (current-window-configuration)))
+          (condition-case err
+              (let* ((edit-window (selected-window))
+                     (created-term-window (not existing-window-in-frame))
+                     (term-window (or existing-window-in-frame
+                                      (split-term-window edit-window))))
+                (when created-term-window
+                  (resize-edit-window edit-window))
 
                 (select-window term-window)
-                (if (and existing-buf
-                         (process-live-p (get-buffer-process existing-buf)))
-                    (set-window-buffer term-window existing-buf)
-                  (let ((default-directory (my-codex-project-root)))
-                    (let ((buffer (get-buffer-create buffer-name)))
-                      (with-current-buffer buffer
-                        (unless (derived-mode-p 'vterm-mode)
-                          (vterm-mode))
-                        (when my-codex-enable-session-links
-                          (my-codex-session-links-mode 1))
-                        (let ((proc (get-buffer-process buffer)))
-                          (unless (process-live-p proc)
-                            (user-error "Failed to start vterm process in %s"
-                                        buffer-name))
-                          (set-process-query-on-exit-flag proc nil)
-                          (goto-char (point-max))
-                          (vterm-send-string
-                           (my-codex--shell-command-and-exit codex-command))
-                          (vterm-send-return)))
-                      (set-window-buffer term-window buffer))))
+                (set-window-buffer
+                 term-window
+                 (if (and existing-buf
+                          (live-buffer-p existing-buf))
+                     existing-buf
+                   (start-codex-buffer buffer-name)))
 
                 (unless focus-term
-                  (select-window edit-window))))
-          (error
-           (set-window-configuration layout-before-change)
-           (signal (car err) (cdr err))))))))
+                  (select-window edit-window)))
+            (error
+             (set-window-configuration layout-before-change)
+             (signal (car err) (cdr err)))))))))
 
 (defun my-codex-restore-layout ()
   "Restore the window layout configuration used before Codex was opened."
@@ -494,18 +514,10 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
   (interactive "r")
   (unless (use-region-p)
     (user-error "No active region"))
-  (let* ((root (my-codex-project-root))
-         (file (when buffer-file-name
-                 (file-relative-name buffer-file-name root)))
-         (line-start (line-number-at-pos beg))
-         (line-end (line-number-at-pos (max beg (1- end))))
-         (context (if file
-                      (format "In file `%s` (lines %d-%d):" file line-start line-end)
-                    "From an unnamed buffer:")))
-    (my-codex-send-prompt
-     (format "%s\n\nPlease review this code and report findings:\n\n%s"
-             context
-             (buffer-substring-no-properties beg end)))))
+  (my-codex-send-prompt
+   (format "%s\n\nPlease review this code and report findings:\n\n%s"
+           (my-codex--region-context beg end)
+           (buffer-substring-no-properties beg end))))
 
 (defun my-codex-send-current-file ()
   "Ask Codex to inspect the current file directly."
@@ -1091,11 +1103,82 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
     (user-error "Prompt cannot be empty"))
   (my-codex-send-prompt prompt))
 
+(defun my-codex--region-context (beg end)
+  "Return a context string for the region between BEG and END."
+  (let* ((root (my-codex-project-root))
+         (file (when buffer-file-name
+                 (file-relative-name buffer-file-name root)))
+         (line-start (line-number-at-pos beg))
+         (line-end (line-number-at-pos (max beg (1- end)))))
+    (if file
+        (format "In file `%s` (lines %d-%d):" file line-start line-end)
+      "From an unnamed buffer:")))
+
+(defun my-codex--read-prompt-preset ()
+  "Read and return a prompt preset cons cell."
+  (unless my-codex-prompt-presets
+    (user-error "No Codex prompt presets configured"))
+  (let* ((names (mapcar #'car my-codex-prompt-presets))
+         (name (completing-read "Codex preset: " names nil t)))
+    (assoc-string name my-codex-prompt-presets)))
+
+(defun my-codex--ask-with-prompt-preset (preset)
+  "Send PRESET, optionally including extra instructions and the active region."
+  (let* ((extra (read-string "Additional instructions (optional): "))
+         (has-region (use-region-p))
+         (parts (delq nil
+                      (list (cdr preset)
+                            (unless (string-blank-p extra)
+                              extra)
+                            (when has-region
+                              (let ((beg (region-beginning))
+                                    (end (region-end)))
+                                (format "%s\n\n%s"
+                                        (my-codex--region-context beg end)
+                                        (buffer-substring-no-properties
+                                         beg end))))))))
+    (my-codex-send-prompt (string-join parts "\n\n"))))
+
+(defun my-codex-ask-with-preset ()
+  "Read a prompt preset by name and send it to Codex.
+After selecting a preset, read extra instructions from the minibuffer.
+When a region is active, include exact file and line context for it."
+  (interactive)
+  (my-codex--ask-with-prompt-preset (my-codex--read-prompt-preset)))
+
+(defconst my-codex--preset-transient-keys
+  '("1" "2" "3" "4" "5" "6" "7" "8" "9" "0"
+    "a" "b" "c" "d" "e" "f" "g" "h" "j" "k" "l" "n" "u" "v" "x" "y" "z")
+  "Keys used for dynamically generated prompt preset transient suffixes.")
+
+(defun my-codex--prompt-preset-transient-suffixes (_children)
+  "Return transient suffixes for `my-codex-prompt-presets'."
+  (transient-parse-suffixes
+   'my-codex-ask-preset-transient
+   `[,@(if my-codex-prompt-presets
+           (cl-mapcar
+            (lambda (key preset)
+              (let ((preset preset))
+                (list key (car preset)
+                      (lambda ()
+                        (interactive)
+                        (my-codex--ask-with-prompt-preset preset)))))
+            my-codex--preset-transient-keys
+            my-codex-prompt-presets)
+         '("No prompt presets configured"))
+     ""
+     ("C" "Choose by name" my-codex-ask-with-preset)]))
+
+(transient-define-prefix my-codex-ask-preset-transient ()
+  "Ask Codex using a prompt preset."
+  [:class transient-column
+   :setup-children my-codex--prompt-preset-transient-suffixes])
+
 (defun my-codex-help ()
   "Show Codex key bindings."
   (interactive)
   (message
-   "Codex: F7=build, F8 o=show/start read-only, w=show/start workspace, r=resume, q=restore layout, a=ask, s/right=send region, left=insert selected Codex text, f=file, g=diff, G=staged diff, m=draft commit message, c=edit commit with Codex message, e=explain error, i=instructions, p=project overview, TAB=toggle focus, ?=help"))
+   "Codex: F7=build, F8 o=show/start read-only, w=show/start workspace, r=resume, q=restore layout, a=ask, A=preset menu, s/right=send region, left=insert selected Codex text, f=file, g=diff, G=staged diff, m=draft commit message, c=edit commit with Codex message, e=explain error, i=instructions, p=project overview, TAB=toggle focus, ?=help"))
 
 ;; Prefix keymap for Codex commands.
 (defvar-keymap my-codex-map
@@ -1105,6 +1188,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
   "r"       #'my-codex-resume
   "q"       #'my-codex-restore-layout
   "a"       #'my-codex-ask
+  "A"       #'my-codex-ask-preset-transient
   "s"       #'my-codex-send-region
   "<right>" #'my-codex-send-region
   "<left>"  #'my-codex-insert-selection-into-code
@@ -1130,6 +1214,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
     ("TAB" "Toggle focus" my-codex-toggle-focus)]
    ["Send"
     ("a" "Ask" my-codex-ask)
+    ("A" "Preset menu" my-codex-ask-preset-transient)
     ("s" "Region" my-codex-send-region)
     ("<right>" "Region" my-codex-send-region)
     ("<left>" "Insert selection" my-codex-insert-selection-into-code)
@@ -1177,6 +1262,8 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
      :help "Restore the layout configuration to how it was before opening Codex"]
     ["Ask Codex..." my-codex-ask
      :help "Prompt for a question and send it to Codex"]
+    ["Ask Codex with preset..." my-codex-ask-with-preset
+     :help "Choose a preset prompt, optionally add instructions, and send it to Codex"]
     "---"
     ["Send selected region" my-codex-send-region
      :active (use-region-p)

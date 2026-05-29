@@ -23,6 +23,7 @@ separate sessions.
 - Use a two-column layout and restore the previous window layout.
 - Send selected code, the current file, Git diffs, or staged Git diffs.
 - Ask free-form questions from the minibuffer.
+- Ask from customisable prompt presets for common transformations.
 - Draft a commit message from staged changes, then open an editable commit.
 - Explain selected compiler or test errors.
 - Open project instruction files such as `AGENTS.md`.
@@ -86,6 +87,7 @@ Prefix bindings:
 | F8 r | `my-codex-resume` | Resume a Codex session |
 | F8 q | `my-codex-restore-layout` | Restore the previous window layout |
 | F8 a | `my-codex-ask` | Ask a free-form question |
+| F8 A | `my-codex-ask-preset-transient` | Open the prompt preset menu |
 | F8 s | `my-codex-send-region` | Send the selected region |
 | F8 Right | `my-codex-send-region` | Send the selected region |
 | F8 Left | `my-codex-insert-selection-into-code` | Insert selected Codex text into code |
@@ -142,6 +144,12 @@ Common options:
       '("AGENTS.md" "CODEX.md" ".codex/instructions.md"))
 (setq my-codex-commit-message-fill-column 76)
 (setq my-codex-project-overview-max-files 200)
+
+(setq my-codex-prompt-presets
+      '(("Refactor" . "Review the following code and refactor it to improve readability and performance without changing its external behaviour.")
+        ("Document" . "Write clear docstrings and comments for the following code. Avoid over-commenting obvious logic.")
+        ("Test" . "Write focused unit tests for the following code.")
+        ("Explain" . "Explain the following code clearly and concisely.")))
 
 (setq my-codex-warn-about-unsaved-project-buffers t)
 (setq my-codex-enable-global-auto-revert t)
