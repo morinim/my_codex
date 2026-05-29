@@ -137,6 +137,9 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 (defvar my-codex--auto-revert-enabled-by-mode nil
   "Non-nil when `my-codex-global-mode' enabled `global-auto-revert-mode'.")
 
+(defvar-local my-codex--prompt-preview-origin-window nil
+  "Window selected before opening the current prompt preview.")
+
 (defvar my-codex--commit-message-request-marker nil
   "Marker for the start of the latest Codex commit message request.")
 
@@ -537,7 +540,10 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
 (defun my-codex--cancel-prompt-preview ()
   "Cancel the current Codex prompt preview buffer."
   (interactive)
-  (kill-buffer (current-buffer))
+  (let ((origin-window my-codex--prompt-preview-origin-window))
+    (kill-buffer (current-buffer))
+    (when (window-live-p origin-window)
+      (select-window origin-window)))
   (message "Codex prompt canceled."))
 
 (defun my-codex--preview-and-send-prompt (prompt &optional force)
@@ -547,6 +553,7 @@ When FORCE is non-nil, always preview PROMPT."
           (and my-codex-prompt-preview-threshold
                (> (length prompt) my-codex-prompt-preview-threshold)))
       (let* ((root (my-codex-project-root))
+             (origin-window (selected-window))
              (buffer (get-buffer-create
                       (my-codex--prompt-preview-buffer-name root))))
         (pop-to-buffer buffer)
@@ -554,8 +561,9 @@ When FORCE is non-nil, always preview PROMPT."
           (erase-buffer)
           (insert prompt)
           (goto-char (point-min)))
-        (setq default-directory root)
         (text-mode)
+        (setq default-directory root)
+        (setq-local my-codex--prompt-preview-origin-window origin-window)
         (setq-local header-line-format
                     "Edit prompt. C-c C-c sends to Codex; C-c C-k cancels.")
         (let ((map (define-keymap :parent (current-local-map)
