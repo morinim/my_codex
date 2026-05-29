@@ -167,7 +167,8 @@ supports project file completion when the current line starts with `@`. Type
 
 Long generated prompts open an editable `*Codex prompt preview*` buffer with a
 short explanation before sending. Press `C-c C-c` to send the edited prompt, or
-`C-c C-k` to cancel. Project overview prompts always use this preview.
+`C-c C-k` to cancel. When Codex is visible, previews open in the left-hand
+editing window. Project overview prompts always use this preview.
 
 For projects with more files than `my-codex-project-overview-max-files`, the
 project overview uses a compact tree summary instead of a long flat file list.

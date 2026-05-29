@@ -466,10 +466,6 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
      my-codex-session-link-target nil
      font-lock-face nil)))
 
-(defun my-codex--multiline-prompt-p (prompt)
-  "Return non-nil when PROMPT has non-trailing multiline content."
-  (string-match-p "\n" (string-trim-right prompt)))
-
 (defun my-codex--linkify-session-region (beg end &optional _len)
   "Add Codex session links in the region from BEG to END."
   (when my-codex-session-links-mode
@@ -531,14 +527,32 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
     (redisplay t)
     (with-current-buffer buffer
       (goto-char (point-max))
-      (vterm-send-string prompt)
-      (vterm-send-return)
-      (when (my-codex--multiline-prompt-p prompt)
-        (vterm-send-return)))))
+      (vterm-send-string prompt t)
+      (vterm-send-return))))
 
 (defun my-codex--prompt-preview-buffer-name (root)
   "Return the prompt preview buffer name for ROOT."
   (format "*Codex prompt preview:%s*" (my-codex--safe-root-name root)))
+
+(defun my-codex--display-prompt-preview-buffer (buffer)
+  "Display prompt preview BUFFER in a predictable window."
+  (if-let* ((codex-window (get-buffer-window (my-codex-current-buffer-name)))
+            (preview-window
+             (seq-find
+              (lambda (window)
+                (not (eq window codex-window)))
+              (sort (window-list (window-frame codex-window) 'no-minibuf)
+                    (lambda (a b)
+                      (or (< (window-left-column a)
+                             (window-left-column b))
+                          (and (= (window-left-column a)
+                                  (window-left-column b))
+                               (< (window-top-line a)
+                                  (window-top-line b)))))))))
+      (progn
+        (set-window-buffer preview-window buffer)
+        (select-window preview-window))
+    (pop-to-buffer buffer)))
 
 (defun my-codex--finish-prompt-preview ()
   "Send the current prompt preview buffer contents to Codex."
@@ -576,7 +590,7 @@ When FORCE is non-nil, always preview PROMPT."
                        "This prompt is long, so it opens here for review."))
              (buffer (get-buffer-create
                       (my-codex--prompt-preview-buffer-name root))))
-        (pop-to-buffer buffer)
+        (my-codex--display-prompt-preview-buffer buffer)
         (let ((inhibit-read-only t))
           (erase-buffer)
           (insert prompt)
