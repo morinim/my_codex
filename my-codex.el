@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.8.0
+;; Version: 0.9.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -1122,9 +1122,39 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
          (name (completing-read "Codex preset: " names nil t)))
     (assoc-string name my-codex-prompt-presets)))
 
+(defun my-codex--file-reference-completion-at-point (files)
+  "Complete project FILES after an at-sign at the start of a minibuffer line."
+  (let ((line-start (max (line-beginning-position) (minibuffer-prompt-end)))
+        (point (point)))
+    (when (and (< line-start point)
+               (eq (char-after line-start) ?@)
+               (save-excursion
+                 (goto-char (1+ line-start))
+                 (looking-at "[^[:space:]]*"))
+               (<= point (match-end 0)))
+      (list (1+ line-start) point files :exclusive 'no))))
+
+(defun my-codex--read-additional-instructions ()
+  "Read optional additional instructions with project file completion.
+When a minibuffer line starts with @, complete project-relative file names
+after the at-sign with `completion-at-point'."
+  (let* ((root (my-codex-project-root))
+         (files (my-codex--project-files root)))
+    (minibuffer-with-setup-hook
+        (lambda ()
+          (add-hook 'completion-at-point-functions
+                    (lambda ()
+                      (my-codex--file-reference-completion-at-point files))
+                    nil t)
+          (let ((map (copy-keymap (current-local-map))))
+            (define-key map (kbd "TAB") #'completion-at-point)
+            (define-key map (kbd "<tab>") #'completion-at-point)
+            (use-local-map map)))
+      (read-string "Additional instructions (optional): "))))
+
 (defun my-codex--ask-with-prompt-preset (preset)
   "Send PRESET, optionally including extra instructions and the active region."
-  (let* ((extra (read-string "Additional instructions (optional): "))
+  (let* ((extra (my-codex--read-additional-instructions))
          (has-region (use-region-p))
          (parts (delq nil
                       (list (cdr preset)

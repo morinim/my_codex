@@ -156,6 +156,10 @@ Common options:
 (setq my-codex-enable-session-links t)
 ```
 
+In the prompt preset menu (`F8 A`), the `Additional instructions` minibuffer
+supports project file completion when the current line starts with `@`. Type
+`@` followed by part of a project-relative path, then press `TAB`.
+
 ## Suggested Codex Configuration
 
 For conservative defaults, configure Codex itself to use read-only mode and
