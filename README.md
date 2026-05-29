@@ -164,9 +164,9 @@ In the prompt preset menu (`F8 A`), the `Additional instructions` minibuffer
 supports project file completion when the current line starts with `@`. Type
 `@` followed by part of a project-relative path, then press `TAB`.
 
-Long generated prompts open an editable `*Codex prompt preview*` buffer before
-sending. Press `C-c C-c` to send the edited prompt, or `C-c C-k` to cancel.
-Project overview prompts always use this preview.
+Long generated prompts open an editable `*Codex prompt preview*` buffer with a
+short explanation before sending. Press `C-c C-c` to send the edited prompt, or
+`C-c C-k` to cancel. Project overview prompts always use this preview.
 
 ## Suggested Codex Configuration
 

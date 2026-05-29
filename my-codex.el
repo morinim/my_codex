@@ -566,6 +566,9 @@ When FORCE is non-nil, always preview PROMPT."
                (> (length prompt) my-codex-prompt-preview-threshold)))
       (let* ((root (my-codex-project-root))
              (origin-window (selected-window))
+             (reason (if force
+                         "This prompt opens here for review before sending."
+                       "This prompt is long, so it opens here for review."))
              (buffer (get-buffer-create
                       (my-codex--prompt-preview-buffer-name root))))
         (pop-to-buffer buffer)
@@ -577,12 +580,14 @@ When FORCE is non-nil, always preview PROMPT."
         (setq default-directory root)
         (setq-local my-codex--prompt-preview-origin-window origin-window)
         (setq-local header-line-format
-                    "Edit prompt. C-c C-c sends to Codex; C-c C-k cancels.")
+                    (concat reason
+                            " Edit if needed; C-c C-c sends to Codex,"
+                            " C-c C-k cancels."))
         (let ((map (define-keymap :parent (current-local-map)
                      "C-c C-c" #'my-codex--finish-prompt-preview
                      "C-c C-k" #'my-codex--cancel-prompt-preview)))
           (use-local-map map))
-        (message "Review the prompt, then press C-c C-c to send."))
+        (message "Codex prompt preview opened."))
     (my-codex-send-prompt prompt)))
 
 (defun my-codex-send-region (beg end)
