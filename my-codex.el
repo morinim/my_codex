@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.9.0
+;; Version: 0.9.1
 ;; Package-Requires: ((emacs "29.1") (vterm "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -112,6 +112,13 @@ When nil, use `compile-command'."
 (defcustom my-codex-project-overview-max-files 200
   "Maximum number of project files to include in a project overview prompt."
   :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-prompt-preview-threshold 2000
+  "Show an editable preview before sending prompts longer than this.
+Set this to nil to disable automatic prompt previews."
+  :type '(choice (const :tag "Disable automatic previews" nil)
+                 natnum)
   :group 'my-codex)
 
 (defcustom my-codex-prompt-presets
@@ -509,12 +516,61 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
       (vterm-send-string prompt)
       (vterm-send-return))))
 
+(defun my-codex--prompt-preview-buffer-name (root)
+  "Return the prompt preview buffer name for ROOT."
+  (format "*Codex prompt preview:%s*" (my-codex--safe-root-name root)))
+
+(defun my-codex--finish-prompt-preview ()
+  "Send the current prompt preview buffer contents to Codex."
+  (interactive)
+  (let ((prompt (string-trim-right
+                 (buffer-substring-no-properties (point-min) (point-max))))
+        (root default-directory)
+        (buffer (current-buffer)))
+    (when (string-blank-p prompt)
+      (user-error "Prompt is empty"))
+    (let ((default-directory root))
+      (my-codex-send-prompt prompt))
+    (when (buffer-live-p buffer)
+      (kill-buffer buffer))))
+
+(defun my-codex--cancel-prompt-preview ()
+  "Cancel the current Codex prompt preview buffer."
+  (interactive)
+  (kill-buffer (current-buffer))
+  (message "Codex prompt canceled."))
+
+(defun my-codex--preview-and-send-prompt (prompt &optional force)
+  "Preview PROMPT before sending it to Codex when useful.
+When FORCE is non-nil, always preview PROMPT."
+  (if (or force
+          (and my-codex-prompt-preview-threshold
+               (> (length prompt) my-codex-prompt-preview-threshold)))
+      (let* ((root (my-codex-project-root))
+             (buffer (get-buffer-create
+                      (my-codex--prompt-preview-buffer-name root))))
+        (pop-to-buffer buffer)
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (insert prompt)
+          (goto-char (point-min)))
+        (setq default-directory root)
+        (text-mode)
+        (setq-local header-line-format
+                    "Edit prompt. C-c C-c sends to Codex; C-c C-k cancels.")
+        (let ((map (define-keymap :parent (current-local-map)
+                     "C-c C-c" #'my-codex--finish-prompt-preview
+                     "C-c C-k" #'my-codex--cancel-prompt-preview)))
+          (use-local-map map))
+        (message "Review the prompt, then press C-c C-c to send."))
+    (my-codex-send-prompt prompt)))
+
 (defun my-codex-send-region (beg end)
   "Send the region between BEG and END to Codex with exact file context."
   (interactive "r")
   (unless (use-region-p)
     (user-error "No active region"))
-  (my-codex-send-prompt
+  (my-codex--preview-and-send-prompt
    (format "%s\n\nPlease review this code and report findings:\n\n%s"
            (my-codex--region-context beg end)
            (buffer-substring-no-properties beg end))))
@@ -663,7 +719,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
                files
                my-codex-project-overview-max-files)
             "No project files found.")))
-    (my-codex-send-prompt
+    (my-codex--preview-and-send-prompt
      (format "Here is the current state and structure of my project. Use this as orientation context for subsequent requests. Do not inspect files, generate code, or make changes solely because of this message.
 
 **Project root:** `%s`
@@ -686,7 +742,8 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
              root
              (my-codex--git-status-text root)
              (my-codex--unsaved-project-buffer-text root)
-             files-text))))
+             files-text)
+     t)))
 
 (defun my-codex--git-comment-char (root)
   "Return Git's commit comment character for ROOT."
@@ -1167,7 +1224,7 @@ after the at-sign with `completion-at-point'."
                                         (my-codex--region-context beg end)
                                         (buffer-substring-no-properties
                                          beg end))))))))
-    (my-codex-send-prompt (string-join parts "\n\n"))))
+    (my-codex--preview-and-send-prompt (string-join parts "\n\n"))))
 
 (defun my-codex-ask-with-preset ()
   "Read a prompt preset by name and send it to Codex.

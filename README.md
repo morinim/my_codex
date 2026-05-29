@@ -144,6 +144,7 @@ Common options:
       '("AGENTS.md" "CODEX.md" ".codex/instructions.md"))
 (setq my-codex-commit-message-fill-column 76)
 (setq my-codex-project-overview-max-files 200)
+(setq my-codex-prompt-preview-threshold 2000)
 
 (setq my-codex-prompt-presets
       '(("Refactor" . "Review the following code and refactor it to improve readability and performance without changing its external behaviour.")
@@ -159,6 +160,10 @@ Common options:
 In the prompt preset menu (`F8 A`), the `Additional instructions` minibuffer
 supports project file completion when the current line starts with `@`. Type
 `@` followed by part of a project-relative path, then press `TAB`.
+
+Long generated prompts open an editable `*Codex prompt preview*` buffer before
+sending. Press `C-c C-c` to send the edited prompt, or `C-c C-k` to cancel.
+Project overview prompts always use this preview.
 
 ## Suggested Codex Configuration
 
