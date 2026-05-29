@@ -122,7 +122,7 @@ When nil, use `compile-command'."
 
 (defcustom my-codex-prompt-preview-threshold 10000
   "Show an editable preview before sending prompts longer than this.
-Set this to nil to disable automatic prompt previews."
+Set this to nil or 0 to disable automatic prompt previews."
   :type '(choice (const :tag "Disable automatic previews" nil)
                  natnum)
   :group 'my-codex)
@@ -582,6 +582,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
 When FORCE is non-nil, always preview PROMPT."
   (if (or force
           (and my-codex-prompt-preview-threshold
+               (> my-codex-prompt-preview-threshold 0)
                (> (length prompt) my-codex-prompt-preview-threshold)))
       (let* ((root (my-codex-project-root))
              (origin-window (selected-window))
