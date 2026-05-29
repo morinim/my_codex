@@ -461,6 +461,10 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
      my-codex-session-link-target nil
      font-lock-face nil)))
 
+(defun my-codex--multiline-prompt-p (prompt)
+  "Return non-nil when PROMPT has non-trailing multiline content."
+  (string-match-p "\n" (string-trim-right prompt)))
+
 (defun my-codex--linkify-session-region (beg end &optional _len)
   "Add Codex session links in the region from BEG to END."
   (when my-codex-session-links-mode
@@ -523,7 +527,9 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
     (with-current-buffer buffer
       (goto-char (point-max))
       (vterm-send-string prompt)
-      (vterm-send-return))))
+      (vterm-send-return)
+      (when (my-codex--multiline-prompt-p prompt)
+        (vterm-send-return)))))
 
 (defun my-codex--prompt-preview-buffer-name (root)
   "Return the prompt preview buffer name for ROOT."
