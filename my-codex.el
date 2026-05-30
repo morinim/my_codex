@@ -117,6 +117,16 @@ When nil, use `compile-command'."
   :type 'natnum
   :group 'my-codex)
 
+(defcustom my-codex-commit-message-poll-interval 0.5
+  "Seconds between checks for a generated Codex commit message."
+  :type 'number
+  :group 'my-codex)
+
+(defcustom my-codex-commit-message-poll-attempts 120
+  "Maximum number of checks for a generated Codex commit message."
+  :type 'natnum
+  :group 'my-codex)
+
 (defcustom my-codex-warn-about-unsaved-project-buffers t
   "When non-nil, warn before sending prompts if project buffers are unsaved."
   :type 'boolean
@@ -1269,10 +1279,9 @@ Kill COMMIT-BUFFER after a successful commit when it is non-nil."
 ROOT is the Git repository root used for the eventual commit.
 ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
   (let ((attempts (or attempts 0))
-        (max-attempts 120)
         (msg (my-codex-latest-commit-message-after buffer start-point)))
     (cond
-     ((> attempts max-attempts)
+     ((> attempts my-codex-commit-message-poll-attempts)
       (my-codex--clear-marker start-point)
       (message "Timed out waiting for Codex commit message."))
      (msg
@@ -1281,7 +1290,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
       (message "Codex commit message is ready for editing."))
      (t
       (run-with-timer
-       0.5 nil
+       my-codex-commit-message-poll-interval nil
        #'my-codex--wait-for-commit-message
        buffer start-point root (1+ attempts))))))
 

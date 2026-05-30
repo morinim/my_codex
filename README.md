@@ -152,6 +152,8 @@ Common options:
 (setq my-codex-project-instruction-files
       '("AGENTS.md" "CODEX.md" ".codex/instructions.md"))
 (setq my-codex-commit-message-fill-column 76)
+(setq my-codex-commit-message-poll-interval 0.5)
+(setq my-codex-commit-message-poll-attempts 120)
 (setq my-codex-project-overview-max-files 200)
 (setq my-codex-project-overview-tree-max-entries 25)
 (setq my-codex-enable-prompt-preview nil)
