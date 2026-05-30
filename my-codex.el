@@ -305,7 +305,7 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
                            (file-in-directory-p (file-truename file) root))))
                   (buffer-list)))))
 
-(defun my-codex-warn-about-unsaved-project-buffers ()
+(defun my-codex--warn-about-unsaved-project-buffers ()
   "Display a non-blocking warning if project buffers have unsaved changes."
   (when my-codex-warn-about-unsaved-project-buffers
     (when-let (buffers (my-codex-modified-project-buffers))
@@ -596,7 +596,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
 
 (defun my-codex-send-prompt (prompt)
   "Send PROMPT to the Codex vterm buffer and show it."
-  (my-codex-warn-about-unsaved-project-buffers)
+  (my-codex--warn-about-unsaved-project-buffers)
   (let ((buffer (my-codex-buffer)))
     (if-let (window (get-buffer-window buffer t))
         (select-window window)
