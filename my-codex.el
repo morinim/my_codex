@@ -287,8 +287,10 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 (defun my-codex-current-buffer-name ()
   "Return a project-specific buffer name for the Codex session."
   (if-let* ((project (project-current))
-            (root (project-root project)))
-      (format "*codex:%s*" (my-codex--safe-root-name root))
+            (root (file-truename (project-root project)))
+            (name (file-name-nondirectory (directory-file-name root)))
+            (hash (substring (secure-hash 'sha1 root) 0 8)))
+      (format "*codex:%s:%s*" name hash)
     my-codex-buffer-name))
 
 (defun my-codex-modified-project-buffers ()
