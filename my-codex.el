@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.9.2
+;; Version: 0.9.3
 ;; Package-Requires: ((emacs "29.1") (vterm "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -80,6 +80,11 @@
 (defcustom my-codex-right-width 100
   "Target width of the Codex vterm window."
   :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-enforce-right-side-layout t
+  "When non-nil, resize the frame and edit window for right-side Codex."
+  :type 'boolean
   :group 'my-codex)
 
 (defcustom my-codex-display-buffer-action
@@ -206,9 +211,14 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
   (+ my-codex-left-width
      (max my-codex-min-right-width my-codex-right-width)))
 
+(defun my-codex--enforce-right-side-layout-p ()
+  "Return non-nil when Codex should enforce the right-side layout."
+  (and my-codex-enforce-right-side-layout
+       (my-codex--right-side-action-p)))
+
 (defun my-codex--fit-frame-to-right-layout ()
   "Widen the selected frame enough for the default right-side layout."
-  (when (my-codex--right-side-action-p)
+  (when (my-codex--enforce-right-side-layout-p)
     (let ((required-width (my-codex--right-layout-width)))
       (when (< (frame-width) required-width)
         (condition-case nil
@@ -242,7 +252,7 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 
 (defun my-codex--resize-edit-window-for-right-layout (edit-window term-window)
   "Resize EDIT-WINDOW for the default right-side Codex layout."
-  (when (and (my-codex--right-side-action-p)
+  (when (and (my-codex--enforce-right-side-layout-p)
              (window-live-p edit-window)
              (window-live-p term-window)
              (> (window-left-column term-window)
@@ -300,7 +310,7 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
   (when my-codex-warn-about-unsaved-project-buffers
     (when-let (buffers (my-codex-modified-project-buffers))
       (message "Codex warning: unsaved buffer(s): %s"
-               (string-join (mapcar #'buffer-name buffers) ", ")))))
+               (mapconcat #'buffer-name buffers ", ")))))
 
 (defun my-codex-two-column-layout-with-command (codex-command &optional focus-term)
   "Display Codex and run CODEX-COMMAND in vterm if not running.
@@ -785,10 +795,10 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
 
 (defun my-codex-clean-commit-message (message)
   "Return MESSAGE trimmed and filled for use as a Git commit message."
-  (let ((message (string-trim message)))
-    (if (string-empty-p message)
+  (let ((trimmed-message (string-trim message)))
+    (if (string-empty-p trimmed-message)
         ""
-      (let ((lines (split-string message "\n")))
+      (let ((lines (split-string trimmed-message "\n")))
         (string-join
          (cons (string-trim (car lines))
                (my-codex--clean-commit-message-body-lines (cdr lines)))
@@ -914,10 +924,10 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
   "Return text describing unsaved modified project buffers under ROOT."
   (let ((buffers (my-codex-modified-project-buffers)))
     (if buffers
-        (string-join
-         (mapcar (lambda (buf)
-                   (file-relative-name (buffer-file-name buf) root))
-                 buffers)
+        (mapconcat
+         (lambda (buf)
+           (file-relative-name (buffer-file-name buf) root))
+         buffers
          "\n")
       "No unsaved modified project buffers.")))
 

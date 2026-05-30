@@ -20,7 +20,7 @@ separate sessions.
 ## Features
 
 - Start Codex in read-only, workspace-write, or resume mode.
-- Use a two-column layout and restore the previous window layout.
+- Use a right-side Codex layout and hide it without disturbing other windows.
 - Send selected code, symbols, the current file, Git diffs, or staged Git
   diffs.
 - Ask free-form questions from the minibuffer.
@@ -32,7 +32,7 @@ separate sessions.
 - Run a configurable project build command.
 - Open clickable URLs and in-project file references from Codex output.
 - Warn when project buffers have unsaved changes before sending prompts.
-- Enable `global-auto-revert-mode` when `my-codex-global-mode` starts.
+- Enable useful display defaults when `my-codex-global-mode` starts.
 - Provide global keys and a Codex menu.
 
 ## Requirements
@@ -86,7 +86,7 @@ Prefix bindings:
 | F8 o | `my-codex-read-only` | Show/start read-only Codex |
 | F8 w | `my-codex-workspace` | Show/start workspace-write Codex |
 | F8 r | `my-codex-resume` | Resume a Codex session |
-| F8 q | `my-codex-restore-layout` | Restore the previous window layout |
+| F8 q | `my-codex-restore-layout` | Hide the Codex window |
 | F8 a | `my-codex-ask` | Ask a free-form question |
 | F8 A | `my-codex-ask-preset-transient` | Open the prompt preset menu |
 | F8 s | `my-codex-send-region` | Send the selected region |
@@ -138,9 +138,10 @@ Common options:
       "codex --sandbox workspace-write --ask-for-approval on-request")
 (setq my-codex-resume-command "codex resume")
 
-(setq my-codex-left-width 80)
+(setq my-codex-left-width 81)
 (setq my-codex-min-right-width 80)
 (setq my-codex-right-width 100)
+(setq my-codex-enforce-right-side-layout t)
 (setq my-codex-display-buffer-action
       '((display-buffer-in-side-window)
         (side . right)
@@ -166,6 +167,10 @@ Common options:
 (setq my-codex-enable-global-auto-revert t)
 (setq my-codex-enable-session-links t)
 ```
+
+When `my-codex-global-mode` is enabled, it also enables trailing whitespace
+display and column numbers. When Codex opens beside an edit buffer, that buffer
+gets a fill-column indicator at column 80.
 
 In the prompt preset menu (`F8 A`), the `Additional instructions` minibuffer
 supports project file completion when the current line starts with `@`. Type
