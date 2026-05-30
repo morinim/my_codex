@@ -67,8 +67,8 @@
   :type 'string
   :group 'my-codex)
 
-(defcustom my-codex-left-width 80
-  "Width of the editing window text area in the Codex two-column layout."
+(defcustom my-codex-left-width 81
+  "Width of the editing window text area in the Codex right-side layout."
   :type 'natnum
   :group 'my-codex)
 
@@ -157,11 +157,17 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
   :type '(alist :key-type string :value-type string)
   :group 'my-codex)
 
-(defvar my-codex--saved-window-configuration nil
-  "Window layout configuration captured before opening Codex.")
-
 (defvar my-codex--auto-revert-enabled-by-mode nil
   "Non-nil when `my-codex-global-mode' enabled `global-auto-revert-mode'.")
+
+(defvar my-codex--saved-show-trailing-whitespace nil
+  "Previous default value of `show-trailing-whitespace'.")
+
+(defvar my-codex--saved-column-number-mode nil
+  "Previous value of `column-number-mode'.")
+
+(defvar my-codex--display-defaults-enabled-by-mode nil
+  "Non-nil when `my-codex-global-mode' changed display defaults.")
 
 (defvar-local my-codex--prompt-preview-origin-window nil
   "Window selected before opening the current prompt preview.")
@@ -185,9 +191,75 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
   "Return shell text that runs COMMAND, then exits with its status."
   (format "(%s); exit $?" command))
 
-(defun my-codex--right-window-width (_window)
-  "Return the target Codex side-window width."
-  (max my-codex-min-right-width my-codex-right-width))
+(defun my-codex--right-window-width (window)
+  "Resize WINDOW to the target Codex side-window width when possible."
+  (my-codex--resize-window-to-body-width
+   window
+   (max my-codex-min-right-width my-codex-right-width)))
+
+(defun my-codex--right-side-action-p ()
+  "Return non-nil when Codex is configured for a right side window."
+  (eq (alist-get 'side (cdr my-codex-display-buffer-action)) 'right))
+
+(defun my-codex--right-layout-width ()
+  "Return the minimum frame width for the default right-side layout."
+  (+ my-codex-left-width
+     (max my-codex-min-right-width my-codex-right-width)))
+
+(defun my-codex--fit-frame-to-right-layout ()
+  "Widen the selected frame enough for the default right-side layout."
+  (when (my-codex--right-side-action-p)
+    (let ((required-width (my-codex--right-layout-width)))
+      (when (< (frame-width) required-width)
+        (condition-case nil
+            (progn
+              (set-frame-width (selected-frame) (+ required-width 8))
+              (redisplay t))
+          (error nil)))
+      (when (< (frame-width) required-width)
+        (user-error "Frame is too narrow for Codex layout")))))
+
+(defun my-codex--resize-window-to-body-width (window width)
+  "Resize WINDOW to WIDTH body columns when possible."
+  (when (and (window-live-p window)
+             (integerp width)
+             (> width 0))
+    (let ((delta (- width (window-body-width window))))
+      (when (not (zerop delta))
+        (ignore-errors
+          (window-resize window delta t 'ignore))))))
+
+(defun my-codex--apply-display-window-width (window)
+  "Apply the configured Codex display width to WINDOW."
+  (when (window-live-p window)
+    (pcase (alist-get 'window-width (cdr my-codex-display-buffer-action))
+      ((and width (pred integerp))
+       (my-codex--resize-window-to-body-width window width))
+      (`(body-columns . ,width)
+       (my-codex--resize-window-to-body-width window width))
+      ((and width (pred functionp))
+       (funcall width window)))))
+
+(defun my-codex--resize-edit-window-for-right-layout (edit-window term-window)
+  "Resize EDIT-WINDOW for the default right-side Codex layout."
+  (when (and (my-codex--right-side-action-p)
+             (window-live-p edit-window)
+             (window-live-p term-window)
+             (> (window-left-column term-window)
+                (window-left-column edit-window)))
+    (my-codex--resize-window-to-body-width edit-window
+                                            my-codex-left-width)))
+
+(defun my-codex--enable-edit-fill-column-indicator (edit-window term-window)
+  "Show a fill-column indicator in EDIT-WINDOW."
+  (when (and (fboundp 'display-fill-column-indicator-mode)
+             (window-live-p edit-window)
+             (window-live-p term-window)
+             (not (eq (window-buffer edit-window)
+                      (window-buffer term-window))))
+    (with-current-buffer (window-buffer edit-window)
+      (setq-local display-fill-column-indicator-column 80)
+      (display-fill-column-indicator-mode 1))))
 
 (defun my-codex--safe-root-name (root)
   "Return a buffer-name-safe representation of ROOT."
@@ -231,56 +303,12 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
                (string-join (mapcar #'buffer-name buffers) ", ")))))
 
 (defun my-codex-two-column-layout-with-command (codex-command &optional focus-term)
-  "Open a two-column layout and run CODEX-COMMAND in vterm if not running.
+  "Display Codex and run CODEX-COMMAND in vterm if not running.
 If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
   (cl-labels
       ((live-buffer-p
         (buffer)
         (process-live-p (get-buffer-process buffer)))
-       (fit-frame-to-layout
-        (width)
-        (when (< (frame-width) width)
-          (condition-case nil
-              (progn
-                (set-frame-width (selected-frame) width)
-                (redisplay t))
-            (error nil))))
-       (right-side-window-action-p
-        ()
-        (eq (alist-get 'side (cdr my-codex-display-buffer-action)) 'right))
-       (ensure-frame-wide-enough
-        (width)
-        (when (< (frame-width) width)
-          (user-error "Frame is too narrow for Codex layout")))
-       (required-layout-window-width
-        ()
-        (let ((window-width (alist-get 'window-width
-                                       (cdr my-codex-display-buffer-action))))
-          (max (+ my-codex-left-width my-codex-min-right-width)
-               (cond
-                ((eq window-width #'my-codex--right-window-width)
-                 (+ my-codex-left-width (my-codex--right-window-width nil)))
-                ((and (floatp window-width)
-                      (> window-width 0))
-                 (max (ceiling my-codex-min-right-width window-width)
-                      (if (< window-width 1)
-                          (ceiling my-codex-left-width
-                                   (- 1 window-width))
-                        0)))
-                ((and (integerp window-width)
-                      (> window-width my-codex-min-right-width))
-                 (+ my-codex-left-width window-width))
-                (t
-                 my-codex-min-right-width)))))
-       (resize-edit-window
-        (edit-window term-window)
-        (when (> (window-left-column term-window)
-                 (window-left-column edit-window))
-          (let ((delta (- my-codex-left-width
-                          (window-body-width edit-window))))
-            (when (and (not (zerop delta))
-                       (window-resizable-p edit-window delta t t))
-              (window-resize edit-window delta t t)))))
        (start-codex-buffer
         (buffer-name)
         (let* ((default-directory (my-codex-project-root))
@@ -304,62 +332,46 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
         (buffer)
         (or (display-buffer buffer my-codex-display-buffer-action)
             (user-error "Failed to display %s" (buffer-name buffer)))))
-    (let* ((decorations-padding 8)
-           (required-window-width (required-layout-window-width))
-           (required-frame-width (+ required-window-width
-                                    decorations-padding))
-           (buffer-name (my-codex-current-buffer-name))
+    (let* ((buffer-name (my-codex-current-buffer-name))
            (existing-buf (get-buffer buffer-name)))
-      (when (right-side-window-action-p)
-        (fit-frame-to-layout required-frame-width)
-        (ensure-frame-wide-enough required-window-width))
+      (my-codex--fit-frame-to-right-layout)
 
       (when (and existing-buf
                  (not (live-buffer-p existing-buf)))
         (kill-buffer existing-buf)
         (setq existing-buf nil))
 
-      (let ((existing-window-in-frame
-             (and existing-buf
-                  (get-buffer-window existing-buf))))
-        (unless existing-window-in-frame
-          (setq my-codex--saved-window-configuration
-                (current-window-configuration)))
+      (let* ((edit-window (selected-window))
+             (term-buffer (or existing-buf
+                              (get-buffer-create buffer-name)))
+             (term-window (display-codex-buffer term-buffer)))
+        (my-codex--apply-display-window-width term-window)
+        (my-codex--resize-edit-window-for-right-layout edit-window term-window)
+        (my-codex--enable-edit-fill-column-indicator edit-window term-window)
+        (select-window term-window)
+        (when (and existing-buf
+                   (live-buffer-p existing-buf))
+          (set-window-buffer term-window existing-buf))
+        (unless (and existing-buf
+                     (live-buffer-p existing-buf))
+          (start-codex-buffer buffer-name))
 
-        (let ((layout-before-change (current-window-configuration)))
-          (condition-case err
-              (let* ((edit-window (selected-window))
-                     (created-term-window (not existing-window-in-frame))
-                     (term-buffer (or existing-buf
-                                      (get-buffer-create buffer-name)))
-                     (term-window (or existing-window-in-frame
-                                      (display-codex-buffer term-buffer))))
-                (when created-term-window
-                  (resize-edit-window edit-window term-window))
-
-                (select-window term-window)
-                (when (and existing-buf
-                           (live-buffer-p existing-buf))
-                  (set-window-buffer term-window existing-buf))
-                (unless (and existing-buf
-                             (live-buffer-p existing-buf))
-                  (start-codex-buffer buffer-name))
-
-                (unless focus-term
-                  (select-window edit-window)))
-            (error
-             (set-window-configuration layout-before-change)
-             (signal (car err) (cdr err)))))))))
+        (if focus-term
+            (select-window term-window)
+          (when (window-live-p edit-window)
+            (select-window edit-window)))))))
 
 (defun my-codex-restore-layout ()
-  "Restore the window layout configuration used before Codex was opened."
+  "Hide visible windows showing the current Codex buffer."
   (interactive)
-  (if my-codex--saved-window-configuration
-      (let ((config my-codex--saved-window-configuration))
-        (setq my-codex--saved-window-configuration nil)
-        (set-window-configuration config)
-        (message "Restored previous window layout"))
-    (user-error "No saved window configuration found")))
+  (let* ((buffer-name (my-codex-current-buffer-name))
+         (windows (get-buffer-window-list buffer-name nil t)))
+    (unless windows
+      (user-error "Codex window is not visible"))
+    (dolist (window windows)
+      (when (window-live-p window)
+        (quit-window nil window)))
+    (message "Codex window hidden")))
 
 (defun my-codex-read-only ()
   "Show Codex, starting it in read-only mode if needed."
@@ -1473,7 +1485,7 @@ When a region is active, include exact file and line context for it."
   "Show Codex key bindings."
   (interactive)
   (message
-   "Codex: F7=build, F8 o=show/start read-only, w=show/start workspace, r=resume, q=restore layout, a=ask, A=preset menu, s/right=send region, left=insert selected Codex text, f=file, x=explain symbol, g=diff, G=staged diff, m=draft commit message, c=edit commit with Codex message, e=explain error, i=instructions, p=project overview, TAB=toggle focus, ?=help"))
+   "Codex: F7=build, F8 o=show/start read-only, w=show/start workspace, r=resume, q=hide Codex, a=ask, A=preset menu, s/right=send region, left=insert selected Codex text, f=file, x=explain symbol, g=diff, G=staged diff, m=draft commit message, c=edit commit with Codex message, e=explain error, i=instructions, p=project overview, TAB=toggle focus, ?=help"))
 
 ;; Prefix keymap for Codex commands.
 (defvar-keymap my-codex-map
@@ -1506,7 +1518,7 @@ When a region is active, include exact file and line context for it."
     ("o" "Read-only" my-codex-read-only)
     ("w" "Workspace" my-codex-workspace)
     ("r" "Resume" my-codex-resume)
-    ("q" "Restore layout" my-codex-restore-layout)
+    ("q" "Hide Codex" my-codex-restore-layout)
     ("TAB" "Toggle focus" my-codex-toggle-focus)]
    ["Send"
     ("a" "Ask" my-codex-ask)
@@ -1561,6 +1573,28 @@ When a region is active, include exact file and line context for it."
   "<f7>" #'my-codex-project-build
   "<f8>" #'my-codex-transient-preserve-selection)
 
+(defun my-codex--enable-display-defaults ()
+  "Enable default editing display helpers."
+  (unless my-codex--display-defaults-enabled-by-mode
+    (setq my-codex--saved-show-trailing-whitespace
+          (default-value 'show-trailing-whitespace))
+    (setq my-codex--saved-column-number-mode
+          (bound-and-true-p column-number-mode))
+    (setq my-codex--display-defaults-enabled-by-mode t))
+  (setq-default show-trailing-whitespace t)
+  (column-number-mode 1))
+
+(defun my-codex--restore-display-defaults ()
+  "Restore display defaults changed by `my-codex-global-mode'."
+  (when my-codex--display-defaults-enabled-by-mode
+    (setq-default show-trailing-whitespace
+                  my-codex--saved-show-trailing-whitespace)
+    (column-number-mode
+     (if my-codex--saved-column-number-mode 1 -1))
+    (setq my-codex--saved-show-trailing-whitespace nil)
+    (setq my-codex--saved-column-number-mode nil)
+    (setq my-codex--display-defaults-enabled-by-mode nil)))
+
 (easy-menu-define my-codex-menu my-codex-global-mode-map
   "Menu for Codex commands."
   '("Codex"
@@ -1570,8 +1604,8 @@ When a region is active, include exact file and line context for it."
      :help "Show Codex, starting it with workspace write access if needed"]
     ["Resume session" my-codex-resume
      :help "Resume a previous Codex session"]
-    ["Restore window layout" my-codex-restore-layout
-     :help "Restore the layout configuration to how it was before opening Codex"]
+    ["Hide Codex window" my-codex-restore-layout
+     :help "Hide the visible Codex window"]
     ["Ask Codex..." my-codex-ask
      :help "Prompt for a question and send it to Codex"]
     ["Ask Codex with preset..." my-codex-ask-with-preset
@@ -1616,13 +1650,16 @@ When a region is active, include exact file and line context for it."
   :group 'my-codex
   :keymap my-codex-global-mode-map
   (if my-codex-global-mode
-      (when (and my-codex-enable-global-auto-revert
-                 (not my-codex--auto-revert-enabled-by-mode)
-                 (not (bound-and-true-p global-auto-revert-mode)))
-        (setq my-codex--auto-revert-enabled-by-mode t)
-        (global-auto-revert-mode 1))
+      (progn
+        (my-codex--enable-display-defaults)
+        (when (and my-codex-enable-global-auto-revert
+                   (not my-codex--auto-revert-enabled-by-mode)
+                   (not (bound-and-true-p global-auto-revert-mode)))
+          (setq my-codex--auto-revert-enabled-by-mode t)
+          (global-auto-revert-mode 1)))
     (when my-codex--auto-revert-enabled-by-mode
       (global-auto-revert-mode -1))
+    (my-codex--restore-display-defaults)
     (setq my-codex--auto-revert-enabled-by-mode nil)))
 
 (provide 'my-codex)
