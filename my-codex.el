@@ -1154,8 +1154,13 @@ Return nil when no matching message is available."
 (defun my-codex--cancel-git-commit ()
   "Cancel the current Codex commit message buffer."
   (interactive)
-  (kill-buffer (current-buffer))
+  (quit-window 'kill)
   (message "Git commit canceled."))
+
+(defun my-codex--quit-commit-buffer (buffer)
+  "Kill BUFFER and quit any windows that were opened for it."
+  (when (buffer-live-p buffer)
+    (quit-windows-on buffer t)))
 
 (defun my-codex-edit-git-commit-with-message (message root)
   "Open an editable Git commit buffer with MESSAGE from ROOT."
@@ -1212,7 +1217,7 @@ Kill COMMIT-BUFFER after a successful commit when it is non-nil."
                    (if (zerop status)
                        (progn
                          (when (buffer-live-p commit-buffer)
-                           (kill-buffer commit-buffer))
+                           (my-codex--quit-commit-buffer commit-buffer))
                          (when (buffer-live-p buffer)
                            (kill-buffer buffer))
                          (message "Git commit finished successfully."))
