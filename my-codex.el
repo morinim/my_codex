@@ -1495,7 +1495,7 @@ When a region is active, include exact file and line context for it."
   "Show Codex key bindings."
   (interactive)
   (message
-   "Codex: F7=build, F8 o=show/start read-only, w=show/start workspace, r=resume, q=hide Codex, a=ask, A=preset menu, s/right=send region, left=insert selected Codex text, f=file, x=explain symbol, g=diff, G=staged diff, m=draft commit message, c=edit commit with Codex message, e=explain error, i=instructions, p=project overview, TAB=toggle focus, ?=help"))
+   "Codex: press F8 for the command menu. Common keys: F7=build, a=ask, s/right=send region, f=file, g=diff, m=draft commit message, TAB=toggle focus."))
 
 ;; Prefix keymap for Codex commands.
 (defvar-keymap my-codex-map
