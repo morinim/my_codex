@@ -177,10 +177,10 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 (defvar-local my-codex--prompt-preview-origin-window nil
   "Window selected before opening the current prompt preview.")
 
-(defvar my-codex--commit-message-request-marker nil
+(defvar-local my-codex--commit-message-request-marker nil
   "Marker for the start of the latest Codex commit message request.")
 
-(defvar my-codex--commit-message-request-signature nil
+(defvar-local my-codex--commit-message-request-signature nil
   "Staged diff signature used for the latest Codex commit message request.")
 
 (defvar my-codex--captured-selection nil
@@ -1096,14 +1096,15 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
   (interactive)
   (let* ((buffer (my-codex-buffer))
          (root (my-codex-project-root))
-         (default-directory root))
+         (default-directory root)
+         (signature nil))
     (my-codex--ensure-git-repository)
     (unless (my-codex--staged-changes-p)
       (user-error "No staged Git changes to draft a commit message from"))
-    (setq my-codex--commit-message-request-signature
-          (my-codex--staged-diff-signature))
-    (setq my-codex--commit-message-request-marker
-          (with-current-buffer buffer
+    (setq signature (my-codex--staged-diff-signature))
+    (with-current-buffer buffer
+      (setq my-codex--commit-message-request-signature signature)
+      (setq my-codex--commit-message-request-marker
             (copy-marker (point-max))))
     (my-codex-send-prompt (my-codex--commit-message-prompt))))
 
@@ -1152,11 +1153,12 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
 (defun my-codex-latest-commit-message ()
   "Return latest requested commit message from current Codex buffer.
 Return nil when no matching message is available."
-  (when-let* ((buffer (get-buffer (my-codex-current-buffer-name)))
-              (marker my-codex--commit-message-request-marker)
-              ((markerp marker))
-              ((eq (marker-buffer marker) buffer)))
-    (my-codex-latest-commit-message-after buffer marker)))
+  (when-let ((buffer (get-buffer (my-codex-current-buffer-name))))
+    (with-current-buffer buffer
+      (when-let* ((marker my-codex--commit-message-request-marker)
+                  ((markerp marker))
+                  ((eq (marker-buffer marker) buffer)))
+        (my-codex-latest-commit-message-after buffer marker)))))
 
 (defun my-codex--commit-message-buffer-name (root)
   "Return the commit message buffer name for ROOT."
@@ -1292,12 +1294,16 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
         (user-error "No staged Git changes to commit"))
       (setq current-signature (my-codex--staged-diff-signature)))
     (let* ((buffer (my-codex-buffer))
-           (marker my-codex--commit-message-request-marker)
-           (current-request-p
+           marker
+           request-signature
+           current-request-p)
+      (with-current-buffer buffer
+        (setq marker my-codex--commit-message-request-marker)
+        (setq request-signature my-codex--commit-message-request-signature))
+      (setq current-request-p
             (and (markerp marker)
                  (eq (marker-buffer marker) buffer)
-                 (equal my-codex--commit-message-request-signature
-                        current-signature))))
+                 (equal request-signature current-signature)))
       (if current-request-p
           (if-let (message (my-codex-latest-commit-message-after buffer marker))
               (progn
