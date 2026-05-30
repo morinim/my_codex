@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.9.1
+;; Version: 0.9.2
 ;; Package-Requires: ((emacs "29.1") (vterm "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -154,6 +154,15 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 
 (defvar my-codex--commit-message-request-signature nil
   "Staged diff signature used for the latest Codex commit message request.")
+
+(defvar my-codex--captured-selection nil
+  "Text captured before opening a transient from an active region.")
+
+(defun my-codex--selected-window-is-codex-p ()
+  "Return non-nil when the selected window is the visible Codex window."
+  (eq (selected-window)
+      (ignore-errors
+        (my-codex-visible-window))))
 
 (defun my-codex--shell-command-and-exit (command)
   "Return shell text that runs COMMAND, then exits with its status."
@@ -1276,13 +1285,19 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
   "Return actively selected text from the visible Codex window."
   (let ((codex-window (my-codex-visible-window)))
     (with-selected-window codex-window
-      (unless (use-region-p)
-        (user-error "No active selection in the Codex buffer"))
-      (prog1
-          (filter-buffer-substring
-           (region-beginning)
-           (region-end))
-        (deactivate-mark)))))
+      (cond
+       ((use-region-p)
+        (prog1
+            (filter-buffer-substring
+             (region-beginning)
+             (region-end))
+          (setq my-codex--captured-selection nil)
+          (deactivate-mark)))
+       (my-codex--captured-selection
+        (prog1 my-codex--captured-selection
+          (setq my-codex--captured-selection nil)))
+       (t
+        (user-error "No active selection in the Codex buffer"))))))
 
 (defun my-codex-insert-selection-into-code ()
   "Insert selected Codex text into the coding window."
@@ -1458,13 +1473,28 @@ When a region is active, include exact file and line context for it."
     ("i" "Project instructions" my-codex-open-project-instructions)
     ("?" "Key binding help" my-codex-help)]])
 
+(defun my-codex-transient-preserve-selection ()
+  "Show Codex commands without disturbing the active region."
+  (interactive)
+  (setq my-codex--captured-selection
+        (when (and (my-codex--selected-window-is-codex-p)
+                   (use-region-p))
+          (prog1
+              (filter-buffer-substring
+               (region-beginning)
+               (region-end))
+            (deactivate-mark))))
+  (my-codex-transient))
+
 (with-eval-after-load 'vterm
   (when (boundp 'vterm-mode-map)
     (keymap-set vterm-mode-map "S-<insert>" #'vterm-yank)
     (keymap-set vterm-mode-map "C-c C-t"    #'vterm-copy-mode)
     (keymap-set vterm-mode-map "<prior>"    #'scroll-down-command)
     (keymap-set vterm-mode-map "<next>"     #'scroll-up-command)
-    (keymap-set vterm-mode-map "<f8>"       #'my-codex-transient)))
+    (keymap-set vterm-mode-map "<f8>"       #'my-codex-transient-preserve-selection))
+  (when (boundp 'vterm-copy-mode-map)
+    (keymap-set vterm-copy-mode-map "<f8>"  #'my-codex-transient-preserve-selection)))
 
 (defun my-codex-project-build ()
   "Run the project build command with `compile'."
@@ -1475,7 +1505,7 @@ When a region is active, include exact file and line context for it."
 (defvar-keymap my-codex-global-mode-map
   :doc "Keymap for `my-codex-global-mode'."
   "<f7>" #'my-codex-project-build
-  "<f8>" #'my-codex-transient)
+  "<f8>" #'my-codex-transient-preserve-selection)
 
 (easy-menu-define my-codex-menu my-codex-global-mode-map
   "Menu for Codex commands."

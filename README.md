@@ -77,7 +77,7 @@ Then use the `F8` prefix for everyday actions.
 | Key | Command | Description |
 | --- | --- | --- |
 | F7 | `my-codex-project-build` | Run the project build command |
-| F8 | `my-codex-map` | Codex prefix key |
+| F8 | `my-codex-transient-preserve-selection` | Open the Codex command menu |
 
 Prefix bindings:
 
@@ -115,7 +115,7 @@ Inside `vterm`:
 
 | Key | Command |
 | --- | --- |
-| F8 | Use the Codex prefix |
+| F8 | Open the Codex command menu |
 | RET / mouse-1 | Open a clickable URL or file reference |
 | Shift Insert | Paste into `vterm` |
 | C-c C-t | Enter `vterm` copy mode |
@@ -195,7 +195,9 @@ explanation of the symbol at point. For larger reviews, prefer `F8 f`, `F8 g`,
 or `F8 G`, which ask Codex to inspect files or diffs directly.
 
 To copy text from Codex, use `C-c C-t` in the `vterm` buffer, select text, then
-use `F8 Left` to insert it into the coding window.
+press `F8`. The selected text is captured and the live terminal selection is
+cleared so it does not extend to the prompt. Use `Left` in the menu to insert
+the captured text into the coding window.
 
 Clickable file references are limited to readable files inside the current
 project.
