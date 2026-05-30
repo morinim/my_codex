@@ -159,7 +159,7 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
   "Text captured before opening a transient from an active region.")
 
 (defun my-codex--selected-window-is-codex-p ()
-  "Return non-nil when the selected window is the visible Codex window."
+  "Return non-nil if the selected window shows Codex."
   (eq (selected-window)
       (ignore-errors
         (my-codex-visible-window))))
