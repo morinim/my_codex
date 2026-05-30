@@ -140,6 +140,12 @@ Common options:
 
 (setq my-codex-left-width 80)
 (setq my-codex-min-right-width 80)
+(setq my-codex-right-width 100)
+(setq my-codex-display-buffer-action
+      '((display-buffer-in-side-window)
+        (side . right)
+        (slot . 0)
+        (window-width . my-codex--right-window-width)))
 
 (setq my-codex-project-build-command "./setup_build")
 (setq my-codex-project-instruction-files

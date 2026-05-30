@@ -77,6 +77,23 @@
   :type 'natnum
   :group 'my-codex)
 
+(defcustom my-codex-right-width 100
+  "Target width of the Codex vterm window."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-display-buffer-action
+  '((display-buffer-in-side-window)
+    (side . right)
+    (slot . 0)
+    (window-width . my-codex--right-window-width))
+  "Display action used for Codex buffers.
+
+The value is passed to `display-buffer'.  Customise this when you prefer a
+different placement, such as a bottom side window or a dedicated frame."
+  :type 'sexp
+  :group 'my-codex)
+
 (defcustom my-codex-project-instruction-files
   '("AGENTS.md" "CODEX.md" ".codex/instructions.md")
   "Candidate project instruction files for Codex."
@@ -168,6 +185,10 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
   "Return shell text that runs COMMAND, then exits with its status."
   (format "(%s); exit $?" command))
 
+(defun my-codex--right-window-width (_window)
+  "Return the target Codex side-window width."
+  (max my-codex-min-right-width my-codex-right-width))
+
 (defun my-codex--safe-root-name (root)
   "Return a buffer-name-safe representation of ROOT."
   (replace-regexp-in-string
@@ -216,7 +237,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
       ((live-buffer-p
         (buffer)
         (process-live-p (get-buffer-process buffer)))
-       (maybe-widen-frame
+       (fit-frame-to-layout
         (width)
         (when (< (frame-width) width)
           (condition-case nil
@@ -224,19 +245,42 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
                 (set-frame-width (selected-frame) width)
                 (redisplay t))
             (error nil))))
-       (split-term-window
-        (edit-window)
-        (condition-case nil
-            (split-window edit-window my-codex-left-width 'right)
-          (error
-           (user-error "Selected window is too narrow for Codex layout"))))
+       (right-side-window-action-p
+        ()
+        (eq (alist-get 'side (cdr my-codex-display-buffer-action)) 'right))
+       (ensure-frame-wide-enough
+        (width)
+        (when (< (frame-width) width)
+          (user-error "Frame is too narrow for Codex layout")))
+       (required-layout-window-width
+        ()
+        (let ((window-width (alist-get 'window-width
+                                       (cdr my-codex-display-buffer-action))))
+          (max (+ my-codex-left-width my-codex-min-right-width)
+               (cond
+                ((eq window-width #'my-codex--right-window-width)
+                 (+ my-codex-left-width (my-codex--right-window-width nil)))
+                ((and (floatp window-width)
+                      (> window-width 0))
+                 (max (ceiling my-codex-min-right-width window-width)
+                      (if (< window-width 1)
+                          (ceiling my-codex-left-width
+                                   (- 1 window-width))
+                        0)))
+                ((and (integerp window-width)
+                      (> window-width my-codex-min-right-width))
+                 (+ my-codex-left-width window-width))
+                (t
+                 my-codex-min-right-width)))))
        (resize-edit-window
-        (edit-window)
-        (let ((delta (- my-codex-left-width
-                        (window-body-width edit-window))))
-          (when (and (not (zerop delta))
-                     (window-resizable-p edit-window delta t t))
-            (window-resize edit-window delta t t))))
+        (edit-window term-window)
+        (when (> (window-left-column term-window)
+                 (window-left-column edit-window))
+          (let ((delta (- my-codex-left-width
+                          (window-body-width edit-window))))
+            (when (and (not (zerop delta))
+                       (window-resizable-p edit-window delta t t))
+              (window-resize edit-window delta t t)))))
        (start-codex-buffer
         (buffer-name)
         (let* ((default-directory (my-codex-project-root))
@@ -255,15 +299,20 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
               (vterm-send-string
                (my-codex--shell-command-and-exit codex-command))
               (vterm-send-return)))
-          buffer)))
+          buffer))
+       (display-codex-buffer
+        (buffer)
+        (or (display-buffer buffer my-codex-display-buffer-action)
+            (user-error "Failed to display %s" (buffer-name buffer)))))
     (let* ((decorations-padding 8)
-           (required-window-width (+ my-codex-left-width
-                                     my-codex-min-right-width))
+           (required-window-width (required-layout-window-width))
            (required-frame-width (+ required-window-width
                                     decorations-padding))
            (buffer-name (my-codex-current-buffer-name))
            (existing-buf (get-buffer buffer-name)))
-      (maybe-widen-frame required-frame-width)
+      (when (right-side-window-action-p)
+        (fit-frame-to-layout required-frame-width)
+        (ensure-frame-wide-enough required-window-width))
 
       (when (and existing-buf
                  (not (live-buffer-p existing-buf)))
@@ -274,11 +323,6 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
              (and existing-buf
                   (get-buffer-window existing-buf))))
         (unless existing-window-in-frame
-          (when (< (window-total-width (selected-window))
-                   required-window-width)
-            (user-error
-             "Selected window is too narrow for Codex layout (%d columns required)"
-             required-window-width))
           (setq my-codex--saved-window-configuration
                 (current-window-configuration)))
 
@@ -286,18 +330,20 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
           (condition-case err
               (let* ((edit-window (selected-window))
                      (created-term-window (not existing-window-in-frame))
+                     (term-buffer (or existing-buf
+                                      (get-buffer-create buffer-name)))
                      (term-window (or existing-window-in-frame
-                                      (split-term-window edit-window))))
+                                      (display-codex-buffer term-buffer))))
                 (when created-term-window
-                  (resize-edit-window edit-window))
+                  (resize-edit-window edit-window term-window))
 
                 (select-window term-window)
-                (set-window-buffer
-                 term-window
-                 (if (and existing-buf
-                          (live-buffer-p existing-buf))
-                     existing-buf
-                   (start-codex-buffer buffer-name)))
+                (when (and existing-buf
+                           (live-buffer-p existing-buf))
+                  (set-window-buffer term-window existing-buf))
+                (unless (and existing-buf
+                             (live-buffer-p existing-buf))
+                  (start-codex-buffer buffer-name))
 
                 (unless focus-term
                   (select-window edit-window)))
@@ -346,6 +392,8 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
     (define-key map (kbd "RET") #'my-codex-open-session-link-at-point)
     map)
   "Keymap used for clickable Codex session links.")
+
+(defvar my-codex-session-links-mode)
 
 (defconst my-codex--url-regexp
   "\\_<https?://[^[:space:]<>()\"'.,;:!?]+\\(?:[.,;:!?]*[^[:space:]<>()\"'.,;:!?]\\)*"
@@ -1080,7 +1128,8 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
                         msg))))))))))))
 
 (defun my-codex-latest-commit-message ()
-  "Return the latest requested commit message from the current Codex buffer, or nil."
+  "Return latest requested commit message from current Codex buffer.
+Return nil when no matching message is available."
   (when-let* ((buffer (get-buffer (my-codex-current-buffer-name)))
               (marker my-codex--commit-message-request-marker)
               ((markerp marker))
