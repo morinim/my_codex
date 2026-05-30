@@ -696,7 +696,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
     (user-error "Current buffer is not visiting a file"))
   (let* ((root (my-codex-project-root))
          (file (file-relative-name buffer-file-name root)))
-    (my-codex-send-prompt
+    (my-codex--preview-and-send-prompt
      (format "Please inspect `%s` directly and report findings. Do not edit it unless I explicitly ask.\n"
              file))))
 
@@ -1058,7 +1058,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
   "Send PROMPT to Codex from the project root after checking Git."
   (let ((default-directory (my-codex-project-root)))
     (my-codex--ensure-git-repository)
-    (my-codex-send-prompt prompt)))
+    (my-codex--preview-and-send-prompt prompt)))
 
 (defun my-codex--git-diff-review-prompt ()
   "Return the prompt for reviewing the current Git diff."
@@ -1104,8 +1104,8 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
           (my-codex--staged-diff-signature))
     (setq my-codex--commit-message-request-marker
           (with-current-buffer buffer
-            (copy-marker (point-max)))))
-  (my-codex--send-git-prompt (my-codex--commit-message-prompt)))
+            (copy-marker (point-max))))
+    (my-codex-send-prompt (my-codex--commit-message-prompt))))
 
 (defun my-codex--terminal-marker-regexp (marker)
   "Return a regexp matching MARKER with terminal whitespace artefacts."
@@ -1316,7 +1316,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
   (interactive)
   (unless (use-region-p)
     (user-error "No active region"))
-  (my-codex-send-prompt
+  (my-codex--preview-and-send-prompt
    (format "Please explain this compiler/test error and suggest the most likely fix:\n\n%s"
            (buffer-substring-no-properties (region-beginning) (region-end)))))
 
@@ -1388,7 +1388,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
   (interactive "sAsk Codex: ")
   (when (string-blank-p prompt)
     (user-error "Prompt cannot be empty"))
-  (my-codex-send-prompt prompt))
+  (my-codex--preview-and-send-prompt prompt))
 
 (defun my-codex--region-context (beg end)
   "Return a context string for the region between BEG and END."
