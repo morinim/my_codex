@@ -873,15 +873,6 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
                        (project-files project))))))
       (sort (or files nil) #'string<))))
 
-(defun my-codex--truncate-lines (lines max-lines)
-  "Return LINES as text truncated to MAX-LINES with a notice when needed."
-  (let ((line-count (length lines)))
-    (if (> line-count max-lines)
-        (concat (string-join (seq-take lines max-lines) "\n")
-                (format "\n... [truncated %d additional lines]"
-                        (- line-count max-lines)))
-      (string-join lines "\n"))))
-
 (defun my-codex--file-count-label (count)
   "Return a human-readable file count label for COUNT."
   (format "%d %s" count (if (= count 1) "file" "files")))
