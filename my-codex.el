@@ -779,6 +779,21 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
       (fill-region (point-min) (point-max)))
     (string-trim-right (buffer-string))))
 
+(defun my-codex--fill-commit-message-list-line (line)
+  "Return list item LINE filled with continuation indentation preserved."
+  (with-temp-buffer
+    (insert (string-trim-right line))
+    (let* ((fill-column my-codex-commit-message-fill-column)
+           (prefix
+            (save-excursion
+              (goto-char (point-min))
+              (when (looking-at
+                     "\\([[:space:]]*\\(?:[-+*]\\|[0-9]+[.)]\\)[[:space:]]+\\)")
+                (make-string (length (match-string 1)) ? )))))
+      (let ((fill-prefix prefix))
+        (fill-region (point-min) (point-max))))
+    (string-trim-right (buffer-string))))
+
 (defun my-codex--clean-commit-message-body-lines (lines)
   "Return LINES trimmed and filled for a Git commit message body."
   (let (result)
@@ -789,7 +804,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
           (push "" result)
           (setq lines (cdr lines)))
          ((my-codex--commit-message-list-line-p line)
-          (push (my-codex--fill-commit-message-text (string-trim-right line))
+          (push (my-codex--fill-commit-message-list-line line)
                 result)
           (setq lines (cdr lines)))
          ((my-codex--commit-message-preserve-line-p line)
@@ -1298,48 +1313,55 @@ Return nil when no matching message is available."
 Kill COMMIT-BUFFER after a successful commit when it is non-nil."
   (let ((file (make-temp-file "my-codex-commit-" nil ".txt"))
         (output-buffer (get-buffer-create "*Codex git commit*")))
-    (with-temp-file file
-      (insert (my-codex-clean-commit-message message) "\n"))
-    (with-current-buffer output-buffer
-      (read-only-mode -1)
-      (erase-buffer))
-    (let* ((default-directory root)
-           (process
-            (make-process
-             :name "my-codex-git-commit"
-             :buffer output-buffer
-             :command (list "git"
-                            "commit"
-                            "--cleanup=strip"
-                            "--no-status"
-                            "-F" file)
-             :connection-type 'pipe
-             :noquery t
-             :sentinel
-             (lambda (proc event)
-               (when (memq (process-status proc) '(exit signal))
-                 (let ((status (process-exit-status proc))
-                       (buffer (process-buffer proc)))
-                   (ignore-errors
-                     (delete-file file))
-                   (if (zerop status)
-                       (progn
-                         (when (buffer-live-p commit-buffer)
-                           (my-codex--quit-commit-buffer commit-buffer))
-                         (when (buffer-live-p buffer)
-                           (kill-buffer buffer))
-                         (message "Git commit finished successfully."))
-                     (when (buffer-live-p buffer)
-                       (with-current-buffer buffer
-                         (goto-char (point-max))
-                         (insert (format "\nProcess %s %s"
-                                         (process-name proc)
-                                         (string-trim event))))
-                       (display-buffer buffer))
-                     (message "Git commit failed with status %s" status))))))))
-      (set-process-query-on-exit-flag process nil)
-      (with-current-buffer output-buffer
-        (setq default-directory root)))))
+    (condition-case err
+        (progn
+          (with-temp-file file
+            (insert (my-codex-clean-commit-message message) "\n"))
+          (with-current-buffer output-buffer
+            (read-only-mode -1)
+            (erase-buffer))
+          (let* ((default-directory root)
+                 (process
+                  (make-process
+                   :name "my-codex-git-commit"
+                   :buffer output-buffer
+                   :command (list "git"
+                                  "commit"
+                                  "--cleanup=strip"
+                                  "--no-status"
+                                  "-F" file)
+                   :connection-type 'pipe
+                   :noquery t
+                   :sentinel
+                   (lambda (proc event)
+                     (when (memq (process-status proc) '(exit signal))
+                       (let ((status (process-exit-status proc))
+                             (buffer (process-buffer proc)))
+                         (ignore-errors
+                           (delete-file file))
+                         (if (zerop status)
+                             (progn
+                               (when (buffer-live-p commit-buffer)
+                                 (my-codex--quit-commit-buffer commit-buffer))
+                               (when (buffer-live-p buffer)
+                                 (kill-buffer buffer))
+                               (message "Git commit finished successfully."))
+                           (when (buffer-live-p buffer)
+                             (with-current-buffer buffer
+                               (goto-char (point-max))
+                               (insert (format "\nProcess %s %s"
+                                               (process-name proc)
+                                               (string-trim event))))
+                             (display-buffer buffer))
+                           (message "Git commit failed with status %s"
+                                    status))))))))
+            (set-process-query-on-exit-flag process nil)
+            (with-current-buffer output-buffer
+              (setq default-directory root))))
+      (error
+       (ignore-errors
+         (delete-file file))
+       (signal (car err) (cdr err))))))
 
 (defun my-codex--clear-marker (marker)
   "Detach MARKER from its buffer when MARKER is a marker."
