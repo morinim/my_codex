@@ -419,8 +419,9 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
          (buffer (get-buffer buffer-name)))
     (unless buffer
       (user-error "No %s buffer found" buffer-name))
-    (unless (get-buffer-process buffer)
-      (user-error "No running Codex process in %s" buffer-name))
+    (let ((proc (get-buffer-process buffer)))
+      (unless (process-live-p proc)
+        (user-error "No running Codex process in %s" buffer-name)))
     buffer))
 
 (defvar my-codex-session-link-map
