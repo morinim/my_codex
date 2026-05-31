@@ -142,7 +142,7 @@ Common options:
 
 (setq my-codex-left-width 81)
 (setq my-codex-min-right-width 80)
-(setq my-codex-right-width 100)
+(setq my-codex-right-width 80)
 (setq my-codex-enforce-right-side-layout t)
 (setq my-codex-display-buffer-action
       '((display-buffer-in-side-window)

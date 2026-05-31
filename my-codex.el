@@ -78,7 +78,7 @@
   :type 'natnum
   :group 'my-codex)
 
-(defcustom my-codex-right-width 100
+(defcustom my-codex-right-width 80
   "Target width of the Codex vterm window."
   :type 'natnum
   :group 'my-codex)
@@ -262,12 +262,14 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
        (funcall width window)))))
 
 (defun my-codex--resize-edit-window-for-right-layout (edit-window term-window)
-  "Resize EDIT-WINDOW for the default right-side Codex layout."
+  "Keep EDIT-WINDOW wide enough for the default right-side Codex layout."
   (when (and (my-codex--enforce-right-side-layout-p)
              (window-live-p edit-window)
              (window-live-p term-window)
              (> (window-left-column term-window)
-                (window-left-column edit-window)))
+                (window-left-column edit-window))
+             (< (window-body-width edit-window)
+                my-codex-left-width))
     (my-codex--resize-window-to-body-width edit-window
                                             my-codex-left-width)))
 
@@ -1618,7 +1620,7 @@ When a region is active, include exact file and line context for it."
     ("w" "Workspace" my-codex-workspace)
     ("r" "Resume" my-codex-resume)
     ("q" "Hide Codex" my-codex-restore-layout)
-    ("TAB" "Toggle focus" my-codex-toggle-focus)]
+    ("<tab>" "Toggle focus" my-codex-toggle-focus)]
    ["Send"
     ("a" "Ask" my-codex-ask)
     ("A" "Preset menu" my-codex-ask-preset-transient)
