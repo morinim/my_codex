@@ -97,6 +97,8 @@ Prefix bindings:
 | F8 x | `my-codex-explain-symbol-at-point` | Explain the symbol at point |
 | F8 g | `my-codex-send-git-diff` | Review the current Git diff |
 | F8 G | `my-codex-send-git-staged-diff` | Review the staged Git diff |
+| F8 d | `my-codex-ediff-current-file-against-head` | Ediff current file against `HEAD` |
+| F8 D | `my-codex-ediff-changed-file-against-head` | Choose a changed file to Ediff against `HEAD` |
 | F8 m | `my-codex-commit-message-from-diff` | Draft a commit message |
 | F8 c | `my-codex-git-commit-with-latest-message` | Edit commit from latest draft |
 | F8 e | `my-codex-explain-region-as-error` | Explain a selected error |

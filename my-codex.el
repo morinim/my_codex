@@ -25,6 +25,7 @@
 
 (require 'compile)
 (require 'cl-lib)
+(require 'ediff)
 (require 'easymenu)
 (require 'project)
 (require 'seq)
@@ -834,6 +835,14 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
     (when (eq 0 (apply #'process-file program nil t nil args))
       (split-string (string-trim-right (buffer-string)) "\n" t))))
 
+(defun my-codex--git-toplevel ()
+  "Return the Git repository toplevel for `default-directory'."
+  (with-temp-buffer
+    (unless (eq 0 (process-file "git" nil t nil
+                                "rev-parse" "--show-toplevel"))
+      (user-error "Unable to determine Git repository toplevel"))
+    (file-name-as-directory (string-trim (buffer-string)))))
+
 (defun my-codex--project-files (root)
   "Return project files relative to ROOT."
   (let ((default-directory root))
@@ -1102,6 +1111,67 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
   "Ask Codex to review the staged Git diff."
   (interactive)
   (my-codex--send-git-prompt (my-codex--git-staged-diff-review-prompt)))
+
+(defun my-codex--git-relative-file-name (file root)
+  "Return FILE as a path relative to Git repository ROOT."
+  (let ((absolute-file (file-truename file))
+        (absolute-root (file-name-as-directory (file-truename root))))
+    (unless (file-in-directory-p absolute-file absolute-root)
+      (user-error "File is not under Git repository root"))
+    (file-relative-name absolute-file absolute-root)))
+
+(defun my-codex--git-head-buffer (root relative-file)
+  "Return a buffer containing RELATIVE-FILE from HEAD in ROOT.
+When RELATIVE-FILE does not exist in HEAD, return an empty buffer."
+  (let ((buffer (generate-new-buffer
+                 (format "*Codex HEAD:%s*" relative-file))))
+    (with-current-buffer buffer
+      (let* ((default-directory root)
+             (status (process-file "git" nil t nil
+                                   "show"
+                                   (concat "HEAD:" relative-file))))
+        (unless (and (integerp status) (zerop status))
+          (erase-buffer)))
+      (setq buffer-read-only t))
+    buffer))
+
+(defun my-codex--ediff-file-against-head (file project-root)
+  "Review FILE against its version in HEAD.
+PROJECT-ROOT scopes the command, but HEAD paths are resolved from the Git
+repository toplevel."
+  (let* ((git-root (let ((default-directory project-root))
+                     (my-codex--git-toplevel)))
+         (relative-file (my-codex--git-relative-file-name file git-root))
+         (head-buffer (my-codex--git-head-buffer git-root relative-file))
+         (worktree-buffer (find-file-noselect file)))
+    (ediff-buffers head-buffer worktree-buffer)))
+
+(defun my-codex-ediff-current-file-against-head ()
+  "Review the current file's uncommitted changes against HEAD using Ediff."
+  (interactive)
+  (unless buffer-file-name
+    (user-error "Current buffer is not visiting a file"))
+  (let ((root (my-codex-project-root)))
+    (let ((default-directory root))
+      (my-codex--ensure-git-repository))
+    (my-codex--ediff-file-against-head buffer-file-name root)))
+
+(defun my-codex-ediff-changed-file-against-head ()
+  "Choose a tracked changed file and review it against HEAD using Ediff."
+  (interactive)
+  (let ((root (my-codex-project-root)))
+    (let* ((default-directory root)
+           (_ (my-codex--ensure-git-repository))
+           (files (my-codex--process-output-lines
+                   "git" "diff" "--relative" "--name-only"
+                   "--diff-filter=ACMT" "HEAD" "--" ".")))
+      (unless files
+        (user-error "No tracked changed files to review"))
+      (my-codex--ediff-file-against-head
+       (expand-file-name
+        (completing-read "Ediff changed file: " files nil t)
+        root)
+       root))))
 
 (defun my-codex-commit-message-from-diff ()
   "Ask Codex to draft a commit message from the staged Git diff."
@@ -1530,6 +1600,8 @@ When a region is active, include exact file and line context for it."
   "x"       #'my-codex-explain-symbol-at-point
   "g"       #'my-codex-send-git-diff
   "G"       #'my-codex-send-git-staged-diff
+  "d"       #'my-codex-ediff-current-file-against-head
+  "D"       #'my-codex-ediff-changed-file-against-head
   "m"       #'my-codex-commit-message-from-diff
   "c"       #'my-codex-git-commit-with-latest-message
   "e"       #'my-codex-explain-region-as-error
@@ -1559,6 +1631,8 @@ When a region is active, include exact file and line context for it."
    ["Git"
     ("g" "Review diff" my-codex-send-git-diff)
     ("G" "Review staged diff" my-codex-send-git-staged-diff)
+    ("d" "Ediff current file" my-codex-ediff-current-file-against-head)
+    ("D" "Ediff changed file" my-codex-ediff-changed-file-against-head)
     ("m" "Draft commit message" my-codex-commit-message-from-diff)
     ("c" "Commit with Codex message" my-codex-git-commit-with-latest-message)]
    ["Context"
@@ -1655,6 +1729,11 @@ When a region is active, include exact file and line context for it."
      :help "Ask Codex to review the current Git diff"]
     ["Review staged Git diff" my-codex-send-git-staged-diff
      :help "Ask Codex to review the staged Git diff"]
+    ["Ediff current file against HEAD" my-codex-ediff-current-file-against-head
+     :active buffer-file-name
+     :help "Review the current file's uncommitted changes against HEAD"]
+    ["Ediff changed file against HEAD" my-codex-ediff-changed-file-against-head
+     :help "Choose a tracked changed file and review it against HEAD"]
     ["Draft commit message" my-codex-commit-message-from-diff
      :help "Ask Codex to draft a commit message from the staged Git diff"]
     ["Edit commit with Codex message" my-codex-git-commit-with-latest-message
