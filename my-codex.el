@@ -118,6 +118,36 @@ When nil, use `compile-command'."
   :type 'natnum
   :group 'my-codex)
 
+(defcustom my-codex-git-diff-review-prompt
+  "Please review the current Git diff using `git diff -- .`. Focus on correctness, regressions, edge cases, naming, and maintainability. Do not edit files unless I explicitly ask.\n"
+  "Prompt used by `my-codex-send-git-diff'."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-git-staged-diff-review-prompt
+  "Please review the staged Git diff using `git diff --cached -- .`. Focus on correctness, regressions, edge cases, and commit readiness. Do not edit files unless I explicitly ask.\n"
+  "Prompt used by `my-codex-send-git-staged-diff'."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-commit-message-prompt-template
+  "Please inspect the staged Git diff using `git diff --cached -- .` and write a concise but comprehensive conventional commit message.
+
+Put only the final commit message between these exact markers:
+
+BEGIN_COMMIT_MESSAGE
+<commit message here>
+END_COMMIT_MESSAGE
+
+Use an imperative subject and a short explanatory body when useful. Limit each line to %d columns. Do not edit files.\n"
+  "Prompt template used by `my-codex-commit-message-from-diff'.
+The literal substring `%d' is replaced with
+`my-codex-commit-message-fill-column'.  Keep the
+BEGIN_COMMIT_MESSAGE and END_COMMIT_MESSAGE markers if you want
+`my-codex-latest-commit-message' to extract the generated message."
+  :type 'string
+  :group 'my-codex)
+
 (defcustom my-codex-commit-message-poll-interval 0.5
   "Seconds between checks for a generated Codex commit message."
   :type 'number
@@ -1097,24 +1127,17 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
 
 (defun my-codex--git-diff-review-prompt ()
   "Return the prompt for reviewing the current Git diff."
-  "Please review the current Git diff using `git diff -- .`. Focus on correctness, regressions, edge cases, naming, and maintainability. Do not edit files unless I explicitly ask.\n")
+  my-codex-git-diff-review-prompt)
 
 (defun my-codex--git-staged-diff-review-prompt ()
   "Return the prompt for reviewing the staged Git diff."
-  "Please review the staged Git diff using `git diff --cached -- .`. Focus on correctness, regressions, edge cases, and commit readiness. Do not edit files unless I explicitly ask.\n")
+  my-codex-git-staged-diff-review-prompt)
 
 (defun my-codex--commit-message-prompt ()
   "Return the prompt for drafting a commit message from staged changes."
-  (format "Please inspect the staged Git diff using `git diff --cached -- .` and write a concise but comprehensive conventional commit message.
-
-Put only the final commit message between these exact markers:
-
-BEGIN_COMMIT_MESSAGE
-<commit message here>
-END_COMMIT_MESSAGE
-
-Use an imperative subject and a short explanatory body when useful. Limit each line to %d columns. Do not edit files.\n"
-          my-codex-commit-message-fill-column))
+  (replace-regexp-in-string
+   "%d" (number-to-string my-codex-commit-message-fill-column)
+   my-codex-commit-message-prompt-template t t))
 
 (defun my-codex-send-git-diff ()
   "Ask Codex to review the current Git diff."

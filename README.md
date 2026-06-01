@@ -154,6 +154,20 @@ Common options:
 (setq my-codex-project-instruction-files
       '("AGENTS.md" "CODEX.md" ".codex/instructions.md"))
 (setq my-codex-commit-message-fill-column 76)
+(setq my-codex-git-diff-review-prompt
+      "Please review the current Git diff using `git diff -- .`. Focus on correctness, regressions, edge cases, naming, and maintainability. Do not edit files unless I explicitly ask.\n")
+(setq my-codex-git-staged-diff-review-prompt
+      "Please review the staged Git diff using `git diff --cached -- .`. Focus on correctness, regressions, edge cases, and commit readiness. Do not edit files unless I explicitly ask.\n")
+(setq my-codex-commit-message-prompt-template
+      "Please inspect the staged Git diff using `git diff --cached -- .` and write a concise but comprehensive conventional commit message.
+
+Put only the final commit message between these exact markers:
+
+BEGIN_COMMIT_MESSAGE
+<commit message here>
+END_COMMIT_MESSAGE
+
+Use an imperative subject and a short explanatory body when useful. Limit each line to %d columns. Do not edit files.\n")
 (setq my-codex-commit-message-poll-interval 0.5)
 (setq my-codex-commit-message-poll-attempts 120)
 (setq my-codex-project-overview-max-files 200)
@@ -184,6 +198,11 @@ When `my-codex-enable-prompt-preview` is non-nil, prompts open an editable
 `*Codex prompt preview*` buffer before sending. Press `C-c C-c` to send the
 edited prompt, or `C-c C-k` to cancel. When Codex is visible, previews open in
 the left-hand editing window.
+
+In `my-codex-commit-message-prompt-template`, `%d` is replaced with
+`my-codex-commit-message-fill-column`. Keep the `BEGIN_COMMIT_MESSAGE` and
+`END_COMMIT_MESSAGE` markers if you want my-codex to extract the generated
+message automatically.
 
 For projects with more files than `my-codex-project-overview-max-files`, the
 project overview uses a compact tree summary instead of a long flat file list.
