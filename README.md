@@ -143,7 +143,7 @@ Common options:
 (setq my-codex-left-width 81)
 (setq my-codex-min-right-width 80)
 (setq my-codex-right-width 80)
-(setq my-codex-enforce-right-side-layout t)
+(setq my-codex-enforce-right-side-layout nil)
 (setq my-codex-display-buffer-action
       '((display-buffer-in-side-window)
         (side . right)
@@ -189,6 +189,12 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
 When `my-codex-global-mode` is enabled, it also enables trailing whitespace
 display and column numbers. When Codex opens beside an edit buffer, that buffer
 gets a fill-column indicator at column 80.
+
+`my-codex-enforce-right-side-layout` is disabled by default. Enable it only if
+you want my-codex to widen the selected frame and keep the edit/Codex windows at
+the configured widths. Leave it disabled when packages such as `shackle` or
+`golden-ratio`, your own `display-buffer-alist`, or an external window manager
+should control the layout.
 
 In the prompt preset menu (`F8 A`), the `Additional instructions` minibuffer
 supports project file completion when the current line starts with `@`. Type

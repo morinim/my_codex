@@ -83,8 +83,9 @@
   :type 'natnum
   :group 'my-codex)
 
-(defcustom my-codex-enforce-right-side-layout t
-  "When non-nil, resize the frame and edit window for right-side Codex."
+(defcustom my-codex-enforce-right-side-layout nil
+  "When non-nil, resize the frame and edit window for right-side Codex.
+Leave this nil when another package or window manager controls window sizes."
   :type 'boolean
   :group 'my-codex)
 
@@ -243,10 +244,11 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
   (format "(%s); exit $?" command))
 
 (defun my-codex--right-window-width (window)
-  "Resize WINDOW to the target Codex side-window width when possible."
-  (my-codex--resize-window-to-body-width
-   window
-   (max my-codex-min-right-width my-codex-right-width)))
+  "Resize WINDOW to the target Codex width when enforcement is enabled."
+  (when my-codex-enforce-right-side-layout
+    (my-codex--resize-window-to-body-width
+     window
+     (max my-codex-min-right-width my-codex-right-width))))
 
 (defun my-codex--right-side-action-p ()
   "Return non-nil when Codex is configured for a right side window."
