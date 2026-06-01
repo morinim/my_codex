@@ -6,7 +6,7 @@
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
 ;; Version: 0.9.5
-;; Package-Requires: ((emacs "29.1") (vterm "0"))
+;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
 
@@ -1603,21 +1603,29 @@ When a region is active, include exact file and line context for it."
 
 (defun my-codex--prompt-preset-transient-suffixes (_children)
   "Return transient suffixes for `my-codex-prompt-presets'."
-  (transient-parse-suffixes
-   'my-codex-ask-preset-transient
-   `[,@(if my-codex-prompt-presets
-           (cl-mapcar
-            (lambda (key preset)
-              (let ((preset preset))
-                (list key (car preset)
-                      (lambda ()
-                        (interactive)
-                        (my-codex--ask-with-prompt-preset preset)))))
-            my-codex--preset-transient-keys
-            my-codex-prompt-presets)
-         '("No prompt presets configured"))
-     ""
-     ("C" "Choose by name" my-codex-ask-with-preset)]))
+  (let* ((visible-presets (seq-take my-codex-prompt-presets
+                                    (length my-codex--preset-transient-keys)))
+         (hidden-count (- (length my-codex-prompt-presets)
+                          (length visible-presets))))
+    (transient-parse-suffixes
+     'my-codex-ask-preset-transient
+     `[,@(if visible-presets
+             (cl-mapcar
+              (lambda (key preset)
+                (let ((preset preset))
+                  (list key (car preset)
+                        (lambda ()
+                          (interactive)
+                          (my-codex--ask-with-prompt-preset preset)))))
+              my-codex--preset-transient-keys
+              visible-presets)
+           '("No prompt presets configured"))
+       ,@(when (> hidden-count 0)
+           (list (format "%d more preset%s available via C"
+                         hidden-count
+                         (if (= hidden-count 1) "" "s"))))
+       ""
+       ("C" "Choose by name" my-codex-ask-with-preset)])))
 
 (transient-define-prefix my-codex-ask-preset-transient ()
   "Ask Codex using a prompt preset."
