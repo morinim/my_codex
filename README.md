@@ -32,6 +32,8 @@ separate sessions.
 - Run a configurable project build command.
 - Open clickable URLs and in-project file references from Codex output.
 - Warn when project buffers have unsaved changes before sending prompts.
+- Run a health check for Emacs, Codex, vterm, Git, project state, configured
+  commands, and terminal startup.
 - Enable useful display defaults when `my-codex-global-mode` starts.
 - Provide global keys and a Codex menu.
 
@@ -104,6 +106,7 @@ Prefix bindings:
 | F8 e | `my-codex-explain-region-as-error` | Explain a selected error |
 | F8 i | `my-codex-open-project-instructions` | Open project instructions |
 | F8 p | `my-codex-send-project-overview` | Send project structure and state |
+| F8 ! | `my-codex-doctor` | Run a health check |
 | F8 ? | `my-codex-help` | Show help |
 
 Commit message edit buffer:
