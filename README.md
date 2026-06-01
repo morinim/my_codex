@@ -146,7 +146,7 @@ Common options:
 (setq my-codex-left-width 81)
 (setq my-codex-min-right-width 80)
 (setq my-codex-right-width 80)
-(setq my-codex-enforce-right-side-layout t)
+(setq my-codex-enforce-right-side-layout nil)
 (setq my-codex-display-buffer-action
       '((display-buffer-in-side-window)
         (side . right)
@@ -157,6 +157,20 @@ Common options:
 (setq my-codex-project-instruction-files
       '("AGENTS.md" "CODEX.md" ".codex/instructions.md"))
 (setq my-codex-commit-message-fill-column 76)
+(setq my-codex-git-diff-review-prompt
+      "Please review the current Git diff using `git diff -- .`. Focus on correctness, regressions, edge cases, naming, and maintainability. Do not edit files unless I explicitly ask.\n")
+(setq my-codex-git-staged-diff-review-prompt
+      "Please review the staged Git diff using `git diff --cached -- .`. Focus on correctness, regressions, edge cases, and commit readiness. Do not edit files unless I explicitly ask.\n")
+(setq my-codex-commit-message-prompt-template
+      "Please inspect the staged Git diff using `git diff --cached -- .` and write a concise but comprehensive conventional commit message.
+
+Put only the final commit message between these exact markers:
+
+BEGIN_COMMIT_MESSAGE
+<commit message here>
+END_COMMIT_MESSAGE
+
+Use an imperative subject and a short explanatory body when useful. Limit each line to %d columns. Do not edit files.\n")
 (setq my-codex-commit-message-poll-interval 0.5)
 (setq my-codex-commit-message-poll-attempts 120)
 (setq my-codex-project-overview-max-files 200)
@@ -179,6 +193,12 @@ When `my-codex-global-mode` is enabled, it also enables trailing whitespace
 display and column numbers. When Codex opens beside an edit buffer, that buffer
 gets a fill-column indicator at column 80.
 
+`my-codex-enforce-right-side-layout` is disabled by default. Enable it only if
+you want my-codex to widen the selected frame and keep the edit/Codex windows at
+the configured widths. Leave it disabled when packages such as `shackle` or
+`golden-ratio`, your own `display-buffer-alist`, or an external window manager
+should control the layout.
+
 In the prompt preset menu (`F8 A`), the `Additional instructions` minibuffer
 supports project file completion when the current line starts with `@`. Type
 `@` followed by part of a project-relative path, then press `TAB`.
@@ -187,6 +207,11 @@ When `my-codex-enable-prompt-preview` is non-nil, prompts open an editable
 `*Codex prompt preview*` buffer before sending. Press `C-c C-c` to send the
 edited prompt, or `C-c C-k` to cancel. When Codex is visible, previews open in
 the left-hand editing window.
+
+In `my-codex-commit-message-prompt-template`, `%d` is replaced with
+`my-codex-commit-message-fill-column`. Keep the `BEGIN_COMMIT_MESSAGE` and
+`END_COMMIT_MESSAGE` markers if you want my-codex to extract the generated
+message automatically.
 
 For projects with more files than `my-codex-project-overview-max-files`, the
 project overview uses a compact tree summary instead of a long flat file list.
