@@ -903,7 +903,8 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
   (let ((default-directory root))
     (let ((files
            (if (my-codex--git-repository-p)
-               (my-codex--process-output-lines "git" "ls-files")
+               (my-codex--process-output-lines
+                "git" "ls-files" "--cached" "--others" "--exclude-standard")
              (when-let (project (project-current nil root))
                (mapcar (lambda (file)
                          (file-relative-name file root))
