@@ -31,6 +31,8 @@ separate sessions.
 - Send a compact project overview for Codex orientation.
 - Run a configurable project build command.
 - Open clickable URLs and in-project file references from Codex output.
+- Export a Codex session transcript to Markdown.
+- Ask Codex to summarize a session transcript into organized Markdown notes.
 - Warn when project buffers have unsaved changes before sending prompts.
 - Run a health check for Emacs, Codex, vterm, Git, project state, configured
   commands, and terminal startup.
@@ -106,6 +108,8 @@ Prefix bindings:
 | F8 e | `my-codex-explain-region-as-error` | Explain a selected error |
 | F8 i | `my-codex-open-project-instructions` | Open project instructions |
 | F8 p | `my-codex-send-project-overview` | Send project structure and state |
+| F8 X | `my-codex-export-session-to-markdown` | Export the session transcript to Markdown |
+| F8 M | `my-codex-summarize-session-to-markdown` | Summarize the session into an editable Markdown buffer |
 | F8 ! | `my-codex-doctor` | Run a health check |
 | F8 ? | `my-codex-help` | Show help |
 
@@ -177,6 +181,17 @@ Use an imperative subject and a short explanatory body when useful. Limit each l
 (setq my-codex-project-overview-tree-max-entries 25)
 (setq my-codex-enable-prompt-preview nil)
 (setq my-codex-symbol-context-lines 10)
+(setq my-codex-session-summary-prompt
+      "Please summarize, organize, and rationalize this Codex session transcript into useful project notes.
+
+Focus on:
+- decisions made
+- open questions
+- action items
+- proposed implementation details
+- risks or constraints
+
+Preserve concrete file names, command names, and technical details. Do not edit files.")
 
 (setq my-codex-prompt-presets
       '(("Refactor" . "Review the following code and refactor it to improve readability and performance without changing its external behaviour.")
@@ -244,6 +259,18 @@ the captured text into the coding window.
 
 Clickable file references are limited to readable files inside the current
 project.
+
+Use `F8 X` to export the current project-specific Codex session to an editable
+Markdown buffer. The export keeps a cleaned raw transcript with project,
+source-buffer, and timestamp metadata. If `markdown-mode` is available, the
+buffer uses it; otherwise it falls back to `text-mode`.
+
+Use `F8 M` to send the cleaned transcript back to Codex, wait for organized
+Markdown notes, and open the generated summary in an editable Markdown buffer.
+This is useful before saving the session as project documentation or turning it
+into an issue. `my-codex-summarize-session-to-markdown` appends unique
+per-request markers to the prompt so older summaries echoed in the transcript
+cannot be mistaken for the new response.
 
 ## Licence
 

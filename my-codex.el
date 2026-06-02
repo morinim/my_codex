@@ -24,6 +24,7 @@
 ;;; Code:
 
 (require 'compile)
+(require 'ansi-color)
 (require 'cl-lib)
 (require 'ediff)
 (require 'easymenu)
@@ -38,6 +39,7 @@
 (autoload 'vterm-send-return "vterm")
 (autoload 'vterm-yank "vterm" nil t)
 (autoload 'vterm-copy-mode "vterm" nil t)
+(declare-function markdown-mode "markdown-mode")
 (defvar vterm-mode-map)
 
 (defgroup my-codex nil
@@ -194,6 +196,33 @@ BEGIN_COMMIT_MESSAGE and END_COMMIT_MESSAGE markers if you want
   :type 'natnum
   :group 'my-codex)
 
+(defcustom my-codex-session-summary-prompt
+  "Please summarize, organize, and rationalize this Codex session transcript into useful project notes.
+
+Focus on:
+- decisions made
+- open questions
+- action items
+- proposed implementation details
+- risks or constraints
+
+Preserve concrete file names, command names, and technical details. Do not edit files."
+  "Prompt used by `my-codex-summarize-session-to-markdown'."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-session-summary-poll-interval
+  my-codex-commit-message-poll-interval
+  "Seconds between checks for generated Codex session summaries."
+  :type 'number
+  :group 'my-codex)
+
+(defcustom my-codex-session-summary-poll-attempts
+  my-codex-commit-message-poll-attempts
+  "Maximum number of checks for a generated Codex session summary."
+  :type 'natnum
+  :group 'my-codex)
+
 (defcustom my-codex-doctor-terminal-timeout 3
   "Seconds to wait for a diagnostic vterm process to start."
   :type 'number
@@ -229,6 +258,9 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 
 (defvar-local my-codex--commit-message-request-signature nil
   "Staged diff signature used for the latest Codex commit message request.")
+
+(defvar-local my-codex--session-summary-request-marker nil
+  "Marker for the start of the latest Codex session summary request.")
 
 (defvar my-codex--captured-selection nil
   "Text captured before opening a transient from an active region.")
@@ -460,6 +492,153 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
       (unless (process-live-p proc)
         (user-error "No running Codex process in %s" buffer-name)))
     buffer))
+
+(defun my-codex--session-buffer ()
+  "Return the current project's Codex session buffer, or raise an error."
+  (let* ((buffer-name (my-codex-current-buffer-name))
+         (buffer (get-buffer buffer-name)))
+    (unless buffer
+      (user-error "No %s buffer found" buffer-name))
+    buffer))
+
+(defun my-codex--session-export-buffer-name (root)
+  "Return the session export buffer name for ROOT."
+  (format "*Codex session export:%s*" (my-codex--safe-root-name root)))
+
+(defun my-codex--session-summary-buffer-name (root)
+  "Return the session summary buffer name for ROOT."
+  (format "*Codex session summary:%s*" (my-codex--safe-root-name root)))
+
+(defun my-codex--unique-output-markers (name)
+  "Return unique begin and end output markers for NAME."
+  (let ((suffix (substring
+                 (secure-hash
+                  'sha1
+                  (format "%s-%s-%s" name (float-time) (random)))
+                 0 12)))
+    (cons (format "BEGIN_%s_%s" name suffix)
+          (format "END_%s_%s" name suffix))))
+
+(defun my-codex--marked-output-instructions (begin-marker end-marker placeholder)
+  "Return prompt instructions for marked output.
+BEGIN-MARKER and END-MARKER delimit the output.  PLACEHOLDER is
+shown between them as an example."
+  (format "Put only the final answer between these exact markers:\n\n%s\n%s\n%s"
+          begin-marker
+          placeholder
+          end-marker))
+
+(defun my-codex--strip-terminal-control-codes (text)
+  "Return TEXT without common terminal control codes."
+  (let ((cleaned (ansi-color-filter-apply text)))
+    (setq cleaned
+          (replace-regexp-in-string
+           "\x1b\\][^\a\x1b]*\\(\a\\|\x1b\\\\\\)" "" cleaned))
+    (setq cleaned
+          (replace-regexp-in-string
+           "\x1b\\[[0-?]*[ -/]*[@-~]" "" cleaned))
+    (setq cleaned
+          (replace-regexp-in-string "\r" "" cleaned))
+    cleaned))
+
+(defun my-codex--clean-session-transcript (text)
+  "Return cleaned Codex session transcript TEXT."
+  (with-temp-buffer
+    (insert (my-codex--strip-terminal-control-codes text))
+    (goto-char (point-min))
+    (while (re-search-forward "[[:blank:]]+$" nil t)
+      (replace-match ""))
+    (goto-char (point-min))
+    (while (re-search-forward "\n\\{4,\\}" nil t)
+      (replace-match "\n\n\n"))
+    (string-trim (buffer-string))))
+
+(defun my-codex-session-transcript ()
+  "Return the cleaned transcript from the current project's Codex buffer."
+  (let ((buffer (my-codex--session-buffer)))
+    (with-current-buffer buffer
+      (my-codex--clean-session-transcript
+       (buffer-substring-no-properties (point-min) (point-max))))))
+
+(defun my-codex--session-export-mode ()
+  "Use a suitable mode for a session export buffer."
+  (if (require 'markdown-mode nil t)
+      (markdown-mode)
+    (text-mode)))
+
+(defun my-codex--markdown-code-fence (text)
+  "Return a Markdown code fence delimiter that does not occur in TEXT."
+  (let ((max-length 2)
+        (start 0))
+    (while (string-match "`+" text start)
+      (setq max-length (max max-length
+                            (- (match-end 0) (match-beginning 0)))
+            start (match-end 0)))
+    (make-string (1+ max-length) ?`)))
+
+(defun my-codex--insert-session-export-markdown (transcript root source-buffer)
+  "Insert Markdown for TRANSCRIPT from ROOT and SOURCE-BUFFER."
+  (let ((fence (my-codex--markdown-code-fence transcript)))
+    (insert "# Codex Session\n\n")
+    (insert (format "- Project root: `%s`\n" root))
+    (insert (format "- Source buffer: `%s`\n" source-buffer))
+    (insert (format "- Exported: `%s`\n\n"
+                    (format-time-string "%Y-%m-%d %H:%M:%S %Z")))
+    (insert "## Transcript\n\n")
+    (insert fence "text\n")
+    (insert transcript)
+    (insert "\n" fence "\n")))
+
+;;;###autoload
+(defun my-codex-export-session-to-markdown ()
+  "Export the current project's Codex session transcript to Markdown."
+  (interactive)
+  (let* ((root (my-codex-project-root))
+         (buffer (my-codex--session-buffer))
+         (transcript (my-codex-session-transcript))
+         (export-buffer
+          (get-buffer-create (my-codex--session-export-buffer-name root))))
+    (when (string-empty-p transcript)
+      (user-error "Codex session transcript is empty"))
+    (with-current-buffer export-buffer
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (my-codex--insert-session-export-markdown
+         transcript root (buffer-name buffer))
+        (goto-char (point-min)))
+      (my-codex--session-export-mode))
+    (pop-to-buffer export-buffer)
+    (message "Codex session exported to Markdown.")))
+
+;;;###autoload
+(defun my-codex-summarize-session-to-markdown ()
+  "Ask Codex to summarize the current session transcript as Markdown notes.
+Open the generated notes in an editable Markdown buffer when they are ready."
+  (interactive)
+  (let* ((root (my-codex-project-root))
+         (buffer (my-codex-buffer))
+         (transcript (my-codex-session-transcript))
+         (fence (my-codex--markdown-code-fence transcript))
+         (markers (my-codex--unique-output-markers "SESSION_SUMMARY"))
+         (begin-marker (car markers))
+         (end-marker (cdr markers)))
+    (when (string-empty-p transcript)
+      (user-error "Codex session transcript is empty"))
+    (let ((start-point (with-current-buffer buffer
+                         (copy-marker (point-max))))
+          (prompt (format "%s\n\n%s\n\nRaw transcript:\n\n%stext\n%s\n%s"
+                          my-codex-session-summary-prompt
+                          (my-codex--marked-output-instructions
+                           begin-marker end-marker "<Markdown notes here>")
+                          fence
+                          transcript
+                          fence)))
+      (with-current-buffer buffer
+        (setq my-codex--session-summary-request-marker start-point))
+      (my-codex-send-prompt prompt)
+      (my-codex--wait-for-session-summary
+       buffer start-point root begin-marker end-marker)
+      (message "Asked Codex to summarize the session; waiting to open editor."))))
 
 (defvar my-codex-session-link-map
   (let ((map (make-sparse-keymap)))
@@ -1238,8 +1417,11 @@ repository toplevel."
    marker
    "[[:space:]\r]*"))
 
-(defun my-codex-latest-commit-message-after (buffer start-point)
-  "Return the commit message in BUFFER appearing after START-POINT, or nil."
+(defun my-codex--latest-marked-output-after
+    (buffer start-point begin-marker end-marker &optional ignored-values)
+  "Return marked output in BUFFER after START-POINT, or nil.
+BEGIN-MARKER and END-MARKER delimit the generated output.  Ignore
+empty output and any exact string in IGNORED-VALUES."
   (when (buffer-live-p buffer)
     (with-current-buffer buffer
       (save-restriction
@@ -1255,22 +1437,57 @@ repository toplevel."
                        (< start-point (point))))
                  (bound (when valid-start-point-p start-point)))
             (when (or (null start-point) bound)
-              ;; Relaxed regex to bypass terminal formatting quirks.
               (when (re-search-backward
-                     (my-codex--terminal-marker-regexp "BEGIN_COMMIT_MESSAGE")
+                     (my-codex--terminal-marker-regexp begin-marker)
                      bound t)
                 (let ((beg (match-end 0)))
                   (when (re-search-forward
-                         (my-codex--terminal-marker-regexp "END_COMMIT_MESSAGE")
+                         (my-codex--terminal-marker-regexp end-marker)
                          nil t)
-                    (let ((msg (string-trim
-                                (replace-regexp-in-string
-                                 "\r" ""
-                                 (buffer-substring-no-properties
-                                  beg
-                                  (match-beginning 0))))))
-                      (unless (member msg '("" "..." "<commit message here>"))
-                        msg))))))))))))
+                    (let ((output
+                           (string-trim
+                            (replace-regexp-in-string
+                             "\r" ""
+                             (buffer-substring-no-properties
+                              beg
+                              (match-beginning 0))))))
+                      (unless (member output
+                                      (append '("") ignored-values))
+                        output))))))))))))
+
+(defun my-codex--wait-for-marked-output
+    (buffer start-point begin-marker end-marker callback timeout-message
+            ready-message poll-interval poll-attempts &optional
+            ignored-values attempts)
+  "Poll BUFFER after START-POINT for marked output, then run CALLBACK.
+BEGIN-MARKER and END-MARKER delimit the output.  CALLBACK receives
+the extracted text.  ATTEMPTS tracks polling cycles."
+  (let ((attempts (or attempts 0))
+        (output (my-codex--latest-marked-output-after
+                 buffer start-point begin-marker end-marker ignored-values)))
+    (cond
+     ((> attempts poll-attempts)
+      (my-codex--clear-marker start-point)
+      (message "%s" timeout-message))
+     (output
+      (my-codex--clear-marker start-point)
+      (funcall callback output)
+      (message "%s" ready-message))
+     (t
+      (run-with-timer
+       poll-interval nil
+       #'my-codex--wait-for-marked-output
+       buffer start-point begin-marker end-marker callback timeout-message
+       ready-message poll-interval poll-attempts ignored-values
+       (1+ attempts))))))
+
+(defun my-codex-latest-commit-message-after (buffer start-point)
+  "Return the commit message in BUFFER appearing after START-POINT, or nil."
+  (my-codex--latest-marked-output-after
+   buffer start-point
+   "BEGIN_COMMIT_MESSAGE"
+   "END_COMMIT_MESSAGE"
+   '("..." "<commit message here>")))
 
 (defun my-codex-latest-commit-message ()
   "Return latest requested commit message from current Codex buffer.
@@ -1285,6 +1502,19 @@ Return nil when no matching message is available."
 (defun my-codex--commit-message-buffer-name (root)
   "Return the commit message buffer name for ROOT."
   (format "*Codex commit message:%s*" (my-codex--safe-root-name root)))
+
+(defun my-codex-edit-session-summary (summary root)
+  "Open an editable Markdown buffer with Codex session SUMMARY from ROOT."
+  (let ((buffer (get-buffer-create (my-codex--session-summary-buffer-name root))))
+    (pop-to-buffer buffer)
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (insert (string-trim summary))
+      (goto-char (point-min)))
+    (setq default-directory root)
+    (my-codex--session-export-mode)
+    (setq-local header-line-format "Edit Codex session summary Markdown.")
+    (message "Codex session summary is ready for editing.")))
 
 (defun my-codex--finish-git-commit ()
   "Commit staged changes using the current buffer as the commit message."
@@ -1395,21 +1625,37 @@ Kill COMMIT-BUFFER after a successful commit when it is non-nil."
   "Poll BUFFER after START-POINT for a finished commit message.
 ROOT is the Git repository root used for the eventual commit.
 ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
-  (let ((attempts (or attempts 0))
-        (msg (my-codex-latest-commit-message-after buffer start-point)))
-    (cond
-     ((> attempts my-codex-commit-message-poll-attempts)
-      (my-codex--clear-marker start-point)
-      (message "Timed out waiting for Codex commit message."))
-     (msg
-      (my-codex--clear-marker start-point)
-      (my-codex-edit-git-commit-with-message msg root)
-      (message "Codex commit message is ready for editing."))
-     (t
-      (run-with-timer
-       my-codex-commit-message-poll-interval nil
-       #'my-codex--wait-for-commit-message
-       buffer start-point root (1+ attempts))))))
+  (my-codex--wait-for-marked-output
+   buffer start-point
+   "BEGIN_COMMIT_MESSAGE"
+   "END_COMMIT_MESSAGE"
+   (lambda (msg)
+     (my-codex-edit-git-commit-with-message msg root))
+   "Timed out waiting for Codex commit message."
+   "Codex commit message is ready for editing."
+   my-codex-commit-message-poll-interval
+   my-codex-commit-message-poll-attempts
+   '("..." "<commit message here>")
+   attempts))
+
+(defun my-codex--wait-for-session-summary
+    (buffer start-point root begin-marker end-marker &optional attempts)
+  "Poll BUFFER after START-POINT for a finished session summary.
+ROOT is the project root used for the editable summary buffer.
+BEGIN-MARKER and END-MARKER delimit this request's summary.
+ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
+  (my-codex--wait-for-marked-output
+   buffer start-point
+   begin-marker
+   end-marker
+   (lambda (summary)
+     (my-codex-edit-session-summary summary root))
+   "Timed out waiting for Codex session summary."
+   "Codex session summary is ready for editing."
+   my-codex-session-summary-poll-interval
+   my-codex-session-summary-poll-attempts
+   '("..." "<Markdown notes here>")
+   attempts))
 
 (defun my-codex-git-commit-with-latest-message ()
   "Edit a commit with the latest Codex message, or ask Codex for one and wait."
@@ -1637,7 +1883,7 @@ When a region is active, include exact file and line context for it."
   "Show Codex key bindings."
   (interactive)
   (message
-   "Codex: press F8 for the command menu. Common keys: F7=build, a=ask, s/right=send region, f=file, g=diff, m=draft commit message, !=doctor, TAB=toggle focus."))
+   "Codex: press F8 for the command menu. Common keys: F7=build, a=ask, s/right=send region, f=file, g=diff, m=draft commit message, X=export session, !=doctor, TAB=toggle focus."))
 
 (defun my-codex--version>= (version minimum)
   "Return non-nil when VERSION is greater than or equal to MINIMUM."
@@ -1873,6 +2119,8 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
   "e"       #'my-codex-explain-region-as-error
   "i"       #'my-codex-open-project-instructions
   "p"       #'my-codex-send-project-overview
+  "X"       #'my-codex-export-session-to-markdown
+  "M"       #'my-codex-summarize-session-to-markdown
   "!"       #'my-codex-doctor
   "TAB"     #'my-codex-toggle-focus
   "<tab>"   #'my-codex-toggle-focus
@@ -1905,6 +2153,8 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
    ["Context"
     ("e" "Explain error" my-codex-explain-region-as-error)
     ("i" "Project instructions" my-codex-open-project-instructions)
+    ("X" "Export session" my-codex-export-session-to-markdown)
+    ("M" "Summarize session" my-codex-summarize-session-to-markdown)
     ("!" "Doctor" my-codex-doctor)
     ("?" "Key binding help" my-codex-help)]])
 
@@ -2011,6 +2261,10 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
      :help "Open AGENTS.md, CODEX.md, or .codex/instructions.md"]
     ["Send project overview" my-codex-send-project-overview
      :help "Send Codex a compact summary of the current project structure"]
+    ["Export session to Markdown" my-codex-export-session-to-markdown
+     :help "Export the current Codex session transcript to a Markdown buffer"]
+    ["Summarize session to Markdown" my-codex-summarize-session-to-markdown
+     :help "Ask Codex to summarize the current session transcript as Markdown notes"]
     ["Run health check" my-codex-doctor
      :help "Check Emacs, Codex, vterm, Git, project, configuration, and terminal startup"]
     ["Show key bindings" my-codex-help
