@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.9.5
+;; Version: 0.9.6
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -728,8 +728,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
                (>= end-line line))
           (push-mark
            (save-excursion
-             (goto-char (point-min))
-             (forward-line (1- end-line))
+             (forward-line (- end-line line))
              (line-end-position))
            nil t)
         (deactivate-mark)))
@@ -861,9 +860,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
                                              origin-frame))
             (preview-window
              (cond
-              ((and (window-live-p origin-window)
-                    (not (eq origin-window codex-window))
-                    (eq (window-frame origin-window) origin-frame))
+              ((not (eq origin-window codex-window))
                origin-window)
               (t
                (seq-find
