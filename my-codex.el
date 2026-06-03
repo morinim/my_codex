@@ -1879,12 +1879,6 @@ When a region is active, include exact file and line context for it."
   [:class transient-column
    :setup-children my-codex--prompt-preset-transient-suffixes])
 
-(defun my-codex-help ()
-  "Show Codex key bindings."
-  (interactive)
-  (message
-   "Codex: press F8 for the command menu. Common keys: F7=build, a=ask, s/right=send region, f=file, g=diff, m=draft commit message, X=export session, !=doctor, TAB=toggle focus."))
-
 (defun my-codex--version>= (version minimum)
   "Return non-nil when VERSION is greater than or equal to MINIMUM."
   (not (version< version minimum)))
@@ -2123,8 +2117,7 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
   "M"       #'my-codex-summarize-session-to-markdown
   "!"       #'my-codex-doctor
   "TAB"     #'my-codex-toggle-focus
-  "<tab>"   #'my-codex-toggle-focus
-  "?"       #'my-codex-help)
+  "<tab>"   #'my-codex-toggle-focus)
 
 (transient-define-prefix my-codex-transient ()
   "Show Codex commands."
@@ -2155,8 +2148,7 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
     ("i" "Project instructions" my-codex-open-project-instructions)
     ("X" "Export session" my-codex-export-session-to-markdown)
     ("M" "Summarize session" my-codex-summarize-session-to-markdown)
-    ("!" "Doctor" my-codex-doctor)
-    ("?" "Key binding help" my-codex-help)]])
+    ("!" "Doctor" my-codex-doctor)]])
 
 (defun my-codex-transient-preserve-selection ()
   "Show Codex commands without disturbing the active region."
@@ -2267,8 +2259,6 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
      :help "Ask Codex to summarize the current session transcript as Markdown notes"]
     ["Run health check" my-codex-doctor
      :help "Check Emacs, Codex, vterm, Git, project, configuration, and terminal startup"]
-    ["Show key bindings" my-codex-help
-     :help "Show Codex key bindings"]
     "---"
     ["Compile project" my-codex-project-build
      :help "Run the project build command"]))

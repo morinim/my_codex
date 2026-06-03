@@ -111,7 +111,6 @@ Prefix bindings:
 | F8 X | `my-codex-export-session-to-markdown` | Export the session transcript to Markdown |
 | F8 M | `my-codex-summarize-session-to-markdown` | Summarize the session into an editable Markdown buffer |
 | F8 ! | `my-codex-doctor` | Run a health check |
-| F8 ? | `my-codex-help` | Show help |
 
 Commit message edit buffer:
 
