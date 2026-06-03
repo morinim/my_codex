@@ -716,13 +716,23 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
   (let* ((root (my-codex-project-root))
          (file (plist-get target :file))
          (line (plist-get target :line))
-         (column (plist-get target :column)))
+         (column (plist-get target :column))
+         (end-line (plist-get target :end-line)))
     (unless (my-codex--valid-file-reference-target-p target)
       (user-error "File does not exist: %s" file))
     (find-file-other-window (expand-file-name file root))
     (when line
       (goto-char (point-min))
-      (forward-line (1- line)))
+      (forward-line (1- line))
+      (if (and end-line
+               (>= end-line line))
+          (push-mark
+           (save-excursion
+             (goto-char (point-min))
+             (forward-line (1- end-line))
+             (line-end-position))
+           nil t)
+        (deactivate-mark)))
     (when column
       (move-to-column (1- column)))))
 
@@ -843,21 +853,30 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
   "Return the prompt preview buffer name for ROOT."
   (format "*Codex prompt preview:%s*" (my-codex--safe-root-name root)))
 
-(defun my-codex--display-prompt-preview-buffer (buffer)
-  "Display prompt preview BUFFER in a predictable window."
-  (if-let* ((codex-window (get-buffer-window (my-codex-current-buffer-name)))
+(defun my-codex--display-prompt-preview-buffer (buffer origin-window)
+  "Display prompt preview BUFFER, preferring ORIGIN-WINDOW."
+  (if-let* ((origin-frame (and (window-live-p origin-window)
+                               (window-frame origin-window)))
+            (codex-window (get-buffer-window (my-codex-current-buffer-name)
+                                             origin-frame))
             (preview-window
-             (seq-find
-              (lambda (window)
-                (not (eq window codex-window)))
-              (sort (window-list (window-frame codex-window) 'no-minibuf)
-                    (lambda (a b)
-                      (or (< (window-left-column a)
-                             (window-left-column b))
-                          (and (= (window-left-column a)
-                                  (window-left-column b))
-                               (< (window-top-line a)
-                                  (window-top-line b)))))))))
+             (cond
+              ((and (window-live-p origin-window)
+                    (not (eq origin-window codex-window))
+                    (eq (window-frame origin-window) origin-frame))
+               origin-window)
+              (t
+               (seq-find
+                (lambda (window)
+                  (not (eq window codex-window)))
+                (sort (window-list (window-frame codex-window) 'no-minibuf)
+                      (lambda (a b)
+                        (or (< (window-left-column a)
+                               (window-left-column b))
+                            (and (= (window-left-column a)
+                                    (window-left-column b))
+                                 (< (window-top-line a)
+                                    (window-top-line b)))))))))))
       (progn
         (set-window-buffer preview-window buffer)
         (select-window preview-window))
@@ -893,7 +912,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
              (origin-window (selected-window))
              (buffer (get-buffer-create
                       (my-codex--prompt-preview-buffer-name root))))
-        (my-codex--display-prompt-preview-buffer buffer)
+        (my-codex--display-prompt-preview-buffer buffer origin-window)
         (let ((inhibit-read-only t))
           (erase-buffer)
           (insert prompt)
