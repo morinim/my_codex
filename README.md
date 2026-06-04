@@ -257,7 +257,8 @@ cleared so it does not extend to the prompt. Use `Left` in the menu to insert
 the captured text into the coding window.
 
 Clickable file references are limited to readable files inside the current
-project.
+project. A basename reference can inherit a directory prefix from a nearby
+preceding line, such as `src/kernel/` followed by `layered_population.tcc:240`.
 
 Use `F8 X` to export the current project-specific Codex session to an editable
 Markdown buffer. The export keeps a cleaned raw transcript with project,

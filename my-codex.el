@@ -672,6 +672,9 @@ Supported forms include:
   src/foo.el:L42-L60
   src/foo.el#L42-L60")
 
+(defconst my-codex--file-reference-context-lines 3
+  "Number of preceding lines used to resolve split file references.")
+
 (defun my-codex--add-session-link (beg end type target)
   "Add a clickable Codex session link from BEG to END.
 TYPE is one of `url' or `file'.  TARGET is link-specific data."
@@ -752,6 +755,42 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
           :end-line (when end-line-str
                       (string-to-number end-line-str)))))
 
+(defun my-codex--file-reference-context-directory (pos)
+  "Return a nearby preceding directory prefix for a file reference at POS."
+  (save-excursion
+    (goto-char pos)
+    (let ((limit (save-excursion
+                   (forward-line (- my-codex--file-reference-context-lines))
+                   (point)))
+          directory)
+      (while (and (not directory)
+                  (> (line-beginning-position) limit))
+        (forward-line -1)
+        (let ((line (string-trim-right
+                     (buffer-substring-no-properties
+                      (line-beginning-position)
+                      (line-end-position)))))
+          (when (string-match
+                 "\\(?:^\\|[^[:alnum:]_.@+-]\\)\\(\\(?:[[:alnum:]_.@+-]+/\\)+\\)\\'"
+                 line)
+            (setq directory (match-string 1 line)))))
+      directory)))
+
+(defun my-codex--resolve-file-reference-target (target pos)
+  "Return a valid file reference TARGET, resolving context at POS when needed."
+  (if (my-codex--valid-file-reference-target-p target)
+      target
+    (let ((file (plist-get target :file)))
+      (when (and file
+                 (not (file-name-directory file))
+                 (not (file-name-absolute-p file)))
+        (when-let ((directory (my-codex--file-reference-context-directory pos)))
+          (let ((resolved (plist-put (copy-sequence target)
+                                     :file
+                                     (concat directory file))))
+            (when (my-codex--valid-file-reference-target-p resolved)
+              resolved)))))))
+
 (defun my-codex--valid-file-reference-target-p (target)
   "Return non-nil if TARGET refers to a readable in-project file."
   (let* ((root (file-truename (my-codex-project-root)))
@@ -763,7 +802,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
                 (file-in-directory-p (file-truename path) root))))))
 
 (defun my-codex--line-bounds (beg end)
-  "Return a cons of line-expanded bounds around BEG and END."
+  "Return a cons of linkification bounds around BEG and END."
   (save-excursion
     (cons
      (progn
@@ -771,6 +810,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
        (line-beginning-position))
      (progn
        (goto-char end)
+       (forward-line my-codex--file-reference-context-lines)
        (line-end-position)))))
 
 (defun my-codex--clear-session-links (beg end)
@@ -811,13 +851,15 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
               (let ((target (my-codex--file-reference-target-at-match))
                     (match-beg (match-beginning 0))
                     (match-end (match-end 0)))
-                (when (save-match-data
-                        (my-codex--valid-file-reference-target-p target))
+                (when-let ((resolved-target
+                            (save-match-data
+                              (my-codex--resolve-file-reference-target
+                               target match-beg))))
                   (my-codex--add-session-link
                    match-beg
                    match-end
                    'file
-                   target))))))))))
+                   resolved-target))))))))))
 
 (define-minor-mode my-codex-session-links-mode
   "Make URLs and in-repository file references clickable in Codex buffers."
