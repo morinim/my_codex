@@ -126,7 +126,7 @@ Inside `vterm`:
 | F8 | Open the Codex command menu |
 | RET / mouse-1 | Open a clickable URL or file reference |
 | Shift Insert | Paste into `vterm` |
-| C-c C-t | Enter `vterm` copy mode |
+| C-c C-t | Toggle `vterm` copy mode |
 | Page Up / Page Down | Scroll the terminal buffer |
 
 ## Customisation
@@ -252,7 +252,8 @@ explanation of the symbol at point. For larger reviews, prefer `F8 f`, `F8 g`,
 or `F8 G`, which ask Codex to inspect files or diffs directly.
 
 To copy text from Codex, use `C-c C-t` in the `vterm` buffer, select text, then
-press `F8`. The selected text is captured and the live terminal selection is
+press `F8`. While `vterm-copy-mode` is active, my-codex shows a header-line
+reminder. The selected text is captured and the live terminal selection is
 cleared so it does not extend to the prompt. Use `Left` in the menu to insert
 the captured text into the coding window.
 
