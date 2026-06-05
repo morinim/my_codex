@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.9.6
+;; Version: 0.9.7
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -240,8 +240,7 @@ Preserve concrete file names, command names, and technical details. Do not edit 
   :type 'number
   :group 'my-codex)
 
-(defcustom my-codex-session-summary-poll-attempts
-  my-codex-commit-message-poll-attempts
+(defcustom my-codex-session-summary-poll-attempts 600
   "Maximum number of checks for a generated Codex session summary."
   :type 'natnum
   :group 'my-codex)
@@ -680,15 +679,76 @@ Open the generated notes in an editable Markdown buffer when they are ready."
   "Return the GitHub issue process buffer name for ROOT."
   (format "*Codex GitHub issue:%s*" (my-codex--safe-root-name root)))
 
+(defun my-codex--github-ticket-list-buffer-name (root)
+  "Return the open ticket list buffer name for ROOT."
+  (format "*Codex open tickets:%s*" (my-codex--safe-root-name root)))
+
 (defun my-codex--github-issue-draft-buffer-name (root)
   "Return the GitHub issue draft buffer name for ROOT."
   (format "*Codex GitHub issue draft:%s*" (my-codex--safe-root-name root)))
+
+(defun my-codex--github-ticket-list-sentinel (proc _event)
+  "Handle completion of open ticket list process PROC."
+  (when (memq (process-status proc) '(exit signal))
+    (let ((status (process-exit-status proc))
+          (buffer (process-buffer proc))
+          (content-start (process-get proc 'my-codex-content-start)))
+      (when (buffer-live-p buffer)
+        (with-current-buffer buffer
+          (let ((inhibit-read-only t))
+            (goto-char (point-max))
+            (cond
+             ((zerop status)
+              (when (and content-start (= (point-max) content-start))
+                (insert "No open tickets.\n")))
+             (t
+              (insert (format "\nProcess %s exited with status %s\n"
+                              (process-name proc)
+                              status)))))
+          (goto-char (point-min))
+          (special-mode))
+        (unless (zerop status)
+          (display-buffer buffer))
+        (message "Open ticket list %s."
+                 (if (zerop status) "updated" "failed"))))))
+
+;;;###autoload
+(defun my-codex-list-open-tickets ()
+  "List open GitHub tickets for the current repository in a buffer."
+  (interactive)
+  (unless (executable-find "gh")
+    (user-error "GitHub CLI `gh' not found in exec-path"))
+  (let* ((root (my-codex-project-root))
+         (buffer
+          (get-buffer-create (my-codex--github-ticket-list-buffer-name root))))
+    (with-current-buffer buffer
+      (read-only-mode -1)
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert (format "Open tickets for %s\n\n" root)))
+      (setq default-directory root))
+    (pop-to-buffer buffer)
+    (let ((process
+           (let ((default-directory root))
+             (make-process
+              :name "my-codex-open-tickets"
+              :buffer buffer
+              :command (list "gh" "issue" "list"
+                             "--state" "open"
+                             "--limit" "100")
+              :connection-type 'pipe
+              :noquery t
+              :sentinel #'my-codex--github-ticket-list-sentinel))))
+      (process-put process 'my-codex-content-start
+                   (with-current-buffer buffer (point-max)))
+      (message "Listing open tickets with gh...")
+      process)))
 
 (defun my-codex--parse-github-issue-draft (draft)
   "Return a cons of issue title and body parsed from DRAFT."
   (let ((text (string-trim draft)))
     (unless (string-match
-             "\\`Title:[ \t]*\\(.+\\)\n\nBody:[ \t]*\n"
+             "\\`[ \t\n]*Title:[ \t]*\\([^\n]+\\)\n+[ \t]*Body:[ \t]*\n*"
              text)
       (user-error "Could not parse GitHub issue draft"))
     (let ((title (string-trim (match-string 1 text)))
@@ -1689,6 +1749,52 @@ repository toplevel."
    marker
    "[[:space:]\r]*"))
 
+(defun my-codex--trim-blank-lines (text)
+  "Return TEXT without leading or trailing blank lines."
+  (setq text (replace-regexp-in-string "\\`[ \t\n]*\n" "" text))
+  (setq text (replace-regexp-in-string "\n[ \t\n]*\\'" "" text))
+  text)
+
+(defun my-codex--common-leading-whitespace-width (text)
+  "Return the common leading whitespace width among nonblank lines in TEXT."
+  (let (width)
+    (dolist (line (split-string text "\n"))
+      (unless (string-blank-p line)
+        (let ((line-width
+               (if (string-match "\\`[ \t]*" line)
+                   (length (match-string 0 line))
+                 0)))
+          (setq width
+                (if width
+                    (min width line-width)
+                  line-width)))))
+    (or width 0)))
+
+(defun my-codex--remove-leading-whitespace-width (text width)
+  "Return TEXT with WIDTH leading whitespace characters removed per line."
+  (if (<= width 0)
+      text
+    (mapconcat
+     (lambda (line)
+       (if (string-blank-p line)
+           ""
+         (replace-regexp-in-string
+          (format "\\`[ \t]\\{0,%d\\}" width)
+          ""
+          line
+          nil
+          nil)))
+     (split-string text "\n")
+     "\n")))
+
+(defun my-codex--normalize-marked-output (text)
+  "Return generated marked output TEXT without terminal layout indentation."
+  (let ((output (my-codex--trim-blank-lines
+                 (replace-regexp-in-string "\r" "" text))))
+    (my-codex--remove-leading-whitespace-width
+     output
+     (my-codex--common-leading-whitespace-width output))))
+
 (defun my-codex--latest-marked-output-after
     (buffer start-point begin-marker end-marker &optional ignored-values)
   "Return marked output in BUFFER after START-POINT, or nil.
@@ -1717,12 +1823,10 @@ empty output and any exact string in IGNORED-VALUES."
                          (my-codex--terminal-marker-regexp end-marker)
                          nil t)
                     (let ((output
-                           (string-trim
-                            (replace-regexp-in-string
-                             "\r" ""
-                             (buffer-substring-no-properties
-                              beg
-                              (match-beginning 0))))))
+                           (my-codex--normalize-marked-output
+                            (buffer-substring-no-properties
+                             beg
+                             (match-beginning 0)))))
                       (unless (member output
                                       (append '("") ignored-values))
                         output))))))))))))
@@ -2304,7 +2408,7 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
         (list "Git version" 'fail "Skipped; git not found"))
       (list "GitHub CLI executable"
             (if gh 'ok 'warn)
-            (or gh "Not found in exec-path; GitHub issue command will fail"))
+            (or gh "Not found in exec-path; GitHub issue commands will fail"))
       (if gh
           (pcase-let ((`(,status . ,output)
                        (my-codex--doctor-process-output
@@ -2406,6 +2510,7 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
   "p"       #'my-codex-send-project-overview
   "X"       #'my-codex-export-session-to-markdown
   "M"       #'my-codex-summarize-session-to-markdown
+  "t"       #'my-codex-list-open-tickets
   "T"       #'my-codex-summarize-session-to-github-issue
   "!"       #'my-codex-doctor
   "TAB"     #'my-codex-toggle-focus
@@ -2440,6 +2545,7 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
     ("i" "Project instructions" my-codex-open-project-instructions)
     ("X" "Export session" my-codex-export-session-to-markdown)
     ("M" "Summarize session" my-codex-summarize-session-to-markdown)
+    ("t" "Open tickets" my-codex-list-open-tickets)
     ("T" "GitHub issue" my-codex-summarize-session-to-github-issue)
     ("!" "Doctor" my-codex-doctor)]])
 
@@ -2613,6 +2719,9 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
     ["Summarize session to Markdown" my-codex-summarize-session-to-markdown
      :keys "F8 M"
      :help "Ask Codex to summarize the current session transcript as Markdown notes"]
+    ["List open tickets" my-codex-list-open-tickets
+     :keys "F8 t"
+     :help "List open GitHub issues for the current repository in a buffer"]
     ["Summarize session to GitHub issue" my-codex-summarize-session-to-github-issue
      :keys "F8 T"
      :help "Ask Codex to draft a GitHub issue, then edit it before creating it with gh"]

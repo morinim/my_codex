@@ -112,6 +112,7 @@ Prefix bindings:
 | F8 p | `my-codex-send-project-overview` | Send project structure and state |
 | F8 X | `my-codex-export-session-to-markdown` | Export the session transcript to Markdown |
 | F8 M | `my-codex-summarize-session-to-markdown` | Summarize the session into an editable Markdown buffer |
+| F8 t | `my-codex-list-open-tickets` | List open GitHub issues in a buffer |
 | F8 T | `my-codex-summarize-session-to-github-issue` | Draft a GitHub issue from the session |
 | F8 ! | `my-codex-doctor` | Run a health check |
 
@@ -179,6 +180,7 @@ END_COMMIT_MESSAGE
 Use an imperative subject and a short explanatory body when useful. Limit each line to %d columns. Do not edit files.\n")
 (setq my-codex-commit-message-poll-interval 0.5)
 (setq my-codex-commit-message-poll-attempts 120)
+(setq my-codex-session-summary-poll-attempts 600)
 (setq my-codex-project-overview-max-files 200)
 (setq my-codex-project-overview-tree-max-entries 25)
 (setq my-codex-enable-prompt-preview nil)
@@ -301,6 +303,10 @@ session transcript. The generated draft opens in an editable buffer. Press
 `gh issue create --title TITLE --body-file FILE`, or `C-c C-k` to cancel. It
 uses unique markers in the same way as
 `my-codex-summarize-session-to-markdown`.
+
+Use `F8 t` to list open GitHub issues for the current repository in a
+read-only buffer. This runs `gh issue list --state open --limit 100` from the
+project root.
 
 ## Licence
 
