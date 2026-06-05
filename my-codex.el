@@ -680,15 +680,15 @@ Open the generated notes in an editable Markdown buffer when they are ready."
   (format "*Codex GitHub issue:%s*" (my-codex--safe-root-name root)))
 
 (defun my-codex--github-ticket-list-buffer-name (root)
-  "Return the open ticket list buffer name for ROOT."
-  (format "*Codex open tickets:%s*" (my-codex--safe-root-name root)))
+  "Return the open issue list buffer name for ROOT."
+  (format "*Codex open issues:%s*" (my-codex--safe-root-name root)))
 
 (defun my-codex--github-issue-draft-buffer-name (root)
   "Return the GitHub issue draft buffer name for ROOT."
   (format "*Codex GitHub issue draft:%s*" (my-codex--safe-root-name root)))
 
 (defun my-codex--github-ticket-list-sentinel (proc _event)
-  "Handle completion of open ticket list process PROC."
+  "Handle completion of open issue list process PROC."
   (when (memq (process-status proc) '(exit signal))
     (let ((status (process-exit-status proc))
           (buffer (process-buffer proc))
@@ -700,7 +700,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
             (cond
              ((zerop status)
               (when (and content-start (= (point-max) content-start))
-                (insert "No open tickets.\n")))
+                (insert "No open issues.\n")))
              (t
               (insert (format "\nProcess %s exited with status %s\n"
                               (process-name proc)
@@ -709,12 +709,12 @@ Open the generated notes in an editable Markdown buffer when they are ready."
           (special-mode))
         (unless (zerop status)
           (display-buffer buffer))
-        (message "Open ticket list %s."
+        (message "Open issue list %s."
                  (if (zerop status) "updated" "failed"))))))
 
 ;;;###autoload
 (defun my-codex-list-open-tickets ()
-  "List open GitHub tickets for the current repository in a buffer."
+  "List open GitHub issues for the current repository in a buffer."
   (interactive)
   (unless (executable-find "gh")
     (user-error "GitHub CLI `gh' not found in exec-path"))
@@ -725,7 +725,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (read-only-mode -1)
       (let ((inhibit-read-only t))
         (erase-buffer)
-        (insert (format "Open tickets for %s\n\n" root)))
+        (insert (format "Open issues for %s\n\n" root)))
       (setq default-directory root))
     (pop-to-buffer buffer)
     (let ((process
@@ -741,7 +741,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
               :sentinel #'my-codex--github-ticket-list-sentinel))))
       (process-put process 'my-codex-content-start
                    (with-current-buffer buffer (point-max)))
-      (message "Listing open tickets with gh...")
+      (message "Listing open issues with gh...")
       process)))
 
 (defun my-codex--parse-github-issue-draft (draft)
@@ -2545,9 +2545,10 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
     ("i" "Project instructions" my-codex-open-project-instructions)
     ("X" "Export session" my-codex-export-session-to-markdown)
     ("M" "Summarize session" my-codex-summarize-session-to-markdown)
-    ("t" "Open tickets" my-codex-list-open-tickets)
-    ("T" "GitHub issue" my-codex-summarize-session-to-github-issue)
-    ("!" "Doctor" my-codex-doctor)]])
+    ("!" "Doctor" my-codex-doctor)]
+   ["GitHub"
+    ("t" "List issues" my-codex-list-open-tickets)
+    ("T" "Draft issue" my-codex-summarize-session-to-github-issue)]])
 
 (defun my-codex-transient-preserve-selection ()
   "Show Codex commands without disturbing the active region."
@@ -2651,83 +2652,91 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
 (easy-menu-define my-codex-menu my-codex-global-mode-map
   "Menu for Codex commands."
   '("Codex"
-    ["Show/start read-only" my-codex-read-only
-     :keys "F8 o"
-     :help "Show Codex, starting it in read-only mode if needed"]
-    ["Show/start workspace-write" my-codex-workspace
-     :keys "F8 w"
-     :help "Show Codex, starting it with workspace write access if needed"]
-    ["Resume session" my-codex-resume
-     :keys "F8 r"
-     :help "Resume a previous Codex session"]
-    ["Hide Codex window" my-codex-restore-layout
-     :keys "F8 q"
-     :help "Hide the visible Codex window"]
-    ["Ask Codex..." my-codex-ask
-     :keys "F8 a"
-     :help "Prompt for a question and send it to Codex"]
-    ["Ask Codex with preset..." my-codex-ask-with-preset
-     :keys "F8 A"
-     :help "Choose a preset prompt, optionally add instructions, and send it to Codex"]
-    "---"
-    ["Send selected region" my-codex-send-region
-     :keys "F8 s"
-     :active (use-region-p)
-     :help "Send the selected region to Codex"]
-    ["Explain selected error" my-codex-explain-region-as-error
-     :keys "F8 e"
-     :active (use-region-p)
-     :help "Ask Codex to explain the selected compiler/test error"]
-    ["Explain symbol at point" my-codex-explain-symbol-at-point
-     :keys "F8 x"
-     :active buffer-file-name
-     :help "Ask Codex to explain the symbol at point"]
-    ["Inspect current file" my-codex-send-current-file
-     :keys "F8 f"
-     :active buffer-file-name
-     :help "Ask Codex to inspect the current file directly"]
-    "---"
-    ["Review Git diff" my-codex-send-git-diff
-     :keys "F8 g"
-     :help "Ask Codex to review the current Git diff"]
-    ["Review staged Git diff" my-codex-send-git-staged-diff
-     :keys "F8 G"
-     :help "Ask Codex to review the staged Git diff"]
-    ["Ediff current file against HEAD" my-codex-ediff-current-file-against-head
-     :keys "F8 d"
-     :active buffer-file-name
-     :help "Review the current file's uncommitted changes against HEAD"]
-    ["Ediff changed file against HEAD" my-codex-ediff-changed-file-against-head
-     :keys "F8 D"
-     :help "Choose a tracked changed file and review it against HEAD"]
-    ["Draft commit message" my-codex-commit-message-from-diff
-     :keys "F8 m"
-     :help "Ask Codex to draft a commit message from the staged Git diff"]
-    ["Edit commit with Codex message" my-codex-git-commit-with-latest-message
-     :keys "F8 c"
-     :help "Use the latest Codex commit message, or ask Codex for one, then edit before committing"]
-    "---"
-    ["Open project instructions" my-codex-open-project-instructions
-     :keys "F8 i"
-     :help "Open AGENTS.md, CODEX.md, or .codex/instructions.md"]
-    ["Send project overview" my-codex-send-project-overview
-     :keys "F8 p"
-     :help "Send Codex a compact summary of the current project structure"]
-    ["Export session to Markdown" my-codex-export-session-to-markdown
-     :keys "F8 X"
-     :help "Export the current Codex session transcript to a Markdown buffer"]
-    ["Summarize session to Markdown" my-codex-summarize-session-to-markdown
-     :keys "F8 M"
-     :help "Ask Codex to summarize the current session transcript as Markdown notes"]
-    ["List open tickets" my-codex-list-open-tickets
-     :keys "F8 t"
-     :help "List open GitHub issues for the current repository in a buffer"]
-    ["Summarize session to GitHub issue" my-codex-summarize-session-to-github-issue
-     :keys "F8 T"
-     :help "Ask Codex to draft a GitHub issue, then edit it before creating it with gh"]
-    ["Run health check" my-codex-doctor
-     :keys "F8 !"
-     :help "Check Emacs, Codex, vterm, Git, gh, project, configuration, and terminal startup"]
+    ("Session"
+     ["Show/start read-only" my-codex-read-only
+      :keys "F8 o"
+      :help "Show Codex, starting it in read-only mode if needed"]
+     ["Show/start workspace-write" my-codex-workspace
+      :keys "F8 w"
+      :help "Show Codex, starting it with workspace write access if needed"]
+     ["Resume session" my-codex-resume
+      :keys "F8 r"
+      :help "Resume a previous Codex session"]
+     ["Hide Codex window" my-codex-restore-layout
+      :keys "F8 q"
+      :help "Hide the visible Codex window"]
+     ["Toggle focus" my-codex-toggle-focus
+      :keys "F8 TAB"
+      :help "Toggle focus between Codex and the previous window"])
+    ("Send"
+     ["Ask Codex..." my-codex-ask
+      :keys "F8 a"
+      :help "Prompt for a question and send it to Codex"]
+     ["Preset menu" my-codex-ask-preset-transient
+      :keys "F8 A"
+      :help "Open the prompt preset menu"]
+     ["Send selected region" my-codex-send-region
+      :keys "F8 s"
+      :active (use-region-p)
+      :help "Send the selected region to Codex"]
+     ["Insert selection" my-codex-insert-selection-into-code
+      :keys "F8 Left"
+      :help "Insert the captured Codex selection into the code buffer"]
+     ["Inspect current file" my-codex-send-current-file
+      :keys "F8 f"
+      :active buffer-file-name
+      :help "Ask Codex to inspect the current file directly"]
+     ["Explain symbol at point" my-codex-explain-symbol-at-point
+      :keys "F8 x"
+      :active buffer-file-name
+      :help "Ask Codex to explain the symbol at point"]
+     ["Send project overview" my-codex-send-project-overview
+      :keys "F8 p"
+      :help "Send Codex a compact summary of the current project structure"])
+    ("Git"
+     ["Review Git diff" my-codex-send-git-diff
+      :keys "F8 g"
+      :help "Ask Codex to review the current Git diff"]
+     ["Review staged Git diff" my-codex-send-git-staged-diff
+      :keys "F8 G"
+      :help "Ask Codex to review the staged Git diff"]
+     ["Ediff current file against HEAD" my-codex-ediff-current-file-against-head
+      :keys "F8 d"
+      :active buffer-file-name
+      :help "Review the current file's uncommitted changes against HEAD"]
+     ["Ediff changed file against HEAD" my-codex-ediff-changed-file-against-head
+      :keys "F8 D"
+      :help "Choose a tracked changed file and review it against HEAD"]
+     ["Draft commit message" my-codex-commit-message-from-diff
+      :keys "F8 m"
+      :help "Ask Codex to draft a commit message from the staged Git diff"]
+     ["Edit commit with Codex message" my-codex-git-commit-with-latest-message
+      :keys "F8 c"
+      :help "Use the latest Codex commit message, or ask Codex for one, then edit before committing"])
+    ("Context"
+     ["Explain selected error" my-codex-explain-region-as-error
+      :keys "F8 e"
+      :active (use-region-p)
+      :help "Ask Codex to explain the selected compiler/test error"]
+     ["Open project instructions" my-codex-open-project-instructions
+      :keys "F8 i"
+      :help "Open AGENTS.md, CODEX.md, or .codex/instructions.md"]
+     ["Export session to Markdown" my-codex-export-session-to-markdown
+      :keys "F8 X"
+      :help "Export the current Codex session transcript to a Markdown buffer"]
+     ["Summarize session to Markdown" my-codex-summarize-session-to-markdown
+      :keys "F8 M"
+      :help "Ask Codex to summarize the current session transcript as Markdown notes"]
+     ["Run health check" my-codex-doctor
+      :keys "F8 !"
+      :help "Check Emacs, Codex, vterm, Git, gh, project, configuration, and terminal startup"])
+    ("GitHub"
+     ["List issues" my-codex-list-open-tickets
+      :keys "F8 t"
+      :help "List open GitHub issues for the current repository in a buffer"]
+     ["Draft issue" my-codex-summarize-session-to-github-issue
+      :keys "F8 T"
+      :help "Ask Codex to draft a GitHub issue, then edit it before creating it with gh"])
     "---"
     ["Compile project" my-codex-project-build
      :keys "F7"
