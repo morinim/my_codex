@@ -33,6 +33,7 @@ separate sessions.
 - Open clickable URLs and in-project file references from Codex output.
 - Export a Codex session transcript to Markdown.
 - Ask Codex to summarize a session transcript into organized Markdown notes.
+- Create GitHub issues from Codex session summaries with `gh`.
 - Warn when project buffers have unsaved changes before sending prompts.
 - Run a health check for Emacs, Codex, vterm, Git, project state, configured
   commands, and terminal startup.
@@ -45,6 +46,7 @@ separate sessions.
 - [`vterm`][vterm].
 - OpenAI [Codex CLI][codex] available as `codex`.
 - Git, for Git-related commands.
+- GitHub CLI `gh`, for creating GitHub issues from session summaries.
 
 `vterm` is loaded lazily, only when Codex is used.
 
@@ -110,6 +112,7 @@ Prefix bindings:
 | F8 p | `my-codex-send-project-overview` | Send project structure and state |
 | F8 X | `my-codex-export-session-to-markdown` | Export the session transcript to Markdown |
 | F8 M | `my-codex-summarize-session-to-markdown` | Summarize the session into an editable Markdown buffer |
+| F8 T | `my-codex-summarize-session-to-github-issue` | Draft a GitHub issue from the session |
 | F8 ! | `my-codex-doctor` | Run a health check |
 
 Commit message edit buffer:
@@ -189,6 +192,25 @@ Focus on:
 - action items
 - proposed implementation details
 - risks or constraints
+
+Preserve concrete file names, command names, and technical details. Do not edit files.")
+
+(setq my-codex-github-issue-summary-prompt
+      "Please summarize this Codex session transcript as a GitHub issue draft.
+
+Focus on:
+- concrete problem or feature context
+- decisions made
+- implementation details
+- remaining action items
+- risks or constraints
+
+Return a concise issue title and a Markdown issue body. Use this exact format:
+
+Title: <issue title>
+
+Body:
+<Markdown issue body>
 
 Preserve concrete file names, command names, and technical details. Do not edit files.")
 
@@ -272,6 +294,13 @@ This is useful before saving the session as project documentation or turning it
 into an issue. `my-codex-summarize-session-to-markdown` appends unique
 per-request markers to the prompt so older summaries echoed in the transcript
 cannot be mistaken for the new response.
+
+Use `F8 T` to ask Codex for a GitHub issue title and body from the current
+session transcript. The generated draft opens in an editable buffer. Press
+`C-c C-c` to create the issue in the current repository with
+`gh issue create --title TITLE --body-file FILE`, or `C-c C-k` to cancel. It
+uses unique markers in the same way as
+`my-codex-summarize-session-to-markdown`.
 
 ## Licence
 

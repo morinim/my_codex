@@ -212,6 +212,28 @@ Preserve concrete file names, command names, and technical details. Do not edit 
   :type 'string
   :group 'my-codex)
 
+(defcustom my-codex-github-issue-summary-prompt
+  "Please summarize this Codex session transcript as a GitHub issue draft.
+
+Focus on:
+- concrete problem or feature context
+- decisions made
+- implementation details
+- remaining action items
+- risks or constraints
+
+Return a concise issue title and a Markdown issue body. Use this exact format:
+
+Title: <issue title>
+
+Body:
+<Markdown issue body>
+
+Preserve concrete file names, command names, and technical details. Do not edit files."
+  "Prompt used by `my-codex-summarize-session-to-github-issue'."
+  :type 'string
+  :group 'my-codex)
+
 (defcustom my-codex-session-summary-poll-interval
   my-codex-commit-message-poll-interval
   "Seconds between checks for generated Codex session summaries."
@@ -262,6 +284,9 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 
 (defvar-local my-codex--session-summary-request-marker nil
   "Marker for the start of the latest Codex session summary request.")
+
+(defvar-local my-codex--github-issue-creation-in-progress nil
+  "Non-nil while the current GitHub issue draft is being submitted.")
 
 (defvar my-codex--captured-selection nil
   "Text captured before opening a transient from an active region.")
@@ -590,6 +615,21 @@ shown between them as an example."
     (insert transcript)
     (insert "\n" fence "\n")))
 
+(defun my-codex--session-summary-prompt
+    (summary-prompt transcript begin-marker end-marker &optional placeholder)
+  "Return a marked session summary prompt.
+SUMMARY-PROMPT describes the requested summary.  TRANSCRIPT is the
+cleaned Codex transcript.  BEGIN-MARKER and END-MARKER delimit the answer.
+PLACEHOLDER is shown inside the output markers."
+  (let ((fence (my-codex--markdown-code-fence transcript)))
+    (format "%s\n\n%s\n\nRaw transcript:\n\n%stext\n%s\n%s"
+            summary-prompt
+            (my-codex--marked-output-instructions
+             begin-marker end-marker (or placeholder "<Markdown notes here>"))
+            fence
+            transcript
+            fence)))
+
 ;;;###autoload
 (defun my-codex-export-session-to-markdown ()
   "Export the current project's Codex session transcript to Markdown."
@@ -619,7 +659,6 @@ Open the generated notes in an editable Markdown buffer when they are ready."
   (let* ((root (my-codex-project-root))
          (buffer (my-codex-buffer))
          (transcript (my-codex-session-transcript))
-         (fence (my-codex--markdown-code-fence transcript))
          (markers (my-codex--unique-output-markers "SESSION_SUMMARY"))
          (begin-marker (car markers))
          (end-marker (cdr markers)))
@@ -627,19 +666,193 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (user-error "Codex session transcript is empty"))
     (let ((start-point (with-current-buffer buffer
                          (copy-marker (point-max))))
-          (prompt (format "%s\n\n%s\n\nRaw transcript:\n\n%stext\n%s\n%s"
-                          my-codex-session-summary-prompt
-                          (my-codex--marked-output-instructions
-                           begin-marker end-marker "<Markdown notes here>")
-                          fence
-                          transcript
-                          fence)))
+          (prompt (my-codex--session-summary-prompt
+                   my-codex-session-summary-prompt
+                   transcript begin-marker end-marker)))
       (with-current-buffer buffer
         (setq my-codex--session-summary-request-marker start-point))
       (my-codex-send-prompt prompt)
       (my-codex--wait-for-session-summary
        buffer start-point root begin-marker end-marker)
       (message "Asked Codex to summarize the session; waiting to open editor."))))
+
+(defun my-codex--github-issue-output-buffer-name (root)
+  "Return the GitHub issue process buffer name for ROOT."
+  (format "*Codex GitHub issue:%s*" (my-codex--safe-root-name root)))
+
+(defun my-codex--github-issue-draft-buffer-name (root)
+  "Return the GitHub issue draft buffer name for ROOT."
+  (format "*Codex GitHub issue draft:%s*" (my-codex--safe-root-name root)))
+
+(defun my-codex--parse-github-issue-draft (draft)
+  "Return a cons of issue title and body parsed from DRAFT."
+  (let ((text (string-trim draft)))
+    (unless (string-match
+             "\\`Title:[ \t]*\\(.+\\)\n\nBody:[ \t]*\n"
+             text)
+      (user-error "Could not parse GitHub issue draft"))
+    (let ((title (string-trim (match-string 1 text)))
+          (body (string-trim (substring text (match-end 0)))))
+      (when (string-empty-p title)
+        (user-error "GitHub issue title is empty"))
+      (when (string-empty-p body)
+        (user-error "GitHub issue body is empty"))
+      (cons title body))))
+
+(defun my-codex--github-issue-draft-text (title body)
+  "Return editable GitHub issue draft text for TITLE and BODY."
+  (format "Title: %s\n\nBody:\n%s\n" title (string-trim body)))
+
+(defun my-codex--github-issue-process-sentinel (proc _event)
+  "Handle completion of GitHub issue creation process PROC."
+  (when (memq (process-status proc) '(exit signal))
+    (let ((status (process-exit-status proc))
+          (buffer (process-buffer proc))
+          (file (process-get proc 'my-codex-temp-file))
+          (draft-buffer (process-get proc 'my-codex-draft-buffer)))
+      (when file
+        (ignore-errors
+          (delete-file file)))
+      (if (zerop status)
+          (when (buffer-live-p buffer)
+            (with-current-buffer buffer
+              (goto-char (point-min))
+              (message "GitHub issue created: %s"
+                       (string-trim (buffer-string))))
+            (when (buffer-live-p draft-buffer)
+              (quit-windows-on draft-buffer t)))
+        (when (buffer-live-p draft-buffer)
+          (with-current-buffer draft-buffer
+            (setq my-codex--github-issue-creation-in-progress nil)
+            (setq-local header-line-format
+                        "Edit GitHub issue draft. C-c C-c creates issue; C-c C-k cancels.")))
+        (when (buffer-live-p buffer)
+          (with-current-buffer buffer
+            (goto-char (point-max))
+            (insert (format "\nProcess %s exited with status %s"
+                            (process-name proc)
+                            status))
+            (display-buffer buffer)))))))
+
+(defun my-codex--create-github-issue-with-body
+    (title body root &optional draft-buffer)
+  "Create a GitHub issue with TITLE and BODY in ROOT using `gh'."
+  (unless (executable-find "gh")
+    (user-error "GitHub CLI `gh' not found in exec-path"))
+  (let ((file (make-temp-file "my-codex-github-issue-" nil ".md"))
+        (output-buffer
+         (get-buffer-create (my-codex--github-issue-output-buffer-name root))))
+    (condition-case err
+        (progn
+          (with-temp-file file
+            (insert (string-trim body) "\n"))
+          (with-current-buffer output-buffer
+            (read-only-mode -1)
+            (erase-buffer))
+          (let ((default-directory root))
+            (let ((process
+                   (make-process
+                    :name "my-codex-github-issue"
+                    :buffer output-buffer
+                    :command (list "gh" "issue" "create"
+                                   "--title" title
+                                   "--body-file" file)
+                    :connection-type 'pipe
+                    :noquery t
+                    :sentinel #'my-codex--github-issue-process-sentinel)))
+              (process-put process 'my-codex-temp-file file)
+              (process-put process 'my-codex-draft-buffer draft-buffer)
+              (message "Creating GitHub issue with gh...")
+              process)))
+      (error
+       (ignore-errors
+         (delete-file file))
+       (signal (car err) (cdr err))))))
+
+(defun my-codex--github-issue-draft-fields ()
+  "Return the edited GitHub issue draft fields in the current buffer."
+  (my-codex--parse-github-issue-draft
+   (buffer-substring-no-properties (point-min) (point-max))))
+
+(defun my-codex--create-github-issue-from-draft ()
+  "Create a GitHub issue from the current editable draft buffer."
+  (interactive)
+  (when my-codex--github-issue-creation-in-progress
+    (user-error "GitHub issue creation is already in progress"))
+  (pcase-let ((`(,title . ,body) (my-codex--github-issue-draft-fields)))
+    (setq my-codex--github-issue-creation-in-progress t)
+    (setq-local header-line-format
+                "Creating GitHub issue with gh; wait for completion.")
+    (condition-case err
+        (my-codex--create-github-issue-with-body
+         title body default-directory (current-buffer))
+      (error
+       (setq my-codex--github-issue-creation-in-progress nil)
+       (setq-local header-line-format
+                   "Edit GitHub issue draft. C-c C-c creates issue; C-c C-k cancels.")
+       (signal (car err) (cdr err))))))
+
+(defun my-codex--cancel-github-issue-draft ()
+  "Cancel the current GitHub issue draft buffer."
+  (interactive)
+  (when my-codex--github-issue-creation-in-progress
+    (user-error "GitHub issue creation is already in progress"))
+  (quit-window 'kill)
+  (message "GitHub issue draft canceled."))
+
+(defun my-codex-edit-github-issue-draft (draft root)
+  "Open an editable GitHub issue DRAFT for ROOT."
+  (pcase-let* ((`(,title . ,body)
+                (my-codex--parse-github-issue-draft draft))
+               (buffer
+                (get-buffer-create
+                 (my-codex--github-issue-draft-buffer-name root))))
+    (pop-to-buffer buffer)
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (insert (my-codex--github-issue-draft-text title body))
+      (goto-char (point-min)))
+    (setq default-directory root)
+    (my-codex--session-export-mode)
+    (setq-local header-line-format
+                "Edit GitHub issue draft. C-c C-c creates issue; C-c C-k cancels.")
+    (let ((map (define-keymap :parent (current-local-map)
+                 "C-c C-c" #'my-codex--create-github-issue-from-draft
+                 "C-c C-k" #'my-codex--cancel-github-issue-draft)))
+      (use-local-map map))
+    (message "Edit the GitHub issue draft, then press C-c C-c to create it.")))
+
+;;;###autoload
+(defun my-codex-summarize-session-to-github-issue ()
+  "Ask Codex to draft a GitHub issue from the current session.
+Open an editable issue draft before running `gh issue create'."
+  (interactive)
+  (let* ((root (my-codex-project-root))
+         (buffer (my-codex-buffer))
+         (transcript (my-codex-session-transcript))
+         (markers (my-codex--unique-output-markers "GITHUB_ISSUE_DRAFT"))
+         (begin-marker (car markers))
+         (end-marker (cdr markers)))
+    (unless (executable-find "gh")
+      (user-error "GitHub CLI `gh' not found in exec-path"))
+    (when (string-empty-p transcript)
+      (user-error "Codex session transcript is empty"))
+    (let ((start-point (with-current-buffer buffer
+                         (copy-marker (point-max))))
+          (prompt (my-codex--session-summary-prompt
+                   my-codex-github-issue-summary-prompt
+                   transcript begin-marker end-marker
+                   "<GitHub issue draft here>")))
+      (with-current-buffer buffer
+        (setq my-codex--session-summary-request-marker start-point))
+      (my-codex-send-prompt prompt)
+      (my-codex--wait-for-session-summary
+       buffer start-point root begin-marker end-marker
+       (lambda (draft)
+         (my-codex-edit-github-issue-draft draft root))
+       "Codex GitHub issue draft is ready for editing."
+       '("<GitHub issue draft here>"))
+      (message "Asked Codex to draft a GitHub issue; waiting to open editor."))))
 
 (defvar my-codex-session-link-map
   (let ((map (make-sparse-keymap)))
@@ -1698,22 +1911,27 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
    attempts))
 
 (defun my-codex--wait-for-session-summary
-    (buffer start-point root begin-marker end-marker &optional attempts)
+    (buffer start-point root begin-marker end-marker
+            &optional callback ready-message ignored-values attempts)
   "Poll BUFFER after START-POINT for a finished session summary.
 ROOT is the project root used for the editable summary buffer.
 BEGIN-MARKER and END-MARKER delimit this request's summary.
+CALLBACK receives the summary and defaults to opening an editable buffer.
+READY-MESSAGE is shown after a summary is found.
+IGNORED-VALUES are additional exact placeholder outputs to ignore.
 ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
   (my-codex--wait-for-marked-output
    buffer start-point
    begin-marker
    end-marker
-   (lambda (summary)
-     (my-codex-edit-session-summary summary root))
+   (or callback
+       (lambda (summary)
+         (my-codex-edit-session-summary summary root)))
    "Timed out waiting for Codex session summary."
-   "Codex session summary is ready for editing."
+   (or ready-message "Codex session summary is ready for editing.")
    my-codex-session-summary-poll-interval
    my-codex-session-summary-poll-attempts
-   '("..." "<Markdown notes here>")
+   (append '("..." "<Markdown notes here>") ignored-values)
    attempts))
 
 (defun my-codex-git-commit-with-latest-message ()
@@ -2037,6 +2255,7 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
          (project (project-current nil default-directory))
          (codex (executable-find "codex"))
          (git (executable-find "git"))
+         (gh (executable-find "gh"))
          (vterm-status (my-codex--doctor-require-vterm))
          (vterm-loadable (car vterm-status)))
     (append
@@ -2083,6 +2302,19 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
                       (format "Exited with status %s and no output" status)
                     output)))
         (list "Git version" 'fail "Skipped; git not found"))
+      (list "GitHub CLI executable"
+            (if gh 'ok 'warn)
+            (or gh "Not found in exec-path; GitHub issue command will fail"))
+      (if gh
+          (pcase-let ((`(,status . ,output)
+                       (my-codex--doctor-process-output
+                        "gh" "--version")))
+            (list "gh --version"
+                  (if (eq status 0) 'ok 'warn)
+                  (if (string-empty-p output)
+                      (format "Exited with status %s and no output" status)
+                    (car (split-string output "\n")))))
+        (list "gh --version" 'warn "Skipped; gh not found"))
       (list "current directory is a project"
             (if project 'ok 'warn)
             (if project
@@ -2174,6 +2406,7 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
   "p"       #'my-codex-send-project-overview
   "X"       #'my-codex-export-session-to-markdown
   "M"       #'my-codex-summarize-session-to-markdown
+  "T"       #'my-codex-summarize-session-to-github-issue
   "!"       #'my-codex-doctor
   "TAB"     #'my-codex-toggle-focus
   "<tab>"   #'my-codex-toggle-focus)
@@ -2207,6 +2440,7 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
     ("i" "Project instructions" my-codex-open-project-instructions)
     ("X" "Export session" my-codex-export-session-to-markdown)
     ("M" "Summarize session" my-codex-summarize-session-to-markdown)
+    ("T" "GitHub issue" my-codex-summarize-session-to-github-issue)
     ("!" "Doctor" my-codex-doctor)]])
 
 (defun my-codex-transient-preserve-selection ()
@@ -2359,8 +2593,10 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
      :help "Export the current Codex session transcript to a Markdown buffer"]
     ["Summarize session to Markdown" my-codex-summarize-session-to-markdown
      :help "Ask Codex to summarize the current session transcript as Markdown notes"]
+    ["Summarize session to GitHub issue" my-codex-summarize-session-to-github-issue
+     :help "Ask Codex to draft a GitHub issue, then edit it before creating it with gh"]
     ["Run health check" my-codex-doctor
-     :help "Check Emacs, Codex, vterm, Git, project, configuration, and terminal startup"]
+     :help "Check Emacs, Codex, vterm, Git, gh, project, configuration, and terminal startup"]
     "---"
     ["Compile project" my-codex-project-build
      :help "Run the project build command"]))
