@@ -2546,59 +2546,82 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
   "Menu for Codex commands."
   '("Codex"
     ["Show/start read-only" my-codex-read-only
+     :keys "F8 o"
      :help "Show Codex, starting it in read-only mode if needed"]
     ["Show/start workspace-write" my-codex-workspace
+     :keys "F8 w"
      :help "Show Codex, starting it with workspace write access if needed"]
     ["Resume session" my-codex-resume
+     :keys "F8 r"
      :help "Resume a previous Codex session"]
     ["Hide Codex window" my-codex-restore-layout
+     :keys "F8 q"
      :help "Hide the visible Codex window"]
     ["Ask Codex..." my-codex-ask
+     :keys "F8 a"
      :help "Prompt for a question and send it to Codex"]
     ["Ask Codex with preset..." my-codex-ask-with-preset
+     :keys "F8 A"
      :help "Choose a preset prompt, optionally add instructions, and send it to Codex"]
     "---"
     ["Send selected region" my-codex-send-region
+     :keys "F8 s"
      :active (use-region-p)
      :help "Send the selected region to Codex"]
     ["Explain selected error" my-codex-explain-region-as-error
+     :keys "F8 e"
      :active (use-region-p)
      :help "Ask Codex to explain the selected compiler/test error"]
     ["Explain symbol at point" my-codex-explain-symbol-at-point
+     :keys "F8 x"
      :active buffer-file-name
      :help "Ask Codex to explain the symbol at point"]
     ["Inspect current file" my-codex-send-current-file
+     :keys "F8 f"
      :active buffer-file-name
      :help "Ask Codex to inspect the current file directly"]
     "---"
     ["Review Git diff" my-codex-send-git-diff
+     :keys "F8 g"
      :help "Ask Codex to review the current Git diff"]
     ["Review staged Git diff" my-codex-send-git-staged-diff
+     :keys "F8 G"
      :help "Ask Codex to review the staged Git diff"]
     ["Ediff current file against HEAD" my-codex-ediff-current-file-against-head
+     :keys "F8 d"
      :active buffer-file-name
      :help "Review the current file's uncommitted changes against HEAD"]
     ["Ediff changed file against HEAD" my-codex-ediff-changed-file-against-head
+     :keys "F8 D"
      :help "Choose a tracked changed file and review it against HEAD"]
     ["Draft commit message" my-codex-commit-message-from-diff
+     :keys "F8 m"
      :help "Ask Codex to draft a commit message from the staged Git diff"]
     ["Edit commit with Codex message" my-codex-git-commit-with-latest-message
+     :keys "F8 c"
      :help "Use the latest Codex commit message, or ask Codex for one, then edit before committing"]
     "---"
     ["Open project instructions" my-codex-open-project-instructions
+     :keys "F8 i"
      :help "Open AGENTS.md, CODEX.md, or .codex/instructions.md"]
     ["Send project overview" my-codex-send-project-overview
+     :keys "F8 p"
      :help "Send Codex a compact summary of the current project structure"]
     ["Export session to Markdown" my-codex-export-session-to-markdown
+     :keys "F8 X"
      :help "Export the current Codex session transcript to a Markdown buffer"]
     ["Summarize session to Markdown" my-codex-summarize-session-to-markdown
+     :keys "F8 M"
      :help "Ask Codex to summarize the current session transcript as Markdown notes"]
     ["Summarize session to GitHub issue" my-codex-summarize-session-to-github-issue
+     :keys "F8 T"
      :help "Ask Codex to draft a GitHub issue, then edit it before creating it with gh"]
     ["Run health check" my-codex-doctor
+     :keys "F8 !"
      :help "Check Emacs, Codex, vterm, Git, gh, project, configuration, and terminal startup"]
     "---"
     ["Compile project" my-codex-project-build
+     :keys "F7"
      :help "Run the project build command"]))
 
 ;;;###autoload
