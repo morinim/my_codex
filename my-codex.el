@@ -283,6 +283,12 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 (defvar-local my-codex--prompt-preview-origin-window nil
   "Window selected before opening the current prompt preview.")
 
+(defvar-local my-codex--edit-fill-column-indicator-state nil
+  "Previous fill-column indicator state saved by my-codex.")
+
+(defvar my-codex--edit-fill-column-indicator-buffers nil
+  "Buffers whose fill-column indicator state is temporarily managed.")
+
 (defvar-local my-codex--commit-message-request-marker nil
   "Marker for the start of the latest Codex commit message request.")
 
@@ -375,6 +381,118 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
     (my-codex--resize-window-to-body-width edit-window
                                             my-codex-left-width)))
 
+(defun my-codex--refresh-edit-fill-column-indicator ()
+  "Refresh the fill-column indicator after window layout changes."
+  (when (and my-codex--edit-fill-column-indicator-state
+             (fboundp 'display-fill-column-indicator-mode)
+             (bound-and-true-p display-fill-column-indicator-mode))
+    (display-fill-column-indicator-mode -1)
+    (display-fill-column-indicator-mode 1)))
+
+(defun my-codex--edit-window-codex-visible-p (window frame)
+  "Return non-nil if WINDOW's Codex buffer is visible in FRAME."
+  (when-let ((buffer (window-parameter window 'my-codex-term-buffer)))
+    (and (buffer-live-p buffer)
+         (get-buffer-window buffer frame))))
+
+(defun my-codex--restore-edit-fill-column-indicator (buffer)
+  "Restore BUFFER's fill-column indicator state saved by my-codex."
+  (setq my-codex--edit-fill-column-indicator-buffers
+        (delq buffer my-codex--edit-fill-column-indicator-buffers))
+  (when (and (buffer-live-p buffer)
+             (fboundp 'display-fill-column-indicator-mode))
+    (with-current-buffer buffer
+      (when my-codex--edit-fill-column-indicator-state
+        (let ((mode (plist-get my-codex--edit-fill-column-indicator-state
+                               :mode))
+              (column-local
+               (plist-get my-codex--edit-fill-column-indicator-state
+                          :column-local))
+              (column
+               (plist-get my-codex--edit-fill-column-indicator-state
+                          :column)))
+          (remove-hook 'window-configuration-change-hook
+                       #'my-codex--refresh-edit-fill-column-indicator
+                       t)
+          (if column-local
+              (setq-local display-fill-column-indicator-column column)
+            (kill-local-variable 'display-fill-column-indicator-column))
+          (display-fill-column-indicator-mode (if mode 1 -1))
+          (setq my-codex--edit-fill-column-indicator-state nil))))))
+
+(defun my-codex--apply-edit-fill-column-indicator (window)
+  "Show a fill-column indicator in WINDOW's buffer."
+  (when (and (fboundp 'display-fill-column-indicator-mode)
+             (window-live-p window))
+    (with-current-buffer (window-buffer window)
+      (unless my-codex--edit-fill-column-indicator-state
+        (setq-local my-codex--edit-fill-column-indicator-state
+                    (list
+                     :mode
+                     (bound-and-true-p display-fill-column-indicator-mode)
+                     :column-local
+                     (local-variable-p
+                      'display-fill-column-indicator-column)
+                     :column
+                     display-fill-column-indicator-column)))
+      (cl-pushnew (current-buffer)
+                  my-codex--edit-fill-column-indicator-buffers)
+      (setq-local display-fill-column-indicator-column 80)
+      (add-hook 'window-configuration-change-hook
+                #'my-codex--refresh-edit-fill-column-indicator
+                nil
+                t)
+      (display-fill-column-indicator-mode 1))))
+
+(defun my-codex--active-edit-fill-column-indicator-buffers ()
+  "Return buffers shown in live Codex edit windows."
+  (let (buffers)
+    (dolist (frame (frame-list))
+      (dolist (window (window-list frame 'no-minibuf))
+        (when (and (window-parameter window 'my-codex-edit-window)
+                   (my-codex--edit-window-codex-visible-p window frame))
+          (cl-pushnew (window-buffer window) buffers))))
+    buffers))
+
+(defun my-codex--restore-inactive-edit-fill-column-indicator-buffers ()
+  "Restore managed buffers no longer shown in a live Codex edit window."
+  (let ((active-buffers
+         (my-codex--active-edit-fill-column-indicator-buffers)))
+    (dolist (buffer (copy-sequence
+                     my-codex--edit-fill-column-indicator-buffers))
+      (unless (memq buffer active-buffers)
+        (my-codex--restore-edit-fill-column-indicator buffer)))))
+
+(defun my-codex--refresh-edit-fill-column-indicator-windows (frame)
+  "Apply Codex fill-column indicators to marked edit windows in FRAME."
+  (dolist (window (window-list frame 'no-minibuf))
+    (when (window-parameter window 'my-codex-edit-window)
+      (let ((previous-buffer
+             (window-parameter window 'my-codex-edit-buffer))
+            (current-buffer (window-buffer window)))
+        (unless (eq previous-buffer current-buffer)
+          (my-codex--restore-edit-fill-column-indicator previous-buffer))
+        (if (my-codex--edit-window-codex-visible-p window frame)
+            (progn
+              (set-window-parameter window 'my-codex-edit-buffer
+                                    current-buffer)
+              (my-codex--apply-edit-fill-column-indicator window))
+          (my-codex--restore-edit-fill-column-indicator current-buffer)
+          (my-codex--restore-edit-fill-column-indicator previous-buffer)
+          (set-window-parameter window 'my-codex-edit-buffer nil)
+          (set-window-parameter window 'my-codex-edit-window nil)
+          (set-window-parameter window 'my-codex-term-buffer nil)))))
+  (my-codex--restore-inactive-edit-fill-column-indicator-buffers))
+
+(defun my-codex--set-edit-fill-column-indicator-window (window)
+  "Mark WINDOW as the Codex edit window and update its indicator."
+  (let ((previous-buffer (window-parameter window 'my-codex-edit-buffer))
+        (current-buffer (window-buffer window)))
+    (unless (eq previous-buffer current-buffer)
+      (my-codex--restore-edit-fill-column-indicator previous-buffer))
+    (set-window-parameter window 'my-codex-edit-buffer current-buffer)
+    (my-codex--apply-edit-fill-column-indicator window)))
+
 (defun my-codex--enable-edit-fill-column-indicator (edit-window term-window)
   "Show a fill-column indicator in EDIT-WINDOW."
   (when (and (fboundp 'display-fill-column-indicator-mode)
@@ -382,9 +500,12 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
              (window-live-p term-window)
              (not (eq (window-buffer edit-window)
                       (window-buffer term-window))))
-    (with-current-buffer (window-buffer edit-window)
-      (setq-local display-fill-column-indicator-column 80)
-      (display-fill-column-indicator-mode 1))))
+    (set-window-parameter edit-window 'my-codex-edit-window t)
+    (set-window-parameter edit-window 'my-codex-term-buffer
+                          (window-buffer term-window))
+    (add-hook 'window-buffer-change-functions
+              #'my-codex--refresh-edit-fill-column-indicator-windows)
+    (my-codex--set-edit-fill-column-indicator-window edit-window)))
 
 (defun my-codex--safe-root-name (root)
   "Return a buffer-name-safe representation of ROOT."
