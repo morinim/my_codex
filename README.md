@@ -38,7 +38,7 @@ separate sessions.
 - Warn when project buffers have unsaved changes before sending prompts.
 - Run a health check for Emacs, Codex, vterm, Git, project state, configured
   commands, and terminal startup.
-- Enable useful display defaults when `my-codex-global-mode` starts.
+- Optionally enable useful display defaults with `my-codex-global-mode`.
 - Provide global keys and a Codex menu.
 
 ## Requirements
@@ -232,12 +232,14 @@ Preserve concrete file names, command names, and technical details. Do not edit 
 
 (setq my-codex-warn-about-unsaved-project-buffers t)
 (setq my-codex-enable-global-auto-revert t)
+(setq my-codex-enable-display-defaults nil)
 (setq my-codex-enable-session-links t)
 ```
 
-When `my-codex-global-mode` is enabled, it also enables trailing whitespace
-display and column numbers. When Codex opens beside an edit buffer, that buffer
-gets a fill-column indicator at column 80.
+When `my-codex-enable-display-defaults` is non-nil,
+`my-codex-global-mode` also enables trailing whitespace display and column
+numbers. When Codex opens beside an edit buffer, that buffer gets a
+fill-column indicator at column 80.
 
 `my-codex-enforce-right-side-layout` is disabled by default. Enable it only if
 you want my-codex to widen the selected frame and keep the edit/Codex windows at
