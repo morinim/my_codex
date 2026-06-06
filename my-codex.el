@@ -2389,10 +2389,21 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
   (or (get-buffer-window (my-codex-current-buffer-name))
       (user-error "No visible Codex window in selected frame")))
 
+(defun my-codex--associated-edit-window (codex-window)
+  "Return the edit window associated with CODEX-WINDOW, or nil."
+  (let ((codex-buffer (window-buffer codex-window)))
+    (seq-find
+     (lambda (window)
+       (and (window-parameter window 'my-codex-edit-window)
+            (eq (window-parameter window 'my-codex-term-buffer)
+                codex-buffer)))
+     (window-list (window-frame codex-window) 'no-minibuf))))
+
 (defun my-codex-code-window ()
   "Return the most likely coding window associated with Codex."
   (let ((codex-window (my-codex-visible-window)))
-    (let ((code-window (next-window codex-window nil)))
+    (let ((code-window (or (my-codex--associated-edit-window codex-window)
+                           (next-window codex-window nil))))
       (if (and code-window (not (eq code-window codex-window)))
           code-window
         (user-error "No coding window found")))))
