@@ -2546,7 +2546,7 @@ When a region is active, include exact file and line context for it."
           (when (member (car tokens) '("-a"))
             (setq tokens (cdr tokens)))
           (setq tokens (cdr tokens))))
-      (when (string= (car tokens) "env")
+      (when (and tokens (string= (car tokens) "env"))
         (setq tokens (cdr tokens))
         (while (and tokens
                     (or (my-codex--doctor-command-assignment-token-p (car tokens))
