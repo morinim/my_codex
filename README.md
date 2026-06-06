@@ -135,6 +135,8 @@ Inside `vterm`:
 | C-c C-t | Toggle `vterm` copy mode |
 | Page Up / Page Down | Scroll the terminal buffer |
 
+From the Codex `vterm`, `F8 d` Ediffs the file shown in the window to its left.
+
 ## Customisation
 
 Use:

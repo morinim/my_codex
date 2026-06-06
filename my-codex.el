@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.9.7
+;; Version: 0.9.8
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -1809,15 +1809,44 @@ repository toplevel."
          (worktree-buffer (find-file-noselect file)))
     (ediff-buffers head-buffer worktree-buffer)))
 
+(defun my-codex--selected-codex-vterm-window-p ()
+  "Return non-nil when the selected window is the current Codex vterm."
+  (let ((buffer (window-buffer (selected-window))))
+    (and (eq buffer (get-buffer (my-codex-current-buffer-name)))
+         (with-current-buffer buffer
+           (derived-mode-p 'vterm-mode)))))
+
+(defun my-codex--left-window-file-name ()
+  "Return the file visited by the window to the left, or nil."
+  (when-let* ((window (window-in-direction 'left (selected-window)))
+              (buffer (window-buffer window)))
+    (buffer-file-name buffer)))
+
+(defun my-codex--current-or-left-file-name ()
+  "Return the current file, using the left window from Codex vterm."
+  (cond
+   (buffer-file-name)
+   ((my-codex--selected-codex-vterm-window-p)
+    (or (my-codex--left-window-file-name)
+        (user-error "No file-visiting buffer to the left of Codex")))
+   (t
+    (user-error "Current buffer is not visiting a file"))))
+
+(defun my-codex--current-or-left-file-available-p ()
+  "Return non-nil when a file target is available for current-file commands."
+  (or buffer-file-name
+      (and (my-codex--selected-codex-vterm-window-p)
+           (my-codex--left-window-file-name))))
+
 (defun my-codex-ediff-current-file-against-head ()
-  "Review the current file's uncommitted changes against HEAD using Ediff."
+  "Review the current file's uncommitted changes against HEAD using Ediff.
+When invoked from the Codex vterm, use the file in the window to its left."
   (interactive)
-  (unless buffer-file-name
-    (user-error "Current buffer is not visiting a file"))
-  (let ((root (my-codex-project-root)))
+  (let ((file (my-codex--current-or-left-file-name))
+        (root (my-codex-project-root)))
     (let ((default-directory root))
       (my-codex--ensure-git-repository))
-    (my-codex--ediff-file-against-head buffer-file-name root)))
+    (my-codex--ediff-file-against-head file root)))
 
 (defun my-codex-ediff-changed-file-against-head ()
   "Choose a tracked changed file and review it against HEAD using Ediff."
@@ -2820,7 +2849,7 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
       :help "Ask Codex to review the staged Git diff"]
      ["Ediff current file against HEAD" my-codex-ediff-current-file-against-head
       :keys "F8 d"
-      :active buffer-file-name
+      :active (my-codex--current-or-left-file-available-p)
       :help "Review the current file's uncommitted changes against HEAD"]
      ["Ediff changed file against HEAD" my-codex-ediff-changed-file-against-head
       :keys "F8 D"
