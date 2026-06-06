@@ -180,6 +180,11 @@ BEGIN_COMMIT_MESSAGE and END_COMMIT_MESSAGE markers if you want
   :type 'boolean
   :group 'my-codex)
 
+(defcustom my-codex-enable-display-defaults nil
+  "When non-nil, enable editing display helpers with `my-codex-global-mode'."
+  :type 'boolean
+  :group 'my-codex)
+
 (defcustom my-codex-enable-session-links t
   "When non-nil, make URLs and file references clickable in Codex buffers."
   :type 'boolean
@@ -3059,7 +3064,8 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
   :keymap my-codex-global-mode-map
   (if my-codex-global-mode
       (progn
-        (my-codex--enable-display-defaults)
+        (when my-codex-enable-display-defaults
+          (my-codex--enable-display-defaults))
         (when (and my-codex-enable-global-auto-revert
                    (not my-codex--auto-revert-enabled-by-mode)
                    (not (bound-and-true-p global-auto-revert-mode)))
