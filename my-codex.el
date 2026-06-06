@@ -295,8 +295,14 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 (defvar-local my-codex--commit-message-request-signature nil
   "Staged diff signature used for the latest Codex commit message request.")
 
+(defvar-local my-codex--commit-message-wait-timer nil
+  "Active timer waiting for a Codex commit message.")
+
 (defvar-local my-codex--session-summary-request-marker nil
   "Marker for the start of the latest Codex session summary request.")
+
+(defvar-local my-codex--session-summary-wait-timer nil
+  "Active timer waiting for a Codex session summary.")
 
 (defvar-local my-codex--github-issue-creation-in-progress nil
   "Non-nil while the current GitHub issue draft is being submitted.")
@@ -2096,7 +2102,7 @@ empty output and any exact string in IGNORED-VALUES."
 (defun my-codex--wait-for-marked-output
     (buffer start-point begin-marker end-marker callback timeout-message
             ready-message poll-interval poll-attempts &optional
-            ignored-values attempts)
+            ignored-values attempts timer-var)
   "Poll BUFFER after START-POINT for marked output, then run CALLBACK.
 BEGIN-MARKER and END-MARKER delimit the output.  CALLBACK receives
 the extracted text.  ATTEMPTS tracks polling cycles."
@@ -2106,18 +2112,26 @@ the extracted text.  ATTEMPTS tracks polling cycles."
     (cond
      ((> attempts poll-attempts)
       (my-codex--clear-marker start-point)
+      (when timer-var
+        (my-codex--clear-buffer-local-timer buffer timer-var))
       (message "%s" timeout-message))
      (output
       (my-codex--clear-marker start-point)
+      (when timer-var
+        (my-codex--clear-buffer-local-timer buffer timer-var))
       (funcall callback output)
       (message "%s" ready-message))
      (t
-      (run-with-timer
-       poll-interval nil
-       #'my-codex--wait-for-marked-output
-       buffer start-point begin-marker end-marker callback timeout-message
-       ready-message poll-interval poll-attempts ignored-values
-       (1+ attempts))))))
+      (let ((timer
+             (run-with-timer
+              poll-interval nil
+              #'my-codex--wait-for-marked-output
+              buffer start-point begin-marker end-marker callback timeout-message
+              ready-message poll-interval poll-attempts ignored-values
+              (1+ attempts) timer-var)))
+        (when (and timer-var (buffer-live-p buffer))
+          (with-current-buffer buffer
+            (set timer-var timer))))))))
 
 (defun my-codex-latest-commit-message-after (buffer start-point)
   "Return the commit message in BUFFER appearing after START-POINT, or nil."
@@ -2259,10 +2273,21 @@ Kill COMMIT-BUFFER after a successful commit when it is non-nil."
   (when (markerp marker)
     (set-marker marker nil)))
 
+(defun my-codex--clear-buffer-local-timer (buffer timer-var)
+  "Cancel and clear TIMER-VAR in BUFFER when it names a timer."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (when (timerp (symbol-value timer-var))
+        (cancel-timer (symbol-value timer-var)))
+      (set timer-var nil))))
+
 (defun my-codex--wait-for-commit-message (buffer start-point root &optional attempts)
   "Poll BUFFER after START-POINT for a finished commit message.
 ROOT is the Git repository root used for the eventual commit.
 ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
+  (unless attempts
+    (my-codex--clear-buffer-local-timer
+     buffer 'my-codex--commit-message-wait-timer))
   (my-codex--wait-for-marked-output
    buffer start-point
    "BEGIN_COMMIT_MESSAGE"
@@ -2274,7 +2299,8 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
    my-codex-commit-message-poll-interval
    my-codex-commit-message-poll-attempts
    '("..." "<commit message here>")
-   attempts))
+   attempts
+   'my-codex--commit-message-wait-timer))
 
 (defun my-codex--wait-for-session-summary
     (buffer start-point root begin-marker end-marker
@@ -2286,6 +2312,9 @@ CALLBACK receives the summary and defaults to opening an editable buffer.
 READY-MESSAGE is shown after a summary is found.
 IGNORED-VALUES are additional exact placeholder outputs to ignore.
 ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
+  (unless attempts
+    (my-codex--clear-buffer-local-timer
+     buffer 'my-codex--session-summary-wait-timer))
   (my-codex--wait-for-marked-output
    buffer start-point
    begin-marker
@@ -2298,7 +2327,8 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
    my-codex-session-summary-poll-interval
    my-codex-session-summary-poll-attempts
    (append '("..." "<Markdown notes here>") ignored-values)
-   attempts))
+   attempts
+   'my-codex--session-summary-wait-timer))
 
 (defun my-codex-git-commit-with-latest-message ()
   "Edit a commit with the latest Codex message, or ask Codex for one and wait."
