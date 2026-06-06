@@ -134,6 +134,14 @@ When nil, use `compile-command'."
   :type 'string
   :group 'my-codex)
 
+(defcustom my-codex-test-coverage-prompt
+  "Please analyse the test coverage for this implementation and its test file.
+
+Identify missing edge cases, unhandled exceptions, logical flaws, and important behaviour that is not currently tested. Do not edit files and do not write tests; only list the missing scenarios."
+  "Prompt used by `my-codex-analyse-test-coverage'."
+  :type 'string
+  :group 'my-codex)
+
 (defcustom my-codex-commit-message-prompt-template
   "Please inspect the staged Git diff using `git diff --cached -- .` and write a concise but comprehensive conventional commit message.
 
@@ -1263,6 +1271,110 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
     (my-codex--preview-and-send-prompt
      (format "Please inspect `%s` directly and report findings. Do not edit it unless I explicitly ask.\n"
              file))))
+
+(defun my-codex--project-relative-file (file root)
+  "Return FILE relative to ROOT, or nil when FILE is outside ROOT."
+  (let ((truename (file-truename file))
+        (root-truename (file-name-as-directory (file-truename root))))
+    (when (file-in-directory-p truename root-truename)
+      (file-relative-name truename root-truename))))
+
+(defun my-codex--projectile-counterpart-file ()
+  "Return Projectile's implementation/test counterpart for current file, or nil."
+  (when (fboundp 'projectile-toggle-between-implementation-and-test)
+    (let ((current-file (buffer-file-name)))
+      (when current-file
+        (save-window-excursion
+          (save-current-buffer
+            (condition-case nil
+                (progn
+                  (call-interactively
+                   #'projectile-toggle-between-implementation-and-test)
+                  (let ((candidate (buffer-file-name)))
+                    (when (and candidate
+                               (not (file-equal-p candidate current-file))
+                               (file-readable-p candidate))
+                      candidate)))
+              (error nil))))))))
+
+(defun my-codex--test-file-candidates (file root)
+  "Return likely test file candidates for FILE under ROOT."
+  (let* ((relative (file-relative-name file root))
+         (directory (or (file-name-directory relative) ""))
+         (basename (file-name-base relative))
+         (extension (or (file-name-extension relative t) ""))
+         (file-name (file-name-nondirectory relative))
+         (without-src (if (string-prefix-p "src/" relative)
+                          (substring relative 4)
+                        relative))
+         (dir-without-src (or (file-name-directory without-src) ""))
+         (common
+          (delq nil
+                (list
+                 (concat "test/" without-src)
+                 (concat "tests/" without-src)
+                 (concat "spec/" without-src)
+                 (concat "test/" dir-without-src "test_" file-name)
+                 (concat "tests/" dir-without-src "test_" file-name)
+                 (concat "test/" dir-without-src basename "_test" extension)
+                 (concat "tests/" dir-without-src basename "_test" extension)
+                 (concat "spec/" dir-without-src basename "_spec" extension)
+                 (concat directory basename "-test" extension)
+                 (concat directory basename "_test" extension)
+                 (concat directory basename ".test" extension)
+                 (concat directory basename "-spec" extension)
+                 (concat directory basename "_spec" extension)
+                 (concat directory basename ".spec" extension))))
+         (seen nil)
+         (candidates nil))
+    (dolist (candidate common (nreverse candidates))
+      (unless (member candidate seen)
+        (push candidate seen)
+        (push (expand-file-name candidate root) candidates)))))
+
+(defun my-codex--read-test-file (implementation-file root)
+  "Read a test file for IMPLEMENTATION-FILE under ROOT."
+  (let* ((root (file-name-as-directory (expand-file-name root)))
+         (projectile-file (my-codex--projectile-counterpart-file))
+         (projectile-file
+          (when (and projectile-file
+                     (file-in-directory-p (file-truename projectile-file)
+                                          (file-truename root)))
+            projectile-file))
+         (candidates (append (when projectile-file (list projectile-file))
+                             (my-codex--test-file-candidates
+                              implementation-file root)))
+         (existing (seq-filter #'file-readable-p candidates))
+         (default (car existing))
+         (file (expand-file-name
+                (read-file-name "Test file: " root default t)
+                root)))
+    (unless (file-in-directory-p (file-truename file)
+                                 (file-truename root))
+      (user-error "Test file is outside the current project"))
+    file))
+
+(defun my-codex-analyse-test-coverage ()
+  "Ask Codex to analyse coverage of the current file by its test file."
+  (interactive)
+  (unless buffer-file-name
+    (user-error "Current buffer is not visiting a file"))
+  (let* ((root (my-codex-project-root))
+         (implementation-file buffer-file-name)
+         (test-file (my-codex--read-test-file implementation-file root))
+         (implementation-relative
+          (my-codex--project-relative-file implementation-file root))
+         (test-relative (my-codex--project-relative-file test-file root)))
+    (unless implementation-relative
+      (user-error "Implementation file is outside the current project"))
+    (unless test-relative
+      (user-error "Test file is outside the current project"))
+    (my-codex--preview-and-send-prompt
+     (string-join
+      (list my-codex-test-coverage-prompt
+            (format "Implementation: @%s" implementation-relative)
+            (format "Test: @%s" test-relative))
+      "\n\n"))))
 
 (defun my-codex--symbol-at-point ()
   "Return the symbol at point, or raise a user error."
@@ -2498,6 +2610,7 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
   "<right>" #'my-codex-send-region
   "<left>"  #'my-codex-insert-selection-into-code
   "f"       #'my-codex-send-current-file
+  "C"       #'my-codex-analyse-test-coverage
   "x"       #'my-codex-explain-symbol-at-point
   "g"       #'my-codex-send-git-diff
   "G"       #'my-codex-send-git-staged-diff
@@ -2531,6 +2644,7 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
     ("<right>" "Region" my-codex-send-region)
     ("<left>" "Insert selection" my-codex-insert-selection-into-code)
     ("f" "Current file" my-codex-send-current-file)
+    ("C" "Coverage gaps" my-codex-analyse-test-coverage)
     ("x" "Explain symbol" my-codex-explain-symbol-at-point)
     ("p" "Project overview" my-codex-send-project-overview)]
    ["Git"
@@ -2686,6 +2800,10 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
       :keys "F8 f"
       :active buffer-file-name
       :help "Ask Codex to inspect the current file directly"]
+     ["Analyse test coverage" my-codex-analyse-test-coverage
+      :keys "F8 C"
+      :active buffer-file-name
+      :help "Ask Codex to analyse missing test scenarios for the current file"]
      ["Explain symbol at point" my-codex-explain-symbol-at-point
       :keys "F8 x"
       :active buffer-file-name

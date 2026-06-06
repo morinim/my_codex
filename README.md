@@ -23,6 +23,7 @@ separate sessions.
 - Use a right-side Codex layout and hide it without disturbing other windows.
 - Send selected code, symbols, the current file, Git diffs, or staged Git
   diffs.
+- Analyse an implementation alongside its test file for missing coverage.
 - Ask free-form questions from the minibuffer.
 - Ask from customisable prompt presets for common transformations.
 - Draft a commit message from staged changes, then open an editable commit.
@@ -100,6 +101,7 @@ Prefix bindings:
 | F8 Left | `my-codex-insert-selection-into-code` | Insert selected Codex text into code |
 | F8 TAB | `my-codex-toggle-focus` | Toggle focus between code and Codex |
 | F8 f | `my-codex-send-current-file` | Ask Codex to inspect the current file |
+| F8 C | `my-codex-analyse-test-coverage` | Analyse missing test coverage for the current file |
 | F8 x | `my-codex-explain-symbol-at-point` | Explain the symbol at point |
 | F8 g | `my-codex-send-git-diff` | Review the current Git diff |
 | F8 G | `my-codex-send-git-staged-diff` | Review the staged Git diff |
@@ -168,6 +170,10 @@ Common options:
       "Please review the current Git diff using `git diff -- .`. Focus on correctness, regressions, edge cases, naming, and maintainability. Do not edit files unless I explicitly ask.\n")
 (setq my-codex-git-staged-diff-review-prompt
       "Please review the staged Git diff using `git diff --cached -- .`. Focus on correctness, regressions, edge cases, and commit readiness. Do not edit files unless I explicitly ask.\n")
+(setq my-codex-test-coverage-prompt
+      "Please analyse the test coverage for this implementation and its test file.
+
+Identify missing edge cases, unhandled exceptions, logical flaws, and important behaviour that is not currently tested. Do not edit files and do not write tests; only list the missing scenarios.")
 (setq my-codex-commit-message-prompt-template
       "Please inspect the staged Git diff using `git diff --cached -- .` and write a concise but comprehensive conventional commit message.
 
@@ -240,6 +246,12 @@ should control the layout.
 In the prompt preset menu (`F8 A`), the `Additional instructions` minibuffer
 supports project file completion when the current line starts with `@`. Type
 `@` followed by part of a project-relative path, then press `TAB`.
+
+`my-codex-analyse-test-coverage` (`F8 C`) sends `@` references for the current
+buffer and a test file to Codex for read-only coverage analysis. If Projectile
+is loaded, it tries `projectile-toggle-between-implementation-and-test` first.
+Otherwise it checks common test file names and asks you to choose the test file
+when needed.
 
 When `my-codex-enable-prompt-preview` is non-nil, prompts open an editable
 `*Codex prompt preview*` buffer before sending. Press `C-c C-c` to send the
