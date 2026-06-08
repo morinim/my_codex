@@ -314,11 +314,12 @@ per-request markers to the prompt so older summaries echoed in the transcript
 cannot be mistaken for the new response.
 
 Use `F8 T` to ask Codex for a GitHub issue title and body from the current
-session transcript. The generated draft opens in an editable buffer. Press
-`C-c C-c` to create the issue in the current repository with
-`gh issue create --title TITLE --body-file FILE`, or `C-c C-k` to cancel. It
-uses unique markers in the same way as
-`my-codex-summarize-session-to-markdown`.
+session transcript. The generated draft opens in an editable buffer with the
+target `Repository: owner/repo` shown above the title and body. Press `C-c C-c`
+to create the issue in that repository with
+`gh issue create --title TITLE --body-file FILE`, or `C-c C-k` to cancel. The
+repository is checked again before submission, and the command uses unique
+markers in the same way as `my-codex-summarize-session-to-markdown`.
 
 Use `F8 t` to list open GitHub issues for the current repository in a
 read-only buffer. This runs `gh issue list --state open --limit 100` from the

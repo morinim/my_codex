@@ -312,6 +312,9 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 (defvar-local my-codex--github-issue-creation-in-progress nil
   "Non-nil while the current GitHub issue draft is being submitted.")
 
+(defvar-local my-codex--github-issue-repository nil
+  "GitHub repository selected for the current issue draft.")
+
 (defvar my-codex--captured-selection nil
   "Text captured before opening a transient from an active region.")
 
@@ -890,24 +893,53 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (message "Listing open issues with gh...")
       process)))
 
+(defun my-codex--github-repository-name (root)
+  "Return the GitHub repository name resolved by `gh' from ROOT."
+  (unless (executable-find "gh")
+    (user-error "GitHub CLI `gh' not found in exec-path"))
+  (with-temp-buffer
+    (let ((default-directory root))
+      (unless (eq 0 (process-file "gh" nil t nil
+                                  "repo" "view"
+                                  "--json" "nameWithOwner"
+                                  "--jq" ".nameWithOwner"))
+        (user-error "Unable to determine GitHub repository with gh")))
+    (let ((repository (string-trim (buffer-string))))
+      (when (string-empty-p repository)
+        (user-error "GitHub repository name is empty"))
+      repository)))
+
 (defun my-codex--parse-github-issue-draft (draft)
-  "Return a cons of issue title and body parsed from DRAFT."
+  "Return issue fields parsed from DRAFT as a plist."
   (let ((text (string-trim draft)))
     (unless (string-match
-             "\\`[ \t\n]*Title:[ \t]*\\([^\n]+\\)\n+[ \t]*Body:[ \t]*\n*"
+             (concat "\\`[ \t\n]*"
+                     "\\(?:Repository:[ \t]*\\([^\n]+\\)\n+[ \t]*\\)?"
+                     "Title:[ \t]*\\([^\n]+\\)\n+[ \t]*Body:[ \t]*\n*")
              text)
       (user-error "Could not parse GitHub issue draft"))
-    (let ((title (string-trim (match-string 1 text)))
+    (let ((repository (when-let (repository (match-string 1 text))
+                        (string-trim repository)))
+          (title (string-trim (match-string 2 text)))
           (body (string-trim (substring text (match-end 0)))))
       (when (string-empty-p title)
         (user-error "GitHub issue title is empty"))
       (when (string-empty-p body)
         (user-error "GitHub issue body is empty"))
-      (cons title body))))
+      (list :repository repository :title title :body body))))
 
-(defun my-codex--github-issue-draft-text (title body)
-  "Return editable GitHub issue draft text for TITLE and BODY."
-  (format "Title: %s\n\nBody:\n%s\n" title (string-trim body)))
+(defun my-codex--github-issue-draft-text (repository title body)
+  "Return editable GitHub issue draft text for REPOSITORY, TITLE, and BODY."
+  (format "Repository: %s\n\nTitle: %s\n\nBody:\n%s\n"
+          repository title (string-trim body)))
+
+(defun my-codex--github-issue-draft-header-line (&optional repository)
+  "Return the GitHub issue draft header line for REPOSITORY."
+  (if repository
+      (format
+       "Edit GitHub issue draft for %s. C-c C-c creates issue; C-c C-k cancels."
+       repository)
+    "Edit GitHub issue draft. C-c C-c creates issue; C-c C-k cancels."))
 
 (defun my-codex--github-issue-process-sentinel (proc _event)
   "Handle completion of GitHub issue creation process PROC."
@@ -931,7 +963,8 @@ Open the generated notes in an editable Markdown buffer when they are ready."
           (with-current-buffer draft-buffer
             (setq my-codex--github-issue-creation-in-progress nil)
             (setq-local header-line-format
-                        "Edit GitHub issue draft. C-c C-c creates issue; C-c C-k cancels.")))
+                        (my-codex--github-issue-draft-header-line
+                         my-codex--github-issue-repository))))
         (when (buffer-live-p buffer)
           (with-current-buffer buffer
             (goto-char (point-max))
@@ -985,7 +1018,21 @@ Open the generated notes in an editable Markdown buffer when they are ready."
   (interactive)
   (when my-codex--github-issue-creation-in-progress
     (user-error "GitHub issue creation is already in progress"))
-  (pcase-let ((`(,title . ,body) (my-codex--github-issue-draft-fields)))
+  (let* ((fields (my-codex--github-issue-draft-fields))
+         (repository (plist-get fields :repository))
+         (title (plist-get fields :title))
+         (body (plist-get fields :body))
+         (expected-repository my-codex--github-issue-repository)
+         (current-repository
+          (my-codex--github-repository-name default-directory)))
+    (unless repository
+      (user-error "GitHub issue repository is missing from draft"))
+    (unless (equal repository expected-repository)
+      (user-error "GitHub issue repository changed from %s to %s"
+                  expected-repository repository))
+    (unless (equal repository current-repository)
+      (user-error "GitHub repository changed from %s to %s"
+                  repository current-repository))
     (setq my-codex--github-issue-creation-in-progress t)
     (setq-local header-line-format
                 "Creating GitHub issue with gh; wait for completion.")
@@ -995,7 +1042,8 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (error
        (setq my-codex--github-issue-creation-in-progress nil)
        (setq-local header-line-format
-                   "Edit GitHub issue draft. C-c C-c creates issue; C-c C-k cancels.")
+                   (my-codex--github-issue-draft-header-line
+                    my-codex--github-issue-repository))
        (signal (car err) (cdr err))))))
 
 (defun my-codex--cancel-github-issue-draft ()
@@ -1008,20 +1056,23 @@ Open the generated notes in an editable Markdown buffer when they are ready."
 
 (defun my-codex-edit-github-issue-draft (draft root)
   "Open an editable GitHub issue DRAFT for ROOT."
-  (pcase-let* ((`(,title . ,body)
-                (my-codex--parse-github-issue-draft draft))
-               (buffer
-                (get-buffer-create
-                 (my-codex--github-issue-draft-buffer-name root))))
+  (let* ((repository (my-codex--github-repository-name root))
+         (fields (my-codex--parse-github-issue-draft draft))
+         (title (plist-get fields :title))
+         (body (plist-get fields :body))
+         (buffer
+          (get-buffer-create
+           (my-codex--github-issue-draft-buffer-name root))))
     (pop-to-buffer buffer)
     (let ((inhibit-read-only t))
       (erase-buffer)
-      (insert (my-codex--github-issue-draft-text title body))
+      (insert (my-codex--github-issue-draft-text repository title body))
       (goto-char (point-min)))
     (setq default-directory root)
     (my-codex--session-export-mode)
+    (setq my-codex--github-issue-repository repository)
     (setq-local header-line-format
-                "Edit GitHub issue draft. C-c C-c creates issue; C-c C-k cancels.")
+                (my-codex--github-issue-draft-header-line repository))
     (let ((map (define-keymap :parent (current-local-map)
                  "C-c C-c" #'my-codex--create-github-issue-from-draft
                  "C-c C-k" #'my-codex--cancel-github-issue-draft)))
