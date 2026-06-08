@@ -323,7 +323,7 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 
 (defun my-codex--shell-command-and-exit (command)
   "Return shell text that runs COMMAND, then exits with its status."
-  (format "(%s); exit $?" command))
+  (format "%s\nstatus=$?\nexit $status" command))
 
 (defun my-codex--right-window-width (window)
   "Resize WINDOW to the target Codex width when enforcement is enabled."
