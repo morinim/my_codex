@@ -532,13 +532,19 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
      default-directory)))
 
 (defun my-codex-current-buffer-name ()
-  "Return a project-specific buffer name for the Codex session."
+  "Return the buffer name for the current Codex session."
   (if-let* ((project (project-current))
             (root (file-truename (project-root project)))
             (name (file-name-nondirectory (directory-file-name root)))
             (hash (substring (secure-hash 'sha1 root) 0 8)))
       (format "*codex:%s:%s*" name hash)
-    my-codex-buffer-name))
+    (if (equal my-codex-buffer-name
+               (eval (car (get 'my-codex-buffer-name 'standard-value)) t))
+        (let* ((root (file-truename (my-codex-project-root)))
+               (name (file-name-nondirectory (directory-file-name root)))
+               (hash (substring (secure-hash 'sha1 root) 0 8)))
+          (format "*codex:%s:%s*" name hash))
+      my-codex-buffer-name)))
 
 (defun my-codex-modified-project-buffers ()
   "Return modified file-visiting buffers belonging to the current project."
