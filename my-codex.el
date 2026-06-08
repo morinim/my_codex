@@ -2018,7 +2018,10 @@ When invoked from the Codex vterm, use the file in the window to its left."
       (setq my-codex--commit-message-request-signature signature)
       (setq my-codex--commit-message-request-marker
             (copy-marker (point-max))))
-    (my-codex-send-prompt (my-codex--commit-message-prompt))))
+    (my-codex-send-prompt (my-codex--commit-message-prompt))
+    (message
+     "Asked Codex to draft a commit message; use F8 c or M-x %s to edit and commit it."
+     "my-codex-git-commit-with-latest-message")))
 
 (defun my-codex--terminal-marker-regexp (marker)
   "Return a regexp matching MARKER with terminal whitespace artefacts."
