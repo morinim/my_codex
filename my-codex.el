@@ -952,12 +952,15 @@ Open the generated notes in an editable Markdown buffer when they are ready."
         (ignore-errors
           (delete-file file)))
       (if (zerop status)
-          (when (buffer-live-p buffer)
-            (with-current-buffer buffer
-              (goto-char (point-min))
-              (message "GitHub issue created: %s"
-                       (string-trim (buffer-string))))
+          (progn
+            (when (buffer-live-p buffer)
+              (with-current-buffer buffer
+                (goto-char (point-min))
+                (message "GitHub issue created: %s"
+                         (string-trim (buffer-string)))))
             (when (buffer-live-p draft-buffer)
+              (with-current-buffer draft-buffer
+                (setq my-codex--github-issue-creation-in-progress nil))
               (quit-windows-on draft-buffer t)))
         (when (buffer-live-p draft-buffer)
           (with-current-buffer draft-buffer
