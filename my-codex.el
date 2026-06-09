@@ -1129,7 +1129,9 @@ Open an editable issue draft before running `gh issue create'."
 
 (defconst my-codex--file-reference-regexp
   (concat
-   "\\(?1:\\(?:[[:alnum:]_.@+-]+/\\)*[[:alnum:]_.@+-]+\\.[[:alnum:]_.@+-]+\\)"
+   "\\(?1:\\(?:[[:alnum:]_.@+-]+/\\)*"
+   "\\(?:[[:alnum:]_.@+-]+\\.[[:alnum:]_.@+-]+"
+   "\\|Makefile\\|Dockerfile\\|README\\|LICENSE\\)\\)"
    "\\(?:"
    ":\\(?2:[0-9]+\\)\\(?::\\(?3:[0-9]+\\)\\)?"
    "\\|"
@@ -1144,7 +1146,8 @@ Supported forms include:
   src/foo.el:42
   src/foo.el:42:7
   src/foo.el:L42-L60
-  src/foo.el#L42-L60")
+  src/foo.el#L42-L60
+  Makefile:10")
 
 (defconst my-codex--file-reference-context-lines 3
   "Number of preceding lines used to resolve split file references.")
