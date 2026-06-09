@@ -25,6 +25,7 @@
 
 (require 'compile)
 (require 'ansi-color)
+(require 'browse-url)
 (require 'cl-lib)
 (require 'ediff)
 (require 'easymenu)
@@ -40,6 +41,7 @@
 (autoload 'vterm-yank "vterm" nil t)
 (autoload 'vterm-copy-mode "vterm" nil t)
 (declare-function markdown-mode "markdown-mode")
+(declare-function projectile-toggle-between-implementation-and-test "projectile")
 (defvar vterm-mode-map)
 (defvar vterm-copy-mode)
 
