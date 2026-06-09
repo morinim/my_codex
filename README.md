@@ -69,6 +69,32 @@ Then add:
 (my-codex-global-mode 1)
 ```
 
+## Updating Codex CLI
+
+This repository includes optional helper scripts for updating direct GitHub
+binary installations of Codex CLI:
+
+```sh
+./update-codex.sh
+```
+
+On Windows, run from PowerShell:
+
+```powershell
+.\update-codex.ps1
+```
+
+The scripts are intentionally conservative. They only update installations
+where the active `codex` command points to a direct binary downloaded from the
+OpenAI Codex GitHub releases, and they refuse common package-manager or wrapper
+installations such as npm, Homebrew, Snap, Flatpak, Scoop, Chocolatey, or
+winget. If you installed Codex with a package manager, update it with that
+package manager instead.
+
+Depending on where `codex` is installed, the Linux script may ask for `sudo`.
+On Windows, close running Codex sessions first and use an elevated PowerShell
+session if the destination directory requires administrator rights.
+
 ## Basic Usage
 
 Start Codex first:
