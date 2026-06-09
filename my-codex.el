@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.9.8
+;; Version: 0.9.9
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -141,6 +141,24 @@ When nil, use `compile-command'."
 
 Identify missing edge cases, unhandled exceptions, logical flaws, and important behaviour that is not currently tested. Do not edit files and do not write tests; only list the missing scenarios."
   "Prompt used by `my-codex-analyse-test-coverage'."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-refactor-plan-prompt
+  "Draft a step-by-step, low-risk refactoring plan for this code.
+
+Do not provide rewritten code or patches.
+
+Focus on:
+- current responsibilities and likely coupling
+- small refactoring steps in a safe order
+- potential breaking changes
+- tests or checks to run after each step
+- rollback points
+- assumptions that need confirmation before editing
+
+Finish with the smallest safe first edit worth making."
+  "Prompt used by `my-codex-plan-refactor-region'."
   :type 'string
   :group 'my-codex)
 
@@ -2446,6 +2464,27 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
    (format "Please explain this compiler/test error and suggest the most likely fix:\n\n%s"
            (buffer-substring-no-properties (region-beginning) (region-end)))))
 
+(defun my-codex--region-file-reference (beg end)
+  "Return a Codex file reference for the region between BEG and END."
+  (unless buffer-file-name
+    (user-error "Current buffer is not visiting a file"))
+  (let* ((root (my-codex-project-root))
+         (file (file-relative-name buffer-file-name root))
+         (line-start (line-number-at-pos beg t))
+         (line-end (line-number-at-pos (max beg (1- end)) t)))
+    (format "@%s lines %d-%d" file line-start line-end)))
+
+(defun my-codex-plan-refactor-region (beg end)
+  "Ask Codex for a safe refactoring plan for the active region.
+Send only a file and line-range reference, not the selected text."
+  (interactive "r")
+  (unless (use-region-p)
+    (user-error "No active region"))
+  (my-codex--preview-and-send-prompt
+   (format "%s\n\n%s"
+           my-codex-refactor-plan-prompt
+           (my-codex--region-file-reference beg end))))
+
 (defun my-codex-open-project-instructions ()
   "Open the project Codex/agent instruction file, if present."
   (interactive)
@@ -2872,6 +2911,7 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
   "A"       #'my-codex-ask-preset-transient
   "s"       #'my-codex-send-region
   "<right>" #'my-codex-send-region
+  "R"       #'my-codex-plan-refactor-region
   "<left>"  #'my-codex-insert-selection-into-code
   "f"       #'my-codex-send-current-file
   "C"       #'my-codex-analyse-test-coverage
@@ -2906,6 +2946,7 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
     ("A" "Preset menu" my-codex-ask-preset-transient)
     ("s" "Region" my-codex-send-region)
     ("<right>" "Region" my-codex-send-region)
+    ("R" "Refactor plan" my-codex-plan-refactor-region)
     ("<left>" "Insert selection" my-codex-insert-selection-into-code)
     ("f" "Current file" my-codex-send-current-file)
     ("C" "Coverage gaps" my-codex-analyse-test-coverage)
@@ -3057,6 +3098,10 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
       :keys "F8 s"
       :active (use-region-p)
       :help "Send the selected region to Codex"]
+     ["Plan refactor for selected region" my-codex-plan-refactor-region
+      :keys "F8 R"
+      :active (and (use-region-p) buffer-file-name)
+      :help "Ask Codex for a low-risk refactoring plan without sending the code"]
      ["Insert selection" my-codex-insert-selection-into-code
       :keys "F8 Left"
       :help "Insert the captured Codex selection into the code buffer"]

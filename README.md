@@ -23,6 +23,8 @@ separate sessions.
 - Use a right-side Codex layout and hide it without disturbing other windows.
 - Send selected code, symbols, the current file, Git diffs, or staged Git
   diffs.
+- Draft low-risk refactoring plans for selected file ranges without sending
+  the selected code.
 - Analyse an implementation alongside its test file for missing coverage.
 - Ask free-form questions from the minibuffer.
 - Ask from customisable prompt presets for common transformations.
@@ -98,6 +100,7 @@ Prefix bindings:
 | F8 A | `my-codex-ask-preset-transient` | Open the prompt preset menu |
 | F8 s | `my-codex-send-region` | Send the selected region |
 | F8 Right | `my-codex-send-region` | Send the selected region |
+| F8 R | `my-codex-plan-refactor-region` | Draft a refactoring plan for the selected file range |
 | F8 Left | `my-codex-insert-selection-into-code` | Insert selected Codex text into code |
 | F8 TAB | `my-codex-toggle-focus` | Toggle focus between code and Codex |
 | F8 f | `my-codex-send-current-file` | Ask Codex to inspect the current file |
@@ -176,6 +179,20 @@ Common options:
       "Please analyse the test coverage for this implementation and its test file.
 
 Identify missing edge cases, unhandled exceptions, logical flaws, and important behaviour that is not currently tested. Do not edit files and do not write tests; only list the missing scenarios.")
+(setq my-codex-refactor-plan-prompt
+      "Draft a step-by-step, low-risk refactoring plan for this code.
+
+Do not provide rewritten code or patches.
+
+Focus on:
+- current responsibilities and likely coupling
+- small refactoring steps in a safe order
+- potential breaking changes
+- tests or checks to run after each step
+- rollback points
+- assumptions that need confirmation before editing
+
+Finish with the smallest safe first edit worth making.")
 (setq my-codex-commit-message-prompt-template
       "Please inspect the staged Git diff using `git diff --cached -- .` and write a concise but comprehensive conventional commit message.
 
@@ -288,8 +305,10 @@ approvals_reviewer = "user"
 ## Notes
 
 Use `F8 s` or `F8 Right` for small snippets, and `F8 x` for a quick
-explanation of the symbol at point. For larger reviews, prefer `F8 f`, `F8 g`,
-or `F8 G`, which ask Codex to inspect files or diffs directly.
+explanation of the symbol at point. Use `F8 R` to ask for a low-risk
+refactoring plan for the selected file range; it sends an `@file lines
+START-END` reference rather than the selected text. For larger reviews, prefer
+`F8 f`, `F8 g`, or `F8 G`, which ask Codex to inspect files or diffs directly.
 
 To copy text from Codex, use `C-c C-t` in the `vterm` buffer, select text, then
 press `F8`. While `vterm-copy-mode` is active, my-codex shows a header-line
