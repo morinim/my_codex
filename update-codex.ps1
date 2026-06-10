@@ -1,4 +1,11 @@
 #!/usr/bin/env pwsh
+
+# SPDX-License-Identifier: MPL-2.0
+#
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
@@ -48,6 +55,7 @@ try {
 
 $CodexPath = [System.IO.Path]::GetFullPath($CodexCommand.Source)
 $CodexDir = Split-Path -Parent $CodexPath
+$SandboxSetupPath = Join-Path $CodexDir "codex-windows-sandbox-setup.exe"
 
 if (-not (Test-Path -LiteralPath $CodexPath -PathType Leaf)) {
     Fail "Active codex is not a regular file: $CodexPath"
@@ -141,28 +149,27 @@ Close any running Codex sessions and, if needed, run this script from an elevate
     }
 
     Download-And-Install "codex" $CodexPath
-
-    $SandboxSetupPath = Join-Path $CodexDir "codex-windows-sandbox-setup.exe"
-
-    Write-Host
-
-    if (Test-Path -LiteralPath $SandboxSetupPath -PathType Leaf) {
-        Write-Host "Detected Codex Windows sandbox setup executable:"
-        Write-Host "  $SandboxSetupPath"
-    } else {
-        Write-Host "No codex-windows-sandbox-setup.exe found next to codex."
-        Write-Host "Installing it next to codex:"
-        Write-Host "  $SandboxSetupPath"
-    }
-
     Download-And-Install "codex-windows-sandbox-setup" $SandboxSetupPath
 
     Write-Host
-    & $CodexPath --version
 
-    if (Test-Path -LiteralPath $SandboxSetupPath -PathType Leaf) {
-        & $SandboxSetupPath --version
+    $UpdatedVersion = & $CodexPath --version
+
+    if ($LASTEXITCODE -ne 0 -or $UpdatedVersion -notmatch "^codex-cli ") {
+        Fail "Updated codex executable does not look valid: $CodexPath"
     }
+
+    Write-Host $UpdatedVersion
+
+    if (-not (Test-Path -LiteralPath $SandboxSetupPath -PathType Leaf)) {
+        Fail "Sandbox setup helper was not installed: $SandboxSetupPath"
+    }
+
+    Write-Host "Sandbox setup helper installed:"
+    Write-Host "  $SandboxSetupPath"
+    Write-Host
+    Write-Host "Note: the sandbox helper is installed, but this script does not test whether"
+    Write-Host "the Windows sandbox works. It may fail in virtualised environments."
 }
 finally {
     Remove-Item -LiteralPath $TempDir -Recurse -Force -ErrorAction SilentlyContinue
