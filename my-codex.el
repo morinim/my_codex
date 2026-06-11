@@ -1201,6 +1201,7 @@ TYPE is one of `url' or `file'.  TARGET is link-specific data."
    `(mouse-face highlight
      help-echo "mouse-1 or RET: open link"
      keymap ,my-codex-session-link-map
+     my-codex-session-link t
      my-codex-session-link-type ,type
      my-codex-session-link-target ,target
      font-lock-face link)))
@@ -1333,14 +1334,22 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
 
 (defun my-codex--clear-session-links (beg end)
   "Remove Codex session link properties between BEG and END."
-  (remove-text-properties
-   beg end
-   '(mouse-face nil
-     help-echo nil
-     keymap nil
-     my-codex-session-link-type nil
-     my-codex-session-link-target nil
-     font-lock-face nil)))
+  (let ((pos beg)
+        next)
+    (while (< pos end)
+      (setq next (next-single-property-change
+                  pos 'my-codex-session-link nil end))
+      (when (get-text-property pos 'my-codex-session-link)
+        (remove-text-properties
+         pos next
+         '(mouse-face nil
+           help-echo nil
+           keymap nil
+           my-codex-session-link nil
+           my-codex-session-link-type nil
+           my-codex-session-link-target nil
+           font-lock-face nil)))
+      (setq pos next))))
 
 (defun my-codex--linkify-session-region (beg end &optional _len)
   "Add Codex session links in the region from BEG to END."
