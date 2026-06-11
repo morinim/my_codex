@@ -81,6 +81,41 @@
         "test/ (1 file)"
         "  my-codex-test.el")))))
 
+(ert-deftest my-codex-xref-items-section-formats-relative-excerpts ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-xref" t))))
+    (unwind-protect
+        (with-temp-buffer
+          (setq buffer-file-name (expand-file-name "src/example.el" root))
+          (insert "(defun alpha ()\n"
+                  "  (beta))\n"
+                  "\n"
+                  "(defun beta ()\n"
+                  "  42)\n")
+          (let* ((first-marker (copy-marker (point-min)))
+                 (second-marker (copy-marker (point-max)))
+                 (section
+                  (my-codex--xref-items-section
+                   "Definition context"
+                   (list
+                    (xref-make
+                     "alpha"
+                     (xref-make-buffer-location
+                      (current-buffer)
+                      (marker-position first-marker)))
+                    (xref-make
+                     "beta"
+                     (xref-make-buffer-location
+                      (current-buffer)
+                      (marker-position second-marker))))
+                   root
+                   1
+                   1)))
+            (should (string-match-p "Definition context:" section))
+            (should (string-match-p "src/example\\.el:1 -- alpha" section))
+            (should (string-match-p "(defun alpha" section))
+            (should-not (string-match-p " -- beta" section))))
+      (delete-directory root t))))
+
 (provide 'my-codex-test)
 
 ;;; my-codex-test.el ends here

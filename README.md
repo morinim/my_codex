@@ -230,6 +230,10 @@ Common options:
 (setq my-codex-project-overview-max-files 200)
 (setq my-codex-project-overview-tree-max-entries 25)
 (setq my-codex-enable-prompt-preview nil)
+(setq my-codex-symbol-include-xref-context t)
+(setq my-codex-symbol-xref-definition-limit 2)
+(setq my-codex-symbol-xref-reference-limit 8)
+(setq my-codex-symbol-xref-context-lines 4)
 (setq my-codex-warn-about-unsaved-project-buffers t)
 (setq my-codex-enable-global-auto-revert t)
 (setq my-codex-enable-display-defaults nil)
@@ -278,10 +282,12 @@ for each directory in that summary.
 ## Notes
 
 Use `F8 s` or `F8 Right` for small snippets, and `F8 x` for a quick
-explanation of the symbol at point. Use `F8 R` to ask for a low-risk
-refactoring plan for the selected file range; it sends an `@file lines
-START-END` reference rather than the selected text. For larger reviews, prefer
-`F8 f`, `F8 g`, or `F8 G`, which ask Codex to inspect files or diffs directly.
+explanation of the symbol at point. Symbol explanations include nearby code
+and, when `my-codex-symbol-include-xref-context` is non-nil, bounded xref
+definition and reference excerpts. Use `F8 R` to ask for a low-risk refactoring
+plan for the selected file range; it sends an `@file lines START-END` reference
+rather than the selected text. For larger reviews, prefer `F8 f`, `F8 g`, or
+`F8 G`, which ask Codex to inspect files or diffs directly.
 
 To copy text from Codex, use `C-c C-t` in the `vterm` buffer, select text, then
 press `F8`. While `vterm-copy-mode` is active, my-codex shows a header-line

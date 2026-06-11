@@ -34,6 +34,7 @@
 (require 'subr-x)
 (require 'thingatpt)
 (require 'transient)
+(require 'xref)
 
 (autoload 'vterm-mode "vterm" nil t)
 (autoload 'vterm-send-string "vterm")
@@ -233,6 +234,26 @@ BEGIN_COMMIT_MESSAGE and END_COMMIT_MESSAGE markers if you want
 
 (defcustom my-codex-symbol-context-lines 10
   "Number of surrounding lines to include when explaining a symbol."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-symbol-include-xref-context t
+  "When non-nil, include xref definition and reference context for symbols."
+  :type 'boolean
+  :group 'my-codex)
+
+(defcustom my-codex-symbol-xref-definition-limit 2
+  "Maximum number of xref definitions to include for symbol explanations."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-symbol-xref-reference-limit 8
+  "Maximum number of xref references to include for symbol explanations."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-symbol-xref-context-lines 4
+  "Number of surrounding lines to include for each xref location."
   :type 'natnum
   :group 'my-codex)
 
@@ -1658,6 +1679,81 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
         (setq end (line-end-position))
         (buffer-substring-no-properties start end)))))
 
+(defun my-codex--xref-location-marker (xref-item)
+  "Return a marker for XREF-ITEM, or nil when its location is unavailable."
+  (ignore-errors
+    (xref-location-marker (xref-item-location xref-item))))
+
+(defun my-codex--xref-location-label (marker root)
+  "Return a project-relative location label for MARKER under ROOT."
+  (with-current-buffer (marker-buffer marker)
+    (let* ((file (or buffer-file-name (buffer-name)))
+           (display-file (if buffer-file-name
+                             (file-relative-name file root)
+                           file))
+           (line (line-number-at-pos marker)))
+      (format "%s:%d" display-file line))))
+
+(defun my-codex--line-context-around-marker (marker context-lines)
+  "Return text around MARKER spanning CONTEXT-LINES before and after."
+  (with-current-buffer (marker-buffer marker)
+    (save-excursion
+      (goto-char marker)
+      (my-codex--line-context-around-point context-lines))))
+
+(defun my-codex--xref-items-section (title items root limit context-lines)
+  "Format an xref context section named TITLE from ITEMS.
+
+ROOT is used for project-relative paths.  LIMIT caps the number of entries,
+and CONTEXT-LINES controls the excerpt radius around each xref location."
+  (let ((entries
+         (seq-keep
+          (lambda (item)
+            (when-let ((marker (my-codex--xref-location-marker item)))
+              (let ((summary (xref-item-summary item)))
+                (format "- %s%s\n\n```\n%s\n```"
+                        (my-codex--xref-location-label marker root)
+                        (if (or (null summary)
+                                (string-empty-p summary))
+                            ""
+                          (format " -- %s" summary))
+                        (my-codex--line-context-around-marker
+                         marker context-lines)))))
+          (seq-take items limit))))
+    (when entries
+      (format "%s:\n\n%s" title (string-join entries "\n\n")))))
+
+(defun my-codex--symbol-xref-context (symbol root)
+  "Return formatted xref context for SYMBOL under ROOT, or nil."
+  (when my-codex-symbol-include-xref-context
+    (when-let ((backend (ignore-errors (xref-find-backend))))
+      (let* ((identifier (or (ignore-errors
+                               (xref-backend-identifier-at-point backend))
+                             symbol))
+             (definitions
+              (ignore-errors
+                (xref-backend-definitions backend identifier)))
+             (references
+              (ignore-errors
+                (xref-backend-references backend identifier)))
+             (sections
+              (delq nil
+                    (list
+                     (my-codex--xref-items-section
+                      "Definition context"
+                      definitions
+                      root
+                      my-codex-symbol-xref-definition-limit
+                      my-codex-symbol-xref-context-lines)
+                     (my-codex--xref-items-section
+                      "Reference context"
+                      references
+                      root
+                      my-codex-symbol-xref-reference-limit
+                      my-codex-symbol-xref-context-lines)))))
+        (when sections
+          (string-join sections "\n\n"))))))
+
 ;;;###autoload
 (defun my-codex-explain-symbol-at-point ()
   "Ask Codex to explain the symbol at point with nearby file context."
@@ -1669,14 +1765,20 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
          (line (line-number-at-pos))
          (symbol (my-codex--symbol-at-point))
          (context (my-codex--line-context-around-point
-                   my-codex-symbol-context-lines)))
+                   my-codex-symbol-context-lines))
+         (xref-context (my-codex--symbol-xref-context symbol root)))
     (my-codex--preview-and-send-prompt
-     (format (concat "In file `%s`, explain the role of symbol `%s` "
-                     "near line %d.\n\n"
-                     "Relevant context:\n\n"
-                     "```\n%s\n```\n\n"
-                     "Inspect the file directly if needed. Do not edit files.")
-             file symbol line context))))
+     (string-join
+      (delq nil
+            (list
+             (format (concat "In file `%s`, explain the role of symbol `%s` "
+                             "near line %d.\n\n"
+                             "Relevant context:\n\n"
+                             "```\n%s\n```")
+                     file symbol line context)
+             xref-context
+             "Inspect the file directly if needed. Do not edit files."))
+      "\n\n"))))
 
 (defun my-codex--commit-message-trailer-line-p (line)
   "Return non-nil if LINE looks like a Git commit message trailer."
