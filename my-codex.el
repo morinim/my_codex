@@ -2157,7 +2157,7 @@ When invoked from the Codex vterm, use the file in the window to its left."
    (lambda (char)
      (regexp-quote (char-to-string char)))
    marker
-   "[[:space:]\r]*"))
+   "[[:space:]\r\n]*"))
 
 (defun my-codex--trim-blank-lines (text)
   "Return TEXT without leading or trailing blank lines."
