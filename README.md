@@ -47,6 +47,7 @@ separate sessions.
 
 - Emacs 29.1 or newer.
 - [`vterm`][vterm].
+- [`transient`][transient].
 - OpenAI [Codex CLI][codex] available as `codex`.
 - Git, for Git-related commands.
 - GitHub CLI `gh`, for creating GitHub issues from session summaries.
@@ -68,6 +69,24 @@ Then add:
 (require 'my-codex)
 (my-codex-global-mode 1)
 ```
+
+## Companion Skills
+
+The `skills/` directory contains optional Codex skills that complement this
+package. They are provided as editable source, are not installed automatically,
+and are not required for the Emacs package to work.
+
+Expert users can copy, symlink, modify, or ignore them according to their own
+Codex setup.
+
+The `handoff` skill follows the context-transfer workflow described by
+Matt Pocock in [handoff: Move Context Between Agent Sessions][aihero-handoff].
+
+Example invocations:
+
+| Skill | Description | Example invocation |
+| --- | --- | --- |
+| `handoff` | Create a disposable Markdown context transfer for continuing focused work in another agent session. | `$handoff continue the Firebird SQL refactoring` |
 
 ## Updating Codex CLI
 
@@ -196,88 +215,18 @@ Common options:
 (setq my-codex-project-build-command "./setup_build")
 (setq my-codex-project-instruction-files
       '("AGENTS.md" "CODEX.md" ".codex/instructions.md"))
-(setq my-codex-commit-message-fill-column 76)
-(setq my-codex-git-diff-review-prompt
-      "Please review the current Git diff using `git diff -- .`. Focus on correctness, regressions, edge cases, naming, and maintainability. Do not edit files unless I explicitly ask.\n")
-(setq my-codex-git-staged-diff-review-prompt
-      "Please review the staged Git diff using `git diff --cached -- .`. Focus on correctness, regressions, edge cases, and commit readiness. Do not edit files unless I explicitly ask.\n")
-(setq my-codex-test-coverage-prompt
-      "Please analyse the test coverage for this implementation and its test file.
 
-Identify missing edge cases, unhandled exceptions, logical flaws, and important behaviour that is not currently tested. Do not edit files and do not write tests; only list the missing scenarios.")
-(setq my-codex-refactor-plan-prompt
-      "Draft a step-by-step, low-risk refactoring plan for this code.
-
-Do not provide rewritten code or patches.
-
-Focus on:
-- current responsibilities and likely coupling
-- small refactoring steps in a safe order
-- potential breaking changes
-- tests or checks to run after each step
-- rollback points
-- assumptions that need confirmation before editing
-
-Finish with the smallest safe first edit worth making.")
-(setq my-codex-commit-message-prompt-template
-      "Please inspect the staged Git diff using `git diff --cached -- .` and write a concise but comprehensive conventional commit message.
-
-Put only the final commit message between these exact markers:
-
-BEGIN_COMMIT_MESSAGE
-<commit message here>
-END_COMMIT_MESSAGE
-
-Use an imperative subject and a short explanatory body when useful. Limit each line to %d columns. Do not edit files.\n")
-(setq my-codex-commit-message-poll-interval 0.5)
-(setq my-codex-commit-message-poll-attempts 120)
-(setq my-codex-session-summary-poll-attempts 600)
 (setq my-codex-project-overview-max-files 200)
 (setq my-codex-project-overview-tree-max-entries 25)
 (setq my-codex-enable-prompt-preview nil)
-(setq my-codex-symbol-context-lines 10)
-(setq my-codex-session-summary-prompt
-      "Please summarize, organize, and rationalize this Codex session transcript into useful project notes.
-
-Focus on:
-- decisions made
-- open questions
-- action items
-- proposed implementation details
-- risks or constraints
-
-Preserve concrete file names, command names, and technical details. Do not edit files.")
-
-(setq my-codex-github-issue-summary-prompt
-      "Please summarize this Codex session transcript as a GitHub issue draft.
-
-Focus on:
-- concrete problem or feature context
-- decisions made
-- implementation details
-- remaining action items
-- risks or constraints
-
-Return a concise issue title and a Markdown issue body. Use this exact format:
-
-Title: <issue title>
-
-Body:
-<Markdown issue body>
-
-Preserve concrete file names, command names, and technical details. Do not edit files.")
-
-(setq my-codex-prompt-presets
-      '(("Refactor" . "Review the following code and refactor it to improve readability and performance without changing its external behaviour.")
-        ("Document" . "Write clear docstrings and comments for the following code. Avoid over-commenting obvious logic.")
-        ("Test" . "Write focused unit tests for the following code.")
-        ("Explain" . "Explain the following code clearly and concisely.")))
-
 (setq my-codex-warn-about-unsaved-project-buffers t)
 (setq my-codex-enable-global-auto-revert t)
 (setq my-codex-enable-display-defaults nil)
 (setq my-codex-enable-session-links t)
 ```
+
+Prompt templates, polling intervals, prompt presets, and summary prompts are
+also customisable from the `my-codex` group.
 
 When `my-codex-enable-display-defaults` is non-nil,
 `my-codex-global-mode` also enables trailing whitespace display and column
@@ -314,19 +263,6 @@ For projects with more files than `my-codex-project-overview-max-files`, the
 project overview uses a compact tree summary instead of a long flat file list.
 `my-codex-project-overview-tree-max-entries` controls how many entries are shown
 for each directory in that summary.
-
-## Suggested Codex Configuration
-
-For conservative defaults, configure Codex itself to use read-only mode and
-explicit approvals.
-
-In `~/.codex/config.toml`:
-
-```toml
-sandbox_mode = "read-only"
-approval_policy = "on-request"
-approvals_reviewer = "user"
-```
 
 ## Notes
 
@@ -374,7 +310,9 @@ project root.
 
 [Mozilla Public License v2.0][mpl2], also available in [LICENSE][license].
 
+[aihero-handoff]: https://www.aihero.dev/skills-handoff
 [codex]: https://github.com/openai/codex
 [license]: https://github.com/morinim/my_codex/blob/main/LICENSE
 [mpl2]: https://www.mozilla.org/MPL/2.0/
+[transient]: https://github.com/magit/transient
 [vterm]: https://github.com/akermu/emacs-libvterm
