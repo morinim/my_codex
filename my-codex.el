@@ -626,7 +626,10 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
 
       (when (and existing-buf
                  (not (live-buffer-p existing-buf)))
-        (kill-buffer existing-buf)
+        (with-current-buffer existing-buf
+          (rename-buffer
+           (generate-new-buffer-name
+            (format "%s<old>" buffer-name))))
         (setq existing-buf nil))
 
       (let* ((edit-window (selected-window))
