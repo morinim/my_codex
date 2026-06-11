@@ -2997,7 +2997,6 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
   "G"       #'my-codex-send-git-staged-diff
   "d"       #'my-codex-ediff-current-file-against-head
   "D"       #'my-codex-ediff-changed-file-against-head
-  "m"       #'my-codex-commit-message-from-diff
   "c"       #'my-codex-git-commit-with-latest-message
   "e"       #'my-codex-explain-region-as-error
   "i"       #'my-codex-open-project-instructions
@@ -3035,7 +3034,6 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
     ("G" "Review staged diff" my-codex-send-git-staged-diff)
     ("d" "Ediff current file" my-codex-ediff-current-file-against-head)
     ("D" "Ediff changed file" my-codex-ediff-changed-file-against-head)
-    ("m" "Draft commit message" my-codex-commit-message-from-diff)
     ("c" "Commit with Codex message" my-codex-git-commit-with-latest-message)]
    ["Context"
     ("e" "Explain error" my-codex-explain-region-as-error)
@@ -3274,9 +3272,6 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
      ["Ediff changed file against HEAD" my-codex-ediff-changed-file-against-head
       :keys "F8 D"
       :help "Choose a tracked changed file and review it against HEAD"]
-     ["Draft commit message" my-codex-commit-message-from-diff
-      :keys "F8 m"
-      :help "Ask Codex to draft a commit message from the staged Git diff"]
      ["Edit commit with Codex message" my-codex-git-commit-with-latest-message
       :keys "F8 c"
       :help "Use the latest Codex commit message, or ask Codex for one, then edit before committing"])

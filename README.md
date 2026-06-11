@@ -126,6 +126,22 @@ F8 r   resume a previous session
 
 Then use the `F8` prefix for everyday actions.
 
+Latest review-to-commit workflow:
+
+```text
+F8 o   start read-only Codex when you only want inspection
+F8 w   start workspace-write Codex when edits are expected
+F8 g   review the current Git diff
+F8 G   review the staged Git diff
+F8 c   draft or reuse a Codex commit message, edit it, then commit
+F8 X   export the session transcript
+F8 M   summarize the session
+F8 !   run the health check
+```
+
+`my-codex-commit-message-from-diff` remains available via `M-x` when you want
+to draft a commit message without opening the commit editor.
+
 ## Key Bindings
 
 | Key | Command | Description |
@@ -155,8 +171,7 @@ Prefix bindings:
 | F8 G | `my-codex-send-git-staged-diff` | Review the staged Git diff |
 | F8 d | `my-codex-ediff-current-file-against-head` | Ediff current file against `HEAD` |
 | F8 D | `my-codex-ediff-changed-file-against-head` | Choose a changed file to Ediff against `HEAD` |
-| F8 m | `my-codex-commit-message-from-diff` | Draft a commit message |
-| F8 c | `my-codex-git-commit-with-latest-message` | Edit commit from latest draft |
+| F8 c | `my-codex-git-commit-with-latest-message` | Draft or reuse a Codex message, edit it, then commit |
 | F8 e | `my-codex-explain-region-as-error` | Explain a selected error |
 | F8 i | `my-codex-open-project-instructions` | Open project instructions |
 | F8 p | `my-codex-send-project-overview` | Send project structure and state |
