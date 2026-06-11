@@ -43,6 +43,7 @@
 (declare-function markdown-mode "markdown-mode")
 (declare-function projectile-toggle-between-implementation-and-test "projectile")
 (defvar vterm-mode-map)
+(defvar vterm-copy-mode-map)
 (defvar vterm-copy-mode)
 
 (defgroup my-codex nil
@@ -205,6 +206,11 @@ BEGIN_COMMIT_MESSAGE and END_COMMIT_MESSAGE markers if you want
   :type 'boolean
   :group 'my-codex)
 
+(defcustom my-codex-enable-vterm-integration t
+  "When non-nil, enable vterm helpers with `my-codex-global-mode'."
+  :type 'boolean
+  :group 'my-codex)
+
 (defcustom my-codex-enable-session-links t
   "When non-nil, make URLs and file references clickable in Codex buffers."
   :type 'boolean
@@ -296,6 +302,9 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 (defvar my-codex--auto-revert-enabled-by-mode nil
   "Non-nil when `my-codex-global-mode' enabled `global-auto-revert-mode'.")
 
+(defvar my-codex--vterm-integration-enabled-by-mode nil
+  "Non-nil when `my-codex-global-mode' enabled vterm integration.")
+
 (defvar my-codex--saved-show-trailing-whitespace nil
   "Previous default value of `show-trailing-whitespace'.")
 
@@ -340,6 +349,12 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 
 (defvar my-codex--captured-selection nil
   "Text captured before opening a transient from an active region.")
+
+(defvar my-codex--vterm-integration-keymap-bindings nil
+  "Previous vterm key bindings replaced by `my-codex-vterm-integration-mode'.")
+
+(defvar my-codex--vterm-copy-mode-lighter :unset
+  "Previous `vterm-copy-mode' lighter before my-codex changed it.")
 
 (defun my-codex--selected-window-is-codex-p ()
   "Return non-nil if the selected window shows Codex."
@@ -3040,17 +3055,49 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
   "Show `vterm-copy-mode' as a short highlighted mode-line lighter."
   (let ((entry (assq 'vterm-copy-mode minor-mode-alist)))
     (when entry
+      (when (eq my-codex--vterm-copy-mode-lighter :unset)
+        (setq my-codex--vterm-copy-mode-lighter (cdr entry)))
       (setcdr entry '((:propertize " Copy" face warning))))))
 
-(with-eval-after-load 'vterm
+(defun my-codex--restore-vterm-copy-mode-lighter ()
+  "Restore the previous `vterm-copy-mode' mode-line lighter."
+  (let ((entry (assq 'vterm-copy-mode minor-mode-alist)))
+    (when (and entry
+               (not (eq my-codex--vterm-copy-mode-lighter :unset)))
+      (setcdr entry my-codex--vterm-copy-mode-lighter)
+      (setq my-codex--vterm-copy-mode-lighter :unset))))
+
+(defun my-codex--save-and-set-vterm-key (map key command)
+  "Save MAP's KEY binding and bind KEY to COMMAND."
+  (push (list map key (keymap-lookup map key))
+        my-codex--vterm-integration-keymap-bindings)
+  (keymap-set map key command))
+
+(defun my-codex--restore-vterm-keymap-bindings ()
+  "Restore vterm key bindings changed by my-codex."
+  (dolist (binding my-codex--vterm-integration-keymap-bindings)
+    (pcase-let ((`(,map ,key ,previous) binding))
+      (if previous
+          (keymap-set map key previous)
+        (keymap-unset map key))))
+  (setq my-codex--vterm-integration-keymap-bindings nil))
+
+(defun my-codex--enable-vterm-integration ()
+  "Enable my-codex helpers for vterm."
   (my-codex--shorten-vterm-copy-mode-lighter)
-  (when (boundp 'vterm-mode-map)
-    (keymap-set vterm-mode-map "S-<insert>" #'vterm-yank)
-    (keymap-set vterm-mode-map "<prior>"    #'scroll-down-command)
-    (keymap-set vterm-mode-map "<next>"     #'scroll-up-command)
-    (keymap-set vterm-mode-map "<f8>"       #'my-codex-transient-preserve-selection))
-  (when (boundp 'vterm-copy-mode-map)
-    (keymap-set vterm-copy-mode-map "<f8>"  #'my-codex-transient-preserve-selection))
+  (unless my-codex--vterm-integration-keymap-bindings
+    (when (boundp 'vterm-mode-map)
+      (my-codex--save-and-set-vterm-key
+       vterm-mode-map "S-<insert>" #'vterm-yank)
+      (my-codex--save-and-set-vterm-key
+       vterm-mode-map "<prior>" #'scroll-down-command)
+      (my-codex--save-and-set-vterm-key
+       vterm-mode-map "<next>" #'scroll-up-command)
+      (my-codex--save-and-set-vterm-key
+       vterm-mode-map "<f8>" #'my-codex-transient-preserve-selection))
+    (when (boundp 'vterm-copy-mode-map)
+      (my-codex--save-and-set-vterm-key
+       vterm-copy-mode-map "<f8>" #'my-codex-transient-preserve-selection)))
   (add-hook 'vterm-mode-hook
             #'my-codex--disable-vterm-editing-minor-modes)
   (add-hook 'after-change-major-mode-hook
@@ -3058,6 +3105,28 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
             100)
   (add-hook 'vterm-copy-mode-hook
             #'my-codex--vterm-copy-mode-header-line))
+
+(defun my-codex--disable-vterm-integration ()
+  "Disable my-codex helpers for vterm."
+  (remove-hook 'vterm-mode-hook
+               #'my-codex--disable-vterm-editing-minor-modes)
+  (remove-hook 'after-change-major-mode-hook
+               #'my-codex--disable-vterm-editing-minor-modes)
+  (remove-hook 'vterm-copy-mode-hook
+               #'my-codex--vterm-copy-mode-header-line)
+  (my-codex--restore-vterm-copy-mode-lighter)
+  (my-codex--restore-vterm-keymap-bindings))
+
+;;;###autoload
+(define-minor-mode my-codex-vterm-integration-mode
+  "Global minor mode for my-codex vterm integration."
+  :global t
+  :group 'my-codex
+  (if my-codex-vterm-integration-mode
+      (with-eval-after-load 'vterm
+        (when my-codex-vterm-integration-mode
+          (my-codex--enable-vterm-integration)))
+    (my-codex--disable-vterm-integration)))
 
 (defun my-codex-project-build ()
   "Run the project build command with `compile'."
@@ -3203,6 +3272,11 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
       (progn
         (when my-codex-enable-display-defaults
           (my-codex--enable-display-defaults))
+        (when (and my-codex-enable-vterm-integration
+                   (not my-codex--vterm-integration-enabled-by-mode)
+                   (not (bound-and-true-p my-codex-vterm-integration-mode)))
+          (setq my-codex--vterm-integration-enabled-by-mode t)
+          (my-codex-vterm-integration-mode 1))
         (when (and my-codex-enable-global-auto-revert
                    (not my-codex--auto-revert-enabled-by-mode)
                    (not (bound-and-true-p global-auto-revert-mode)))
@@ -3210,7 +3284,10 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
           (global-auto-revert-mode 1)))
     (when my-codex--auto-revert-enabled-by-mode
       (global-auto-revert-mode -1))
+    (when my-codex--vterm-integration-enabled-by-mode
+      (my-codex-vterm-integration-mode -1))
     (my-codex--restore-display-defaults)
+    (setq my-codex--vterm-integration-enabled-by-mode nil)
     (setq my-codex--auto-revert-enabled-by-mode nil)))
 
 (provide 'my-codex)
