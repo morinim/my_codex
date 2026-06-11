@@ -129,14 +129,10 @@ Then use the `F8` prefix for everyday actions.
 Latest review-to-commit workflow:
 
 ```text
-F8 o   start read-only Codex when you only want inspection
-F8 w   start workspace-write Codex when edits are expected
-F8 g   review the current Git diff
-F8 G   review the staged Git diff
+F8 g/G review the current Git diff or the staged Git diff
 F8 c   draft or reuse a Codex commit message, edit it, then commit
 F8 X   export the session transcript
 F8 M   summarize the session
-F8 !   run the health check
 ```
 
 `my-codex-commit-message-from-diff` remains available via `M-x` when you want
