@@ -314,6 +314,12 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 (defvar my-codex--display-defaults-enabled-by-mode nil
   "Non-nil when `my-codex-global-mode' changed display defaults.")
 
+(defconst my-codex--display-show-trailing-whitespace-value t
+  "Default `show-trailing-whitespace' value set by `my-codex-global-mode'.")
+
+(defconst my-codex--display-column-number-mode-value t
+  "Default `column-number-mode' value set by `my-codex-global-mode'.")
+
 (defvar-local my-codex--prompt-preview-origin-window nil
   "Window selected before opening the current prompt preview.")
 
@@ -3182,16 +3188,22 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
     (setq my-codex--saved-column-number-mode
           (bound-and-true-p column-number-mode))
     (setq my-codex--display-defaults-enabled-by-mode t))
-  (setq-default show-trailing-whitespace t)
-  (column-number-mode 1))
+  (setq-default show-trailing-whitespace
+                my-codex--display-show-trailing-whitespace-value)
+  (column-number-mode
+   (if my-codex--display-column-number-mode-value 1 -1)))
 
 (defun my-codex--restore-display-defaults ()
   "Restore display defaults changed by `my-codex-global-mode'."
   (when my-codex--display-defaults-enabled-by-mode
-    (setq-default show-trailing-whitespace
-                  my-codex--saved-show-trailing-whitespace)
-    (column-number-mode
-     (if my-codex--saved-column-number-mode 1 -1))
+    (when (eq (default-value 'show-trailing-whitespace)
+              my-codex--display-show-trailing-whitespace-value)
+      (setq-default show-trailing-whitespace
+                    my-codex--saved-show-trailing-whitespace))
+    (when (eq (bound-and-true-p column-number-mode)
+              my-codex--display-column-number-mode-value)
+      (column-number-mode
+       (if my-codex--saved-column-number-mode 1 -1)))
     (setq my-codex--saved-show-trailing-whitespace nil)
     (setq my-codex--saved-column-number-mode nil)
     (setq my-codex--display-defaults-enabled-by-mode nil)))
@@ -3317,9 +3329,11 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
                    (not (bound-and-true-p global-auto-revert-mode)))
           (setq my-codex--auto-revert-enabled-by-mode t)
           (global-auto-revert-mode 1)))
-    (when my-codex--auto-revert-enabled-by-mode
+    (when (and my-codex--auto-revert-enabled-by-mode
+               (bound-and-true-p global-auto-revert-mode))
       (global-auto-revert-mode -1))
-    (when my-codex--vterm-integration-enabled-by-mode
+    (when (and my-codex--vterm-integration-enabled-by-mode
+               (bound-and-true-p my-codex-vterm-integration-mode))
       (my-codex-vterm-integration-mode -1))
     (my-codex--restore-display-defaults)
     (setq my-codex--vterm-integration-enabled-by-mode nil)
