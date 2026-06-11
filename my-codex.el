@@ -670,6 +670,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
           (when (window-live-p edit-window)
             (select-window edit-window)))))))
 
+;;;###autoload
 (defun my-codex-restore-layout ()
   "Hide visible windows showing the current Codex buffer."
   (interactive)
@@ -682,16 +683,19 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
         (quit-window nil window)))
     (message "Codex window hidden")))
 
+;;;###autoload
 (defun my-codex-read-only ()
   "Show Codex, starting it in read-only mode if needed."
   (interactive)
   (my-codex-two-column-layout-with-command my-codex-read-only-command))
 
+;;;###autoload
 (defun my-codex-workspace ()
   "Show Codex, starting it with workspace write access if needed."
   (interactive)
   (my-codex-two-column-layout-with-command my-codex-workspace-command))
 
+;;;###autoload
 (defun my-codex-resume ()
   "Show Codex, resuming a previous session if needed and focusing the window."
   (interactive)
@@ -1496,6 +1500,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
         (message "Codex prompt preview opened."))
     (my-codex-send-prompt prompt)))
 
+;;;###autoload
 (defun my-codex-send-region (beg end)
   "Send the region between BEG and END to Codex with exact file context."
   (interactive "r")
@@ -1506,6 +1511,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
            (my-codex--region-context beg end)
            (buffer-substring-no-properties beg end))))
 
+;;;###autoload
 (defun my-codex-send-current-file ()
   "Ask Codex to inspect the current file directly."
   (interactive)
@@ -1599,6 +1605,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
       (user-error "Test file is outside the current project"))
     file))
 
+;;;###autoload
 (defun my-codex-analyse-test-coverage ()
   "Ask Codex to analyse coverage of the current file by its test file."
   (interactive)
@@ -1645,6 +1652,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
         (setq end (line-end-position))
         (buffer-substring-no-properties start end)))))
 
+;;;###autoload
 (defun my-codex-explain-symbol-at-point ()
   "Ask Codex to explain the symbol at point with nearby file context."
   (interactive)
@@ -1867,6 +1875,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
          "\n")
       "No unsaved modified project buffers.")))
 
+;;;###autoload
 (defun my-codex-send-project-overview ()
   "Send a compact summary of the current project structure to Codex."
   (interactive)
@@ -2010,11 +2019,13 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
    "%d" (number-to-string my-codex-commit-message-fill-column)
    my-codex-commit-message-prompt-template t t))
 
+;;;###autoload
 (defun my-codex-send-git-diff ()
   "Ask Codex to review the current Git diff."
   (interactive)
   (my-codex--send-git-prompt (my-codex--git-diff-review-prompt)))
 
+;;;###autoload
 (defun my-codex-send-git-staged-diff ()
   "Ask Codex to review the staged Git diff."
   (interactive)
@@ -2083,6 +2094,7 @@ repository toplevel."
       (and (my-codex--selected-codex-vterm-window-p)
            (my-codex--left-window-file-name))))
 
+;;;###autoload
 (defun my-codex-ediff-current-file-against-head ()
   "Review the current file's uncommitted changes against HEAD using Ediff.
 When invoked from the Codex vterm, use the file in the window to its left."
@@ -2093,6 +2105,7 @@ When invoked from the Codex vterm, use the file in the window to its left."
       (my-codex--ensure-git-repository))
     (my-codex--ediff-file-against-head file root)))
 
+;;;###autoload
 (defun my-codex-ediff-changed-file-against-head ()
   "Choose a tracked changed file and review it against HEAD using Ediff."
   (interactive)
@@ -2110,6 +2123,7 @@ When invoked from the Codex vterm, use the file in the window to its left."
         root)
        root))))
 
+;;;###autoload
 (defun my-codex-commit-message-from-diff ()
   "Ask Codex to draft a commit message from the staged Git diff."
   (interactive)
@@ -2466,6 +2480,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
    attempts
    'my-codex--session-summary-wait-timer))
 
+;;;###autoload
 (defun my-codex-git-commit-with-latest-message ()
   "Edit a commit with the latest Codex message, or ask Codex for one and wait."
   (interactive)
@@ -2503,6 +2518,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
            buffer start-point root request-signature)
           (message "Asked Codex to draft a commit message; waiting to open editor."))))))
 
+;;;###autoload
 (defun my-codex-explain-region-as-error ()
   "Ask Codex to explain the selected compiler or test error."
   (interactive)
@@ -2522,6 +2538,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
          (line-end (line-number-at-pos (max beg (1- end)) t)))
     (format "@%s lines %d-%d" file line-start line-end)))
 
+;;;###autoload
 (defun my-codex-plan-refactor-region (beg end)
   "Ask Codex for a safe refactoring plan for the active region.
 Send only a file and line-range reference, not the selected text."
@@ -2533,6 +2550,7 @@ Send only a file and line-range reference, not the selected text."
            my-codex-refactor-plan-prompt
            (my-codex--region-file-reference beg end))))
 
+;;;###autoload
 (defun my-codex-open-project-instructions ()
   "Open the project Codex/agent instruction file, if present."
   (interactive)
@@ -2573,6 +2591,7 @@ Send only a file and line-range reference, not the selected text."
   (interactive)
   (select-window (my-codex-code-window)))
 
+;;;###autoload
 (defun my-codex-toggle-focus ()
   "Toggle focus between the Codex vterm and the coding window."
   (interactive)
@@ -2599,6 +2618,7 @@ Send only a file and line-range reference, not the selected text."
        (t
         (user-error "No active selection in the Codex buffer"))))))
 
+;;;###autoload
 (defun my-codex-insert-selection-into-code ()
   "Insert selected Codex text into the coding window."
   (interactive)
@@ -2607,6 +2627,7 @@ Send only a file and line-range reference, not the selected text."
     (select-window code-window)
     (insert text)))
 
+;;;###autoload
 (defun my-codex-ask (prompt)
   "Read PROMPT in the minibuffer and send it straight to Codex."
   (interactive "sAsk Codex: ")
@@ -2680,6 +2701,7 @@ after the at-sign with `completion-at-point'."
                                          beg end))))))))
     (my-codex--preview-and-send-prompt (string-join parts "\n\n"))))
 
+;;;###autoload
 (defun my-codex-ask-with-preset ()
   "Read a prompt preset by name and send it to Codex.
 After selecting a preset, read extra instructions from the minibuffer.
@@ -2718,6 +2740,7 @@ When a region is active, include exact file and line context for it."
        ""
        ("C" "Choose by name" my-codex-ask-with-preset)])))
 
+;;;###autoload
 (transient-define-prefix my-codex-ask-preset-transient ()
   "Ask Codex using a prompt preset."
   [:class transient-column
@@ -2981,6 +3004,7 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
   "TAB"     #'my-codex-toggle-focus
   "<tab>"   #'my-codex-toggle-focus)
 
+;;;###autoload
 (transient-define-prefix my-codex-transient ()
   "Show Codex commands."
   [["Session"
@@ -3017,6 +3041,7 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
     ("t" "List issues" my-codex-list-open-tickets)
     ("T" "Draft issue" my-codex-summarize-session-to-github-issue)]])
 
+;;;###autoload
 (defun my-codex-transient-preserve-selection ()
   "Show Codex commands without disturbing the active region."
   (interactive)
@@ -3137,6 +3162,7 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
           (my-codex--enable-vterm-integration)))
     (my-codex--disable-vterm-integration)))
 
+;;;###autoload
 (defun my-codex-project-build ()
   "Run the project build command with `compile'."
   (interactive)
