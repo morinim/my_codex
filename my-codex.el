@@ -1752,6 +1752,36 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
       (goto-char marker)
       (my-codex--line-context-around-point context-lines))))
 
+(defun my-codex--yaml-string (value)
+  "Return VALUE as a YAML double-quoted scalar."
+  (let ((text (format "%s" value)))
+    (setq text (replace-regexp-in-string "\\\\" "\\\\\\\\" text t t))
+    (setq text (replace-regexp-in-string "\"" "\\\\\"" text t t))
+    (setq text (replace-regexp-in-string "\r" "\\\\r" text t t))
+    (setq text (replace-regexp-in-string "\n" "\\\\n" text t t))
+    (format "\"%s\"" text)))
+
+(defun my-codex--yaml-list (values indent)
+  "Return VALUES as a YAML list indented by INDENT spaces."
+  (if values
+      (mapconcat
+       (lambda (value)
+         (format "%s- %s"
+                 (make-string indent ?\s)
+                 (my-codex--yaml-string value)))
+       values
+       "\n")
+    (format "%s[]" (make-string indent ?\s))))
+
+(defun my-codex--yaml-literal-block (text indent)
+  "Return TEXT as YAML literal block content indented by INDENT spaces."
+  (let ((prefix (make-string indent ?\s)))
+    (mapconcat
+     (lambda (line)
+       (concat prefix line))
+     (split-string text "\n")
+     "\n")))
+
 (defun my-codex--xref-items-section (title items root limit context-lines)
   "Format an xref context section named TITLE from ITEMS.
 
@@ -1762,17 +1792,30 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
           (lambda (item)
             (when-let ((marker (my-codex--xref-location-marker item)))
               (let ((summary (xref-item-summary item)))
-                (format "- %s%s\n\n```\n%s\n```"
-                        (my-codex--xref-location-label marker root)
-                        (if (or (null summary)
-                                (string-empty-p summary))
-                            ""
-                          (format " -- %s" summary))
-                        (my-codex--line-context-around-marker
-                         marker context-lines)))))
+                (string-join
+                 (delq nil
+                       (list
+                        (format "  - location: %s"
+                                (my-codex--yaml-string
+                                 (my-codex--xref-location-label marker root)))
+                        (unless (or (null summary)
+                                    (string-empty-p summary))
+                          (format "    summary: %s"
+                                  (my-codex--yaml-string summary)))
+                        (format "    excerpt: |\n%s"
+                                (my-codex--yaml-literal-block
+                                 (my-codex--line-context-around-marker
+                                  marker context-lines)
+                                 6))))
+                 "\n"))))
           (seq-take items limit))))
     (when entries
-      (format "%s:\n\n%s" title (string-join entries "\n\n")))))
+      (format "%s:\n%s"
+              (replace-regexp-in-string
+               "[^[:alnum:]]+"
+               "_"
+               (downcase title))
+              (string-join entries "\n")))))
 
 (defun my-codex--symbol-xref-context (symbol root)
   "Return formatted xref context for SYMBOL under ROOT, or nil."
@@ -1822,11 +1865,17 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
      (string-join
       (delq nil
             (list
-             (format (concat "In file `%s`, explain the role of symbol `%s` "
-                             "near line %d.\n\n"
-                             "Relevant context:\n\n"
-                             "```\n%s\n```")
-                     file symbol line context)
+             (format (concat "Explain the role of this symbol using the YAML "
+                             "context below.\n\n"
+                             "symbol_context:\n"
+                             "  file: %s\n"
+                             "  symbol: %s\n"
+                             "  line: %d\n"
+                             "  excerpt: |\n%s")
+                     (my-codex--yaml-string file)
+                     (my-codex--yaml-string symbol)
+                     line
+                     (my-codex--yaml-literal-block context 4))
              xref-context
              "Inspect the file directly if needed. Do not edit files."))
       "\n\n"))))
@@ -2001,17 +2050,18 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
              (reverse lines))))
       (render-paths (mapcar #'split-file files) 2 ""))))
 
-(defun my-codex--project-files-text (files)
-  "Return project FILES text for a project overview prompt."
+(defun my-codex--project-files-yaml (files)
+  "Return project FILES as YAML for a project overview prompt."
   (cond
    ((not files)
-    "No project files found.")
+    "mode: empty\nentries: []")
    ((> (length files) my-codex-project-overview-max-files)
-    (format "Project has %d files; showing a compact tree summary:\n%s"
+    (format "mode: compact_tree\ntotal: %d\nentries:\n%s"
             (length files)
-            (string-join (my-codex--project-tree-lines files) "\n")))
+            (my-codex--yaml-list (my-codex--project-tree-lines files) 2)))
    (t
-    (string-join files "\n"))))
+    (format "mode: full\nentries:\n%s"
+            (my-codex--yaml-list files 2)))))
 
 (defun my-codex--git-status-text (root)
   "Return compact Git status text for ROOT."
@@ -2041,31 +2091,27 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
   (let* ((root (my-codex-project-root))
          (default-directory root)
          (files (my-codex--project-files root))
-         (files-text (my-codex--project-files-text files)))
+         (files-yaml (my-codex--project-files-yaml files)))
     (my-codex--preview-and-send-prompt
-     (format "Here is the current state and structure of my project. Use this as orientation context for subsequent requests. Do not inspect files, generate code, or make changes solely because of this message.
+     (format "Here is the current state and structure of my project as YAML. Use this as orientation context for subsequent requests. Do not inspect files, generate code, or make changes solely because of this message.
 
-**Project root:** `%s`
-
-**Git status:**
-```text
+project:
+  root: %s
+git_status:
 %s
-```
-
-**Unsaved modified project buffers:**
-```text
+unsaved_modified_project_buffers:
 %s
-```
-
-**Project files:**
-```text
+project_files:
 %s
-```
 "
-             root
-             (my-codex--git-status-text root)
-             (my-codex--unsaved-project-buffer-text root)
-             files-text))))
+             (my-codex--yaml-string root)
+             (my-codex--yaml-list
+              (split-string (my-codex--git-status-text root) "\n" t)
+              2)
+             (my-codex--yaml-list
+              (split-string (my-codex--unsaved-project-buffer-text root) "\n" t)
+              2)
+             (my-codex--yaml-literal-block files-yaml 2)))))
 
 (defun my-codex--git-comment-char (root)
   "Return Git's commit comment character for ROOT."

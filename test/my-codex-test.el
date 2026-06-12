@@ -289,19 +289,27 @@
         "test/ (1 file)"
         "  my-codex-test.el")))))
 
-(ert-deftest my-codex-project-files-text-lists-files-at-default-threshold ()
+(ert-deftest my-codex-project-files-yaml-lists-files-at-default-threshold ()
   (let ((files (cl-loop for n from 1 to my-codex-project-overview-max-files
                         collect (format "file-%02d.el" n))))
-    (should (equal (my-codex--project-files-text files)
-                   (string-join files "\n")))))
+    (should (equal (my-codex--project-files-yaml files)
+                   (format "mode: full\nentries:\n%s"
+                           (mapconcat
+                            (lambda (file)
+                              (format "  - \"%s\"" file))
+                            files
+                            "\n"))))))
 
-(ert-deftest my-codex-project-files-text-uses-tree-above-default-threshold ()
+(ert-deftest my-codex-project-files-yaml-uses-tree-above-default-threshold ()
   (let* ((files (cl-loop for n from 1
                          to (1+ my-codex-project-overview-max-files)
                          collect (format "src/file-%02d.el" n)))
-         (text (my-codex--project-files-text files)))
-    (should (string-match-p "showing a compact tree summary" text))
-    (should-not (equal text (string-join files "\n")))))
+         (text (my-codex--project-files-yaml files)))
+    (should (string-match-p "mode: compact_tree" text))
+    (should (string-match-p
+             (format "total: %d" (length files))
+             text))
+    (should-not (string-match-p "mode: full" text))))
 
 (ert-deftest my-codex-xref-items-section-formats-relative-excerpts ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-xref" t))))
@@ -332,10 +340,14 @@
                    root
                    1
                    1)))
-            (should (string-match-p "Definition context:" section))
-            (should (string-match-p "src/example\\.el:1 -- alpha" section))
+            (should (string-match-p "definition_context:" section))
+            (should (string-match-p
+                     "location: \"src/example\\.el:1\""
+                     section))
+            (should (string-match-p "summary: \"alpha\"" section))
+            (should (string-match-p "excerpt: |" section))
             (should (string-match-p "(defun alpha" section))
-            (should-not (string-match-p " -- beta" section))))
+            (should-not (string-match-p "summary: \"beta\"" section))))
       (delete-directory root t))))
 
 (provide 'my-codex-test)
