@@ -58,6 +58,13 @@
   (should (= (my-codex--approx-token-count "abcd") 1))
   (should (= (my-codex--approx-token-count "abcde") 2)))
 
+(ert-deftest my-codex-prompt-preview-header-shows-initial-size ()
+  (should
+   (equal
+    (my-codex--prompt-preview-header "abcde")
+    (concat "Initial size: 5 chars, approx. 2 tokens. Edit if needed; "
+            "C-c C-c sends to Codex, C-c C-k cancels."))))
+
 (ert-deftest my-codex-check-prompt-size-allows-small-prompts ()
   (let ((my-codex-large-prompt-warning-chars 10)
         (my-codex-large-prompt-error-chars nil))

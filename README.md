@@ -274,8 +274,9 @@ when needed.
 
 When `my-codex-enable-prompt-preview` is non-nil, prompts open an editable
 `*Codex prompt preview*` buffer before sending. Press `C-c C-c` to send the
-edited prompt, or `C-c C-k` to cancel. When Codex is visible, previews open in
-the left-hand editing window.
+edited prompt, or `C-c C-k` to cancel. The preview header shows the initial
+prompt size with an approximate token estimate. When Codex is visible, previews
+open in the left-hand editing window.
 
 In `my-codex-commit-message-prompt-template`, `%d` is replaced with
 `my-codex-commit-message-fill-column`. Keep the `BEGIN_COMMIT_MESSAGE` and

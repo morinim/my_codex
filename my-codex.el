@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.11.0
+;; Version: 0.12.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -1467,6 +1467,12 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
           (length prompt)
           (my-codex--approx-token-count prompt)))
 
+(defun my-codex--prompt-preview-header (prompt)
+  "Return the prompt preview header line for PROMPT."
+  (format (concat "Initial size: %s. Edit if needed; "
+                  "C-c C-c sends to Codex, C-c C-k cancels.")
+          (my-codex--prompt-size-description prompt)))
+
 (defun my-codex--check-prompt-size (prompt)
   "Raise or ask for confirmation when PROMPT is unusually large."
   (let ((size (length prompt)))
@@ -1566,8 +1572,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
         (setq default-directory root)
         (setq-local my-codex--prompt-preview-origin-window origin-window)
         (setq-local header-line-format
-                    (concat "Edit if needed; C-c C-c sends to Codex,"
-                            " C-c C-k cancels."))
+                    (my-codex--prompt-preview-header prompt))
         (let ((map (define-keymap :parent (current-local-map)
                      "C-c C-c" #'my-codex--finish-prompt-preview
                      "C-c C-k" #'my-codex--cancel-prompt-preview)))
