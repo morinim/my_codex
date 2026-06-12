@@ -53,6 +53,44 @@
     (my-codex--normalize-marked-output "\r\n    first\n      second\n\n")
     "first\n  second")))
 
+(ert-deftest my-codex-approx-token-count-rounds-up ()
+  (should (= (my-codex--approx-token-count "") 0))
+  (should (= (my-codex--approx-token-count "abcd") 1))
+  (should (= (my-codex--approx-token-count "abcde") 2)))
+
+(ert-deftest my-codex-check-prompt-size-allows-small-prompts ()
+  (let ((my-codex-large-prompt-warning-chars 10)
+        (my-codex-large-prompt-error-chars nil))
+    (should-not (my-codex--check-prompt-size "small"))))
+
+(ert-deftest my-codex-check-prompt-size-can-disable-warning ()
+  (let ((my-codex-large-prompt-warning-chars nil)
+        (my-codex-large-prompt-error-chars nil))
+    (should-not (my-codex--check-prompt-size "this is large"))))
+
+(ert-deftest my-codex-check-prompt-size-confirms-large-prompts ()
+  (let ((my-codex-large-prompt-warning-chars 5)
+        (my-codex-large-prompt-error-chars nil))
+    (cl-letf (((symbol-function 'y-or-n-p)
+               (lambda (_prompt) t)))
+      (should-not (my-codex--check-prompt-size "this is large")))))
+
+(ert-deftest my-codex-check-prompt-size-cancels-large-prompts ()
+  (let ((my-codex-large-prompt-warning-chars 5)
+        (my-codex-large-prompt-error-chars nil))
+    (cl-letf (((symbol-function 'y-or-n-p)
+               (lambda (_prompt) nil)))
+      (should-error
+       (my-codex--check-prompt-size "this is large")
+       :type 'user-error))))
+
+(ert-deftest my-codex-check-prompt-size-enforces-hard-limit ()
+  (let ((my-codex-large-prompt-warning-chars nil)
+        (my-codex-large-prompt-error-chars 5))
+    (should-error
+     (my-codex--check-prompt-size "this is large")
+     :type 'user-error)))
+
 (ert-deftest my-codex-doctor-command-executable-token-handles-shell-prefixes ()
   (should
    (equal

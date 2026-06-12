@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.9.10
+;; Version: 0.10.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -230,6 +230,20 @@ BEGIN_COMMIT_MESSAGE and END_COMMIT_MESSAGE markers if you want
 (defcustom my-codex-enable-prompt-preview nil
   "When non-nil, show an editable preview before sending prompts."
   :type 'boolean
+  :group 'my-codex)
+
+(defcustom my-codex-large-prompt-warning-chars 12000
+  "Prompt size in characters that requires confirmation before sending.
+When nil, do not warn about large prompts."
+  :type '(choice (const :tag "Do not warn" nil)
+                 natnum)
+  :group 'my-codex)
+
+(defcustom my-codex-large-prompt-error-chars nil
+  "Prompt size in characters that is refused before sending.
+When nil, do not enforce a hard prompt size limit."
+  :type '(choice (const :tag "No hard limit" nil)
+                 natnum)
   :group 'my-codex)
 
 (defcustom my-codex-symbol-context-lines 10
@@ -1435,9 +1449,35 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
           (inhibit-modification-hooks t))
       (my-codex--clear-session-links (point-min) (point-max)))))
 
+(defun my-codex--approx-token-count (text)
+  "Return a rough token count estimate for TEXT."
+  (ceiling (/ (float (length text)) 4)))
+
+(defun my-codex--prompt-size-description (prompt)
+  "Return a short human-readable size description for PROMPT."
+  (format "%d chars, approx. %d tokens"
+          (length prompt)
+          (my-codex--approx-token-count prompt)))
+
+(defun my-codex--check-prompt-size (prompt)
+  "Raise or ask for confirmation when PROMPT is unusually large."
+  (let ((size (length prompt)))
+    (when (and my-codex-large-prompt-error-chars
+               (> size my-codex-large-prompt-error-chars))
+      (user-error "Prompt is too large to send (%s; limit is %d chars)"
+                  (my-codex--prompt-size-description prompt)
+                  my-codex-large-prompt-error-chars))
+    (when (and my-codex-large-prompt-warning-chars
+               (> size my-codex-large-prompt-warning-chars)
+               (not (y-or-n-p
+                     (format "Send large Codex prompt (%s)? "
+                             (my-codex--prompt-size-description prompt)))))
+      (user-error "Codex prompt canceled"))))
+
 (defun my-codex-send-prompt (prompt)
   "Send PROMPT to the Codex vterm buffer and show it."
   (my-codex--warn-about-unsaved-project-buffers)
+  (my-codex--check-prompt-size prompt)
   (let ((buffer (my-codex-buffer)))
     (if-let (window (get-buffer-window buffer t))
         (select-window window)

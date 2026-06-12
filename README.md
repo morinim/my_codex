@@ -235,6 +235,8 @@ Common options:
 (setq my-codex-project-overview-max-files 200)
 (setq my-codex-project-overview-tree-max-entries 25)
 (setq my-codex-enable-prompt-preview nil)
+(setq my-codex-large-prompt-warning-chars 12000)
+(setq my-codex-large-prompt-error-chars nil)
 (setq my-codex-symbol-include-xref-context t)
 (setq my-codex-symbol-xref-definition-limit 2)
 (setq my-codex-symbol-xref-reference-limit 8)
