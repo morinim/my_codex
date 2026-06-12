@@ -2097,21 +2097,21 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
 
 project:
   root: %s
+project_files:
+%s
 git_status:
 %s
 unsaved_modified_project_buffers:
 %s
-project_files:
-%s
 "
              (my-codex--yaml-string root)
+             (my-codex--yaml-literal-block files-yaml 2)
              (my-codex--yaml-list
               (split-string (my-codex--git-status-text root) "\n" t)
               2)
              (my-codex--yaml-list
               (split-string (my-codex--unsaved-project-buffer-text root) "\n" t)
-              2)
-             (my-codex--yaml-literal-block files-yaml 2)))))
+              2)))))
 
 (defun my-codex--git-comment-char (root)
   "Return Git's commit comment character for ROOT."
