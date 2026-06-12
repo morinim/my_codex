@@ -1683,6 +1683,17 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
       (user-error "Test file is outside the current project"))
     file))
 
+(defun my-codex--test-coverage-prompt (implementation-relative test-relative)
+  "Return a cache-friendly coverage prompt.
+IMPLEMENTATION-RELATIVE and TEST-RELATIVE are project-relative file names."
+  (string-join
+   (list my-codex-test-coverage-prompt
+         (format "context:\n  implementation: @%s\n  test: @%s"
+                 implementation-relative
+                 test-relative)
+         "request: Analyze test coverage now.")
+   "\n\n"))
+
 ;;;###autoload
 (defun my-codex-analyse-test-coverage ()
   "Ask Codex to analyse coverage of the current file by its test file."
@@ -1700,11 +1711,9 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
     (unless test-relative
       (user-error "Test file is outside the current project"))
     (my-codex--preview-and-send-prompt
-     (string-join
-      (list my-codex-test-coverage-prompt
-            (format "Implementation: @%s" implementation-relative)
-            (format "Test: @%s" test-relative))
-      "\n\n"))))
+     (my-codex--test-coverage-prompt
+      implementation-relative
+      test-relative))))
 
 (defun my-codex--symbol-at-point ()
   "Return the symbol at point, or raise a user error."

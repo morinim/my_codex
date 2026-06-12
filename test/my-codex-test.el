@@ -261,6 +261,30 @@
         (should (string-match-p "first\nsecond\nthird" context))
         (should-not (string-match-p "@.* lines " context))))))
 
+(ert-deftest my-codex-test-coverage-prompt-puts-dynamic-context-late ()
+  (let* ((my-codex-test-coverage-prompt "Stable coverage instructions.")
+         (prompt (my-codex--test-coverage-prompt
+                  "src/example.el"
+                  "test/example-test.el")))
+    (let ((instructions-pos
+           (string-match "Stable coverage instructions\\." prompt))
+          (context-pos (string-match "context:" prompt))
+          (implementation-pos
+           (string-match "implementation: @src/example\\.el" prompt))
+          (test-pos
+           (string-match "test: @test/example-test\\.el" prompt))
+          (request-pos
+           (string-match "request: Analyze test coverage now\\." prompt)))
+      (should instructions-pos)
+      (should context-pos)
+      (should implementation-pos)
+      (should test-pos)
+      (should request-pos)
+      (should (< instructions-pos context-pos))
+      (should (< context-pos implementation-pos))
+      (should (< implementation-pos test-pos))
+      (should (< test-pos request-pos)))))
+
 (ert-deftest my-codex-doctor-command-executable-token-handles-shell-prefixes ()
   (should
    (equal
