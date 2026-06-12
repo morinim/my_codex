@@ -237,6 +237,7 @@ Common options:
 (setq my-codex-enable-prompt-preview nil)
 (setq my-codex-large-prompt-warning-chars 12000)
 (setq my-codex-large-prompt-error-chars nil)
+(setq my-codex-region-reference-threshold-chars 12000)
 (setq my-codex-symbol-include-xref-context t)
 (setq my-codex-symbol-xref-definition-limit 2)
 (setq my-codex-symbol-xref-reference-limit 8)

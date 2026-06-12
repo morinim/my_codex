@@ -91,6 +91,169 @@
      (my-codex--check-prompt-size "this is large")
      :type 'user-error)))
 
+(ert-deftest my-codex-region-file-reference-formats-relative-lines ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t))))
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "src/example.el" root))
+          (insert "first\nsecond\nthird\n")
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root)))
+            (should
+             (equal
+              (my-codex--region-file-reference (point-min) (point-max))
+              "@src/example.el lines 1-3"))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-region-review-prompt-pastes-small-regions ()
+  (let ((my-codex-region-reference-threshold-chars 100))
+    (with-temp-buffer
+      (insert "small region")
+      (let ((prompt (my-codex--region-review-prompt
+                     (point-min)
+                     (point-max))))
+        (should (string-match-p "small region" prompt))
+        (should-not (string-match-p "@.* lines " prompt))))))
+
+(ert-deftest my-codex-region-review-prompt-references-large-file-regions ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t)))
+        (my-codex-region-reference-threshold-chars 5))
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "src/example.el" root))
+          (insert "first\nsecond\nthird\n")
+          (set-buffer-modified-p nil)
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root))
+                    ((symbol-function 'verify-visited-file-modtime)
+                     (lambda (_buffer) t)))
+            (let ((prompt (my-codex--region-review-prompt
+                           (point-min)
+                           (point-max))))
+              (should (string-match-p "@src/example\\.el lines 1-3" prompt))
+              (should-not (string-match-p "first\nsecond\nthird" prompt)))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-region-review-prompt-pastes-stale-file-regions ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t)))
+        (my-codex-region-reference-threshold-chars 5))
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "src/example.el" root))
+          (insert "first\nsecond\nthird\n")
+          (set-buffer-modified-p nil)
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root))
+                    ((symbol-function 'verify-visited-file-modtime)
+                     (lambda (_buffer) nil)))
+            (let ((prompt (my-codex--region-review-prompt
+                           (point-min)
+                           (point-max))))
+              (should (string-match-p "first\nsecond\nthird" prompt))
+              (should-not
+               (string-match-p "@src/example\\.el lines 1-3" prompt)))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-region-review-prompt-pastes-unsaved-file-regions ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t)))
+        (my-codex-region-reference-threshold-chars 5))
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "src/example.el" root))
+          (insert "first\nsecond\nthird\n")
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root)))
+            (let ((prompt (my-codex--region-review-prompt
+                           (point-min)
+                           (point-max))))
+              (should (string-match-p "first\nsecond\nthird" prompt))
+              (should-not
+               (string-match-p "@src/example\\.el lines 1-3" prompt)))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-region-review-prompt-pastes-unnamed-large-regions ()
+  (let ((my-codex-region-reference-threshold-chars 5))
+    (with-temp-buffer
+      (insert "first\nsecond\nthird\n")
+      (let ((prompt (my-codex--region-review-prompt
+                     (point-min)
+                     (point-max))))
+        (should (string-match-p "first\nsecond\nthird" prompt))
+        (should-not (string-match-p "@.* lines " prompt))))))
+
+(ert-deftest my-codex-region-prompt-context-references-large-file-regions ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t)))
+        (my-codex-region-reference-threshold-chars 5))
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "src/example.el" root))
+          (insert "first\nsecond\nthird\n")
+          (set-buffer-modified-p nil)
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root))
+                    ((symbol-function 'verify-visited-file-modtime)
+                     (lambda (_buffer) t)))
+            (let ((context (my-codex--region-prompt-context
+                            (point-min)
+                            (point-max))))
+              (should (string-match-p "@src/example\\.el lines 1-3" context))
+              (should-not (string-match-p "first\nsecond\nthird" context)))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-region-prompt-context-pastes-stale-file-regions ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t)))
+        (my-codex-region-reference-threshold-chars 5))
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "src/example.el" root))
+          (insert "first\nsecond\nthird\n")
+          (set-buffer-modified-p nil)
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root))
+                    ((symbol-function 'verify-visited-file-modtime)
+                     (lambda (_buffer) nil)))
+            (let ((context (my-codex--region-prompt-context
+                            (point-min)
+                            (point-max))))
+              (should (string-match-p "first\nsecond\nthird" context))
+              (should-not
+               (string-match-p "@src/example\\.el lines 1-3" context)))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-region-prompt-context-pastes-unsaved-file-regions ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t)))
+        (my-codex-region-reference-threshold-chars 5))
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "src/example.el" root))
+          (insert "first\nsecond\nthird\n")
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root)))
+            (let ((context (my-codex--region-prompt-context
+                            (point-min)
+                            (point-max))))
+              (should (string-match-p "first\nsecond\nthird" context))
+              (should-not
+               (string-match-p "@src/example\\.el lines 1-3" context)))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-region-prompt-context-pastes-unnamed-regions ()
+  (let ((my-codex-region-reference-threshold-chars 5))
+    (with-temp-buffer
+      (insert "first\nsecond\nthird\n")
+      (let ((context (my-codex--region-prompt-context
+                      (point-min)
+                      (point-max))))
+        (should (string-match-p "first\nsecond\nthird" context))
+        (should-not (string-match-p "@.* lines " context))))))
+
 (ert-deftest my-codex-doctor-command-executable-token-handles-shell-prefixes ()
   (should
    (equal

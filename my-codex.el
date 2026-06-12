@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.10.0
+;; Version: 0.11.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -243,6 +243,14 @@ When nil, do not warn about large prompts."
   "Prompt size in characters that is refused before sending.
 When nil, do not enforce a hard prompt size limit."
   :type '(choice (const :tag "No hard limit" nil)
+                 natnum)
+  :group 'my-codex)
+
+(defcustom my-codex-region-reference-threshold-chars 12000
+  "Region size in characters that sends a file reference instead of text.
+This only applies to file-visiting buffers.  When nil, always send
+selected region text from `my-codex-send-region'."
+  :type '(choice (const :tag "Always send selected text" nil)
                  natnum)
   :group 'my-codex)
 
@@ -1574,9 +1582,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
   (unless (use-region-p)
     (user-error "No active region"))
   (my-codex--preview-and-send-prompt
-   (format "%s\n\nPlease review this code and report findings:\n\n%s"
-           (my-codex--region-context beg end)
-           (buffer-substring-no-properties beg end))))
+   (my-codex--region-review-prompt beg end)))
 
 ;;;###autoload
 (defun my-codex-send-current-file ()
@@ -2686,6 +2692,42 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
          (line-end (line-number-at-pos (max beg (1- end)) t)))
     (format "@%s lines %d-%d" file line-start line-end)))
 
+(defun my-codex--region-reference-p (beg end)
+  "Return non-nil when region BEG to END should be sent by reference."
+  (and buffer-file-name
+       (not (buffer-modified-p))
+       (verify-visited-file-modtime (current-buffer))
+       my-codex-region-reference-threshold-chars
+       (> (- end beg) my-codex-region-reference-threshold-chars)))
+
+(defun my-codex--region-review-reference-prompt (beg end)
+  "Return a region review prompt that references BEG to END by file range."
+  (format (concat "Please review this code and report findings. Inspect this "
+                  "file range directly instead of relying on pasted code:"
+                  "\n\n%s")
+          (my-codex--region-file-reference beg end)))
+
+(defun my-codex--region-review-text-prompt (beg end)
+  "Return a region review prompt that includes text between BEG and END."
+  (format "%s\n\nPlease review this code and report findings:\n\n%s"
+          (my-codex--region-context beg end)
+          (buffer-substring-no-properties beg end)))
+
+(defun my-codex--region-prompt-context (beg end)
+  "Return prompt context for region BEG to END."
+  (if (my-codex--region-reference-p beg end)
+      (format "Selected region:\n\n%s"
+              (my-codex--region-file-reference beg end))
+    (format "%s\n\n%s"
+            (my-codex--region-context beg end)
+            (buffer-substring-no-properties beg end))))
+
+(defun my-codex--region-review-prompt (beg end)
+  "Return a review prompt for region BEG to END."
+  (if (my-codex--region-reference-p beg end)
+      (my-codex--region-review-reference-prompt beg end)
+    (my-codex--region-review-text-prompt beg end)))
+
 ;;;###autoload
 (defun my-codex-plan-refactor-region (beg end)
   "Ask Codex for a safe refactoring plan for the active region.
@@ -2843,10 +2885,7 @@ after the at-sign with `completion-at-point'."
                             (when has-region
                               (let ((beg (region-beginning))
                                     (end (region-end)))
-                                (format "%s\n\n%s"
-                                        (my-codex--region-context beg end)
-                                        (buffer-substring-no-properties
-                                         beg end))))))))
+                                (my-codex--region-prompt-context beg end)))))))
     (my-codex--preview-and-send-prompt (string-join parts "\n\n"))))
 
 ;;;###autoload
