@@ -217,12 +217,12 @@ BEGIN_COMMIT_MESSAGE and END_COMMIT_MESSAGE markers if you want
   :type 'boolean
   :group 'my-codex)
 
-(defcustom my-codex-project-overview-max-files 200
+(defcustom my-codex-project-overview-max-files 80
   "Maximum project file count before project overviews use a tree summary."
   :type 'natnum
   :group 'my-codex)
 
-(defcustom my-codex-project-overview-tree-max-entries 25
+(defcustom my-codex-project-overview-tree-max-entries 12
   "Maximum entries shown for each directory in project overview tree summaries."
   :type 'natnum
   :group 'my-codex)

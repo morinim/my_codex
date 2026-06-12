@@ -282,6 +282,20 @@
         "test/ (1 file)"
         "  my-codex-test.el")))))
 
+(ert-deftest my-codex-project-files-text-lists-files-at-default-threshold ()
+  (let ((files (cl-loop for n from 1 to my-codex-project-overview-max-files
+                        collect (format "file-%02d.el" n))))
+    (should (equal (my-codex--project-files-text files)
+                   (string-join files "\n")))))
+
+(ert-deftest my-codex-project-files-text-uses-tree-above-default-threshold ()
+  (let* ((files (cl-loop for n from 1
+                         to (1+ my-codex-project-overview-max-files)
+                         collect (format "src/file-%02d.el" n)))
+         (text (my-codex--project-files-text files)))
+    (should (string-match-p "showing a compact tree summary" text))
+    (should-not (equal text (string-join files "\n")))))
+
 (ert-deftest my-codex-xref-items-section-formats-relative-excerpts ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-xref" t))))
     (unwind-protect

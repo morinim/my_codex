@@ -232,8 +232,8 @@ Common options:
 (setq my-codex-project-instruction-files
       '("AGENTS.md" "CODEX.md" ".codex/instructions.md"))
 
-(setq my-codex-project-overview-max-files 200)
-(setq my-codex-project-overview-tree-max-entries 25)
+(setq my-codex-project-overview-max-files 80)
+(setq my-codex-project-overview-tree-max-entries 12)
 (setq my-codex-enable-prompt-preview nil)
 (setq my-codex-large-prompt-warning-chars 12000)
 (setq my-codex-large-prompt-error-chars nil)
