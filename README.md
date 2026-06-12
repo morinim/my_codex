@@ -79,14 +79,19 @@ and are not required for the Emacs package to work.
 Expert users can copy, symlink, modify, or ignore them according to their own
 Codex setup.
 
-The `handoff` skill follows the context-transfer workflow described by
-Matt Pocock in [handoff: Move Context Between Agent Sessions][aihero-handoff].
-
 Example invocations:
 
 | Skill | Description | Example invocation |
 | --- | --- | --- |
+| `grill-me` | Stress-test a plan or design by asking focused questions one at a time. | `$grill-me stress-test this refactoring plan` |
 | `handoff` | Create a disposable Markdown context transfer for continuing focused work in another agent session. | `$handoff continue the Firebird SQL refactoring` |
+
+Attribution:
+
+| Skill | Attribution | Licence | Reference |
+| --- | --- | --- | --- |
+| `grill-me` | Matt Pocock | MIT | [grill-me: Stress-Test a Plan Before You Build][aihero-grillme] |
+| `handoff` | Matt Pocock | MIT | [handoff: Move Context Between Agent Sessions][aihero-handoff] |
 
 ## Updating Codex CLI
 
@@ -327,6 +332,8 @@ project root.
 
 [Mozilla Public License v2.0][mpl2], also available in [LICENSE][license].
 
+
+[aihero-grillme]: https://www.aihero.dev/skills-grill-me
 [aihero-handoff]: https://www.aihero.dev/skills-handoff
 [codex]: https://github.com/openai/codex
 [license]: https://github.com/morinim/my_codex/blob/main/LICENSE
