@@ -127,21 +127,21 @@ When nil, use `compile-command'."
   :group 'my-codex)
 
 (defcustom my-codex-git-diff-review-prompt
-  "Please review the current Git diff using `git diff -- .`. Focus on correctness, regressions, edge cases, naming, and maintainability. Do not edit files unless I explicitly ask.\n"
+  "Review the current Git diff using `git diff -- .`. Focus on correctness, regressions, edge cases, naming and maintainability. Do not edit unless asked\n"
   "Prompt used by `my-codex-send-git-diff'."
   :type 'string
   :group 'my-codex)
 
 (defcustom my-codex-git-staged-diff-review-prompt
-  "Please review the staged Git diff using `git diff --cached -- .`. Focus on correctness, regressions, edge cases, and commit readiness. Do not edit files unless I explicitly ask.\n"
+  "Review the staged Git diff using `git diff --cached -- .`. Focus on correctness, regressions, edge cases and commit readiness. Do not edit unless asked\n"
   "Prompt used by `my-codex-send-git-staged-diff'."
   :type 'string
   :group 'my-codex)
 
 (defcustom my-codex-test-coverage-prompt
-  "Please analyse the test coverage for this implementation and its test file.
+  "Analyse test coverage for this implementation and its test file.
 
-Identify missing edge cases, unhandled exceptions, logical flaws, and important behaviour that is not currently tested. Do not edit files and do not write tests; only list the missing scenarios."
+Identify missing edge cases, unhandled exceptions, logical flaws and important behaviour that is not currently tested. Do not edit or write tests; list missing scenarios only."
   "Prompt used by `my-codex-analyse-test-coverage'."
   :type 'string
   :group 'my-codex)
@@ -165,7 +165,7 @@ Finish with the smallest safe first edit worth making."
   :group 'my-codex)
 
 (defcustom my-codex-commit-message-prompt-template
-  "Please inspect the staged Git diff using `git diff --cached -- .` and write a concise but comprehensive conventional commit message.
+  "Inspect the staged Git diff using `git diff --cached -- .` and write a concise conventional commit message.
 
 Put only the final commit message between these exact markers:
 
@@ -280,7 +280,7 @@ selected region text from `my-codex-send-region'."
   :group 'my-codex)
 
 (defcustom my-codex-session-summary-prompt
-  "Please summarize, organize, and rationalize this Codex session transcript into useful project notes.
+  "Summarise this Codex session transcript into useful project notes.
 
 Focus on:
 - decisions made
@@ -295,7 +295,7 @@ Preserve concrete file names, command names, and technical details. Do not edit 
   :group 'my-codex)
 
 (defcustom my-codex-github-issue-summary-prompt
-  "Please summarize this Codex session transcript as a GitHub issue draft.
+  "Summarise this Codex session transcript as a GitHub issue draft.
 
 Focus on:
 - concrete problem or feature context
@@ -1598,7 +1598,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
   (let* ((root (my-codex-project-root))
          (file (file-relative-name buffer-file-name root)))
     (my-codex--preview-and-send-prompt
-     (format "Please inspect `%s` directly and report findings. Do not edit it unless I explicitly ask.\n"
+     (format "Inspect `%s` directly and report findings. Do not edit unless asked\n"
              file))))
 
 (defun my-codex--project-relative-file (file root)
@@ -2739,7 +2739,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
   (unless (use-region-p)
     (user-error "No active region"))
   (my-codex--preview-and-send-prompt
-   (format "Please explain this compiler/test error and suggest the most likely fix:\n\n%s"
+   (format "Explain this compiler/test error and suggest the most likely fix:\n\n%s"
            (buffer-substring-no-properties (region-beginning) (region-end)))))
 
 (defun my-codex--region-file-reference (beg end)
@@ -2762,14 +2762,14 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
 
 (defun my-codex--region-review-reference-prompt (beg end)
   "Return a region review prompt that references BEG to END by file range."
-  (format (concat "Please review this code and report findings. Inspect this "
-                  "file range directly instead of relying on pasted code:"
+  (format (concat "Review this code and report findings. Inspect this "
+                  "file range directly:"
                   "\n\n%s")
           (my-codex--region-file-reference beg end)))
 
 (defun my-codex--region-review-text-prompt (beg end)
   "Return a region review prompt that includes text between BEG and END."
-  (format "%s\n\nPlease review this code and report findings:\n\n%s"
+  (format "%s\n\nReview this code and report findings:\n\n%s"
           (my-codex--region-context beg end)
           (buffer-substring-no-properties beg end)))
 
