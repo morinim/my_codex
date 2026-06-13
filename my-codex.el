@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.12.0
+;; Version: 0.12.1
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -46,7 +46,6 @@
 (defvar vterm-mode-map)
 (defvar vterm-copy-mode-map)
 (defvar vterm-copy-mode)
-(defvar vterm-shell nil)
 
 (defgroup my-codex nil
   "Customisation options for the Codex development tool."
@@ -415,9 +414,10 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 (defun my-codex--vterm-shell-name ()
   "Return the configured vterm shell executable name, if known."
   (let ((shell (or (and (boundp 'vterm-shell)
-                        (stringp vterm-shell)
-                        (not (string-empty-p vterm-shell))
-                        vterm-shell)
+                        (let ((value (symbol-value 'vterm-shell)))
+                          (and (stringp value)
+                               (not (string-empty-p value))
+                               value)))
                    shell-file-name
                    "")))
     (file-name-nondirectory

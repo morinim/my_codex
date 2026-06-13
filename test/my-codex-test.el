@@ -58,28 +58,59 @@
   (should (= (my-codex--approx-token-count "abcd") 1))
   (should (= (my-codex--approx-token-count "abcde") 2)))
 
+(defmacro my-codex-test-with-vterm-shell (shell &rest body)
+  "Bind `vterm-shell' to SHELL while running BODY."
+  (declare (indent 1))
+  `(let ((was-bound (boundp 'vterm-shell))
+         (original-value (and (boundp 'vterm-shell)
+                              (symbol-value 'vterm-shell))))
+     (unwind-protect
+         (progn
+           (set 'vterm-shell ,shell)
+           ,@body)
+       (if was-bound
+           (set 'vterm-shell original-value)
+         (makunbound 'vterm-shell)))))
+
 (ert-deftest my-codex-shell-command-and-exit-uses-posix-status ()
-  (let ((vterm-shell "/bin/bash"))
+  (my-codex-test-with-vterm-shell "/bin/bash"
     (should
      (equal
       (my-codex--shell-command-and-exit "codex")
       "codex\nstatus=$?\nexit $status"))))
 
 (ert-deftest my-codex-shell-command-and-exit-uses-cmd-errorlevel ()
-  (let ((vterm-shell "C:\\Windows\\System32\\cmd.exe"))
+  (my-codex-test-with-vterm-shell "C:\\Windows\\System32\\cmd.exe"
     (should
      (equal
       (my-codex--shell-command-and-exit "codex")
       "codex\nexit %ERRORLEVEL%"))))
 
 (ert-deftest my-codex-shell-command-and-exit-uses-powershell-status ()
-  (let ((vterm-shell "C:\\Program Files\\PowerShell\\7\\pwsh.exe"))
+  (my-codex-test-with-vterm-shell "C:\\Program Files\\PowerShell\\7\\pwsh.exe"
     (should
      (equal
       (my-codex--shell-command-and-exit "codex")
       (concat "codex\n"
               "if ($LASTEXITCODE -ne $null) { exit $LASTEXITCODE }\n"
               "if ($?) { exit 0 } else { exit 1 }")))))
+
+(ert-deftest my-codex-does-not-prebind-vterm-shell ()
+  (let* ((script '(progn
+                    (package-initialize)
+                    (require 'my-codex)
+                    (require 'vterm)
+                    (princ vterm-shell)))
+         (output
+          (with-temp-buffer
+            (let ((exit-code
+                   (call-process invocation-name nil t nil
+                                 "--batch" "-Q" "-L" default-directory
+                                 "--eval" (prin1-to-string script))))
+              (unless (zerop exit-code)
+                (error "Nested Emacs failed: %s" (buffer-string)))
+              (buffer-string)))))
+    (should (equal output shell-file-name))))
 
 (ert-deftest my-codex-prompt-preset-transient-suffixes-empty-keeps-chooser ()
   (let* ((my-codex-prompt-presets nil)
