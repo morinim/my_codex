@@ -81,6 +81,23 @@
               "if ($LASTEXITCODE -ne $null) { exit $LASTEXITCODE }\n"
               "if ($?) { exit 0 } else { exit 1 }")))))
 
+(ert-deftest my-codex-prompt-preset-transient-suffixes-empty-keeps-chooser ()
+  (let* ((my-codex-prompt-presets nil)
+         (suffixes (my-codex--prompt-preset-transient-suffixes nil))
+         (choose-suffix (cadr suffixes))
+         (properties (nth 2 choose-suffix)))
+    (should (equal (car suffixes) ""))
+    (should
+     (equal (plist-get properties :description)
+            "Choose by name"))
+    (should (eq (plist-get properties :command)
+                'my-codex-ask-with-preset))
+    (should-not
+     (seq-some (lambda (suffix)
+                 (and (consp suffix)
+                      (eq (plist-get (nth 2 suffix) :command) 'ignore)))
+               suffixes))))
+
 (ert-deftest my-codex-display-buffer-action-alist-returns-action-alist ()
   (let ((my-codex-display-buffer-action
          '((display-buffer-in-side-window)

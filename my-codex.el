@@ -3016,7 +3016,7 @@ When a region is active, include exact file and line context for it."
                           (my-codex--ask-with-prompt-preset preset)))))
               my-codex--preset-transient-keys
               visible-presets)
-           '("No prompt presets configured"))
+           nil)
        ,@(when (> hidden-count 0)
            (list (format "%d more preset%s available via C"
                          hidden-count
