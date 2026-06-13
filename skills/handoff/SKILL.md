@@ -1,7 +1,6 @@
 ---
 name: handoff
 description: Compact the current conversation into a handoff document for another agent to continue the work.
-license: MPL-2.0
 argument-hint: What will the next session be used for?
 metadata:
   version: "1.0"

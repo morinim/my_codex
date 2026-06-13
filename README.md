@@ -88,15 +88,17 @@ Example invocations:
 
 | Skill | Description | Example invocation |
 | --- | --- | --- |
+| `caveman` | Ultra-compressed communication mode. Optional argument accepts on/off, enable/disable, start/end, yes/no, or true/false; no argument toggles. | `$caveman on` |
 | `grill-me` | Stress-test a plan or design by asking focused questions one at a time. | `$grill-me stress-test this refactoring plan` |
 | `handoff` | Create a disposable Markdown context transfer for continuing focused work in another agent session. | `$handoff continue the Firebird SQL refactoring` |
 
 Attribution:
 
-| Skill | Attribution | Licence | Reference |
-| --- | --- | --- | --- |
-| `grill-me` | Matt Pocock | MIT | [grill-me: Stress-Test a Plan Before You Build][aihero-grillme] |
-| `handoff` | Matt Pocock | MIT | [handoff: Move Context Between Agent Sessions][aihero-handoff] |
+| Skill      | Attribution    | Reference |
+| ---        | ---            | ---       |
+| `caveman`  | Julius Brussee | [caveman: why use many token when few do trick][caveman] |
+| `grill-me` | Matt Pocock    | [grill-me: Stress-Test a Plan Before You Build][aihero-grillme] |
+| `handoff`  | Matt Pocock    | [handoff: Move Context Between Agent Sessions][aihero-handoff] |
 
 ## Updating Codex CLI
 
@@ -344,6 +346,7 @@ project root.
 
 [aihero-grillme]: https://www.aihero.dev/skills-grill-me
 [aihero-handoff]: https://www.aihero.dev/skills-handoff
+[caveman]: https://github.com/juliusbrussee/caveman
 [codex]: https://github.com/openai/codex
 [license]: https://github.com/morinim/my_codex/blob/main/LICENSE
 [mpl2]: https://www.mozilla.org/MPL/2.0/
