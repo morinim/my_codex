@@ -46,6 +46,7 @@
 (defvar vterm-mode-map)
 (defvar vterm-copy-mode-map)
 (defvar vterm-copy-mode)
+(defvar vterm-shell nil)
 
 (defgroup my-codex nil
   "Customisation options for the Codex development tool."
@@ -411,9 +412,31 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
       (ignore-errors
         (my-codex-visible-window))))
 
+(defun my-codex--vterm-shell-name ()
+  "Return the configured vterm shell executable name, if known."
+  (let ((shell (or (and (boundp 'vterm-shell)
+                        (stringp vterm-shell)
+                        (not (string-empty-p vterm-shell))
+                        vterm-shell)
+                   shell-file-name
+                   "")))
+    (file-name-nondirectory
+     (replace-regexp-in-string "\\\\" "/" shell))))
+
 (defun my-codex--shell-command-and-exit (command)
   "Return shell text that runs COMMAND, then exits with its status."
-  (format "%s\nstatus=$?\nexit $status" command))
+  (let ((shell (downcase (my-codex--vterm-shell-name))))
+    (cond
+     ((member shell '("cmd" "cmd.exe" "cmdproxy" "cmdproxy.exe"))
+      (format "%s\nexit %%ERRORLEVEL%%" command))
+     ((member shell '("powershell" "powershell.exe" "pwsh" "pwsh.exe"))
+      (format (concat "%s\n"
+                      "if ($LASTEXITCODE -ne $null) { exit $LASTEXITCODE }\n"
+                      "if ($?) { exit 0 } else { exit 1 }")
+              command))
+     (t
+      (format "%s\nstatus=$?\nexit $status" command)))))
+
 
 (defun my-codex--right-window-width (window)
   "Resize WINDOW to the target Codex width when enforcement is enabled."

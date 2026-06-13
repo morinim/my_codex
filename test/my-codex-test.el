@@ -58,6 +58,29 @@
   (should (= (my-codex--approx-token-count "abcd") 1))
   (should (= (my-codex--approx-token-count "abcde") 2)))
 
+(ert-deftest my-codex-shell-command-and-exit-uses-posix-status ()
+  (let ((vterm-shell "/bin/bash"))
+    (should
+     (equal
+      (my-codex--shell-command-and-exit "codex")
+      "codex\nstatus=$?\nexit $status"))))
+
+(ert-deftest my-codex-shell-command-and-exit-uses-cmd-errorlevel ()
+  (let ((vterm-shell "C:\\Windows\\System32\\cmd.exe"))
+    (should
+     (equal
+      (my-codex--shell-command-and-exit "codex")
+      "codex\nexit %ERRORLEVEL%"))))
+
+(ert-deftest my-codex-shell-command-and-exit-uses-powershell-status ()
+  (let ((vterm-shell "C:\\Program Files\\PowerShell\\7\\pwsh.exe"))
+    (should
+     (equal
+      (my-codex--shell-command-and-exit "codex")
+      (concat "codex\n"
+              "if ($LASTEXITCODE -ne $null) { exit $LASTEXITCODE }\n"
+              "if ($?) { exit 0 } else { exit 1 }")))))
+
 (ert-deftest my-codex-display-buffer-action-alist-returns-action-alist ()
   (let ((my-codex-display-buffer-action
          '((display-buffer-in-side-window)
