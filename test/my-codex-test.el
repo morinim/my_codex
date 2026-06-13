@@ -58,6 +58,26 @@
   (should (= (my-codex--approx-token-count "abcd") 1))
   (should (= (my-codex--approx-token-count "abcde") 2)))
 
+(ert-deftest my-codex-display-buffer-action-alist-returns-action-alist ()
+  (let ((my-codex-display-buffer-action
+         '((display-buffer-in-side-window)
+           (side . right)
+           (window-width . 80))))
+    (should
+     (equal (my-codex--display-buffer-action-alist)
+            '((side . right)
+              (window-width . 80))))))
+
+(ert-deftest my-codex-display-buffer-action-alist-handles-functions ()
+  (let ((my-codex-display-buffer-action #'display-buffer-same-window))
+    (should-not (my-codex--display-buffer-action-alist))
+    (should-not (my-codex--right-side-action-p))))
+
+(ert-deftest my-codex-display-buffer-action-alist-handles-symbols ()
+  (let ((my-codex-display-buffer-action 'display-buffer-same-window))
+    (should-not (my-codex--display-buffer-action-alist))
+    (should-not (my-codex--right-side-action-p))))
+
 (ert-deftest my-codex-prompt-preview-header-shows-initial-size ()
   (should
    (equal

@@ -422,9 +422,15 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
      window
      (max my-codex-min-right-width my-codex-right-width))))
 
+(defun my-codex--display-buffer-action-alist ()
+  "Return the alist part of `my-codex-display-buffer-action', if any."
+  (when (and (consp my-codex-display-buffer-action)
+             (listp (cdr my-codex-display-buffer-action)))
+    (cdr my-codex-display-buffer-action)))
+
 (defun my-codex--right-side-action-p ()
   "Return non-nil when Codex is configured for a right side window."
-  (eq (alist-get 'side (cdr my-codex-display-buffer-action)) 'right))
+  (eq (alist-get 'side (my-codex--display-buffer-action-alist)) 'right))
 
 (defun my-codex--right-layout-width ()
   "Return the minimum frame width for the default right-side layout."
@@ -462,7 +468,7 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 (defun my-codex--apply-display-window-width (window)
   "Apply the configured Codex display width to WINDOW."
   (when (window-live-p window)
-    (pcase (alist-get 'window-width (cdr my-codex-display-buffer-action))
+    (pcase (alist-get 'window-width (my-codex--display-buffer-action-alist))
       ((and width (pred integerp))
        (my-codex--resize-window-to-body-width window width))
       (`(body-columns . ,width)
