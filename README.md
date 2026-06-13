@@ -1,3 +1,8 @@
+[![Version](https://img.shields.io/github/tag/morinim/my_codex.svg)][releases]
+![elisp](https://img.shields.io/badge/elisp-blue.svg)
+![Platform](https://img.shields.io/badge/platform-cross--platform-lightgrey)
+[![License](https://img.shields.io/badge/license-MPLv2-blue.svg)][mpl2]
+
 # my-codex.el
 
 ```text
@@ -342,5 +347,6 @@ project root.
 [codex]: https://github.com/openai/codex
 [license]: https://github.com/morinim/my_codex/blob/main/LICENSE
 [mpl2]: https://www.mozilla.org/MPL/2.0/
+[releases]: https://github.com/morinim/my_codex/releases
 [transient]: https://github.com/magit/transient
 [vterm]: https://github.com/akermu/emacs-libvterm
