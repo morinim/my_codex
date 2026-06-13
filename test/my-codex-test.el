@@ -125,13 +125,67 @@
           (setq default-directory root)
           (setq buffer-file-name (expand-file-name "src/example.el" root))
           (insert "first\nsecond\nthird\n")
+          (set-buffer-modified-p nil)
           (cl-letf (((symbol-function 'my-codex-project-root)
-                     (lambda () root)))
+                     (lambda () root))
+                    ((symbol-function 'verify-visited-file-modtime)
+                     (lambda (_buffer) t)))
             (should
              (equal
               (my-codex--region-file-reference (point-min) (point-max))
               "@src/example.el lines 1-3"))))
       (delete-directory root t))))
+
+(ert-deftest my-codex-region-file-reference-rejects-unsaved-files ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t))))
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "src/example.el" root))
+          (insert "first\nsecond\nthird\n")
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root)))
+            (should-error
+             (my-codex--region-file-reference (point-min) (point-max))
+             :type 'user-error)))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-region-file-reference-rejects-stale-files ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t))))
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "src/example.el" root))
+          (insert "first\nsecond\nthird\n")
+          (set-buffer-modified-p nil)
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root))
+                    ((symbol-function 'verify-visited-file-modtime)
+                     (lambda (_buffer) nil)))
+            (should-error
+             (my-codex--region-file-reference (point-min) (point-max))
+             :type 'user-error)))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-region-file-reference-rejects-outside-project-files ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t)))
+        (outside-root (file-name-as-directory
+                       (make-temp-file "my-codex-outside" t))))
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "example.el" outside-root))
+          (insert "first\nsecond\nthird\n")
+          (set-buffer-modified-p nil)
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root))
+                    ((symbol-function 'verify-visited-file-modtime)
+                     (lambda (_buffer) t)))
+            (should-error
+             (my-codex--region-file-reference (point-min) (point-max))
+             :type 'user-error)))
+      (delete-directory root t)
+      (delete-directory outside-root t))))
 
 (ert-deftest my-codex-region-review-prompt-pastes-small-regions ()
   (let ((my-codex-region-reference-threshold-chars 100))
@@ -212,6 +266,29 @@
         (should (string-match-p "first\nsecond\nthird" prompt))
         (should-not (string-match-p "@.* lines " prompt))))))
 
+(ert-deftest my-codex-region-review-prompt-pastes-outside-project-regions ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t)))
+        (outside-root (file-name-as-directory
+                       (make-temp-file "my-codex-outside" t)))
+        (my-codex-region-reference-threshold-chars 5))
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "example.el" outside-root))
+          (insert "first\nsecond\nthird\n")
+          (set-buffer-modified-p nil)
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root))
+                    ((symbol-function 'verify-visited-file-modtime)
+                     (lambda (_buffer) t)))
+            (let ((prompt (my-codex--region-review-prompt
+                           (point-min)
+                           (point-max))))
+              (should (string-match-p "first\nsecond\nthird" prompt))
+              (should-not (string-match-p "@.* lines " prompt)))))
+      (delete-directory root t)
+      (delete-directory outside-root t))))
+
 (ert-deftest my-codex-region-prompt-context-references-large-file-regions ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t)))
         (my-codex-region-reference-threshold-chars 5))
@@ -280,6 +357,29 @@
                       (point-max))))
         (should (string-match-p "first\nsecond\nthird" context))
         (should-not (string-match-p "@.* lines " context))))))
+
+(ert-deftest my-codex-region-prompt-context-pastes-outside-project-regions ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t)))
+        (outside-root (file-name-as-directory
+                       (make-temp-file "my-codex-outside" t)))
+        (my-codex-region-reference-threshold-chars 5))
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "example.el" outside-root))
+          (insert "first\nsecond\nthird\n")
+          (set-buffer-modified-p nil)
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root))
+                    ((symbol-function 'verify-visited-file-modtime)
+                     (lambda (_buffer) t)))
+            (let ((context (my-codex--region-prompt-context
+                            (point-min)
+                            (point-max))))
+              (should (string-match-p "first\nsecond\nthird" context))
+              (should-not (string-match-p "@.* lines " context)))))
+      (delete-directory root t)
+      (delete-directory outside-root t))))
 
 (ert-deftest my-codex-test-coverage-prompt-puts-dynamic-context-late ()
   (let* ((my-codex-test-coverage-prompt "Stable coverage instructions.")

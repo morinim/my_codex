@@ -2752,10 +2752,16 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
   "Return a Codex file reference for the region between BEG and END."
   (unless buffer-file-name
     (user-error "Current buffer is not visiting a file"))
+  (when (buffer-modified-p)
+    (user-error "Save the buffer before sending a file reference"))
+  (unless (verify-visited-file-modtime (current-buffer))
+    (user-error "File changed on disk; revert or save before sending a file reference"))
   (let* ((root (my-codex-project-root))
-         (file (file-relative-name buffer-file-name root))
+         (file (my-codex--project-relative-file buffer-file-name root))
          (line-start (line-number-at-pos beg t))
          (line-end (line-number-at-pos (max beg (1- end)) t)))
+    (unless file
+      (user-error "Current file is outside the current project"))
     (format "@%s lines %d-%d" file line-start line-end)))
 
 (defun my-codex--region-reference-p (beg end)
@@ -2763,6 +2769,8 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
   (and buffer-file-name
        (not (buffer-modified-p))
        (verify-visited-file-modtime (current-buffer))
+       (my-codex--project-relative-file buffer-file-name
+                                        (my-codex-project-root))
        my-codex-region-reference-threshold-chars
        (> (- end beg) my-codex-region-reference-threshold-chars)))
 
