@@ -332,8 +332,15 @@ IMPLEMENTATION-RELATIVE and TEST-RELATIVE are project-relative file names."
 
 (defun my-codex--xref-location-marker (xref-item)
   "Return a marker for XREF-ITEM, or nil when its location is unavailable."
-  (ignore-errors
-    (xref-location-marker (xref-item-location xref-item))))
+  (my-codex--xref-call #'xref-location-marker (xref-item-location xref-item)))
+
+(defun my-codex--xref-call (function &rest args)
+  "Call xref FUNCTION with ARGS, returning nil when it fails."
+  (condition-case err
+      (apply function args)
+    (error
+     (message "Codex xref lookup failed: %s" (error-message-string err))
+     nil)))
 
 (defun my-codex--xref-location-label (marker root)
   "Return a project-relative location label for MARKER under ROOT."
@@ -420,16 +427,16 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
 (defun my-codex--symbol-xref-context (symbol root)
   "Return formatted xref context for SYMBOL under ROOT, or nil."
   (when my-codex-symbol-include-xref-context
-    (when-let ((backend (ignore-errors (xref-find-backend))))
-      (let* ((identifier (or (ignore-errors
-                               (xref-backend-identifier-at-point backend))
+    (when-let ((backend (my-codex--xref-call #'xref-find-backend)))
+      (let* ((identifier (or (my-codex--xref-call
+                              #'xref-backend-identifier-at-point backend)
                              symbol))
              (definitions
-              (ignore-errors
-                (xref-backend-definitions backend identifier)))
+              (my-codex--xref-call
+               #'xref-backend-definitions backend identifier))
              (references
-              (ignore-errors
-                (xref-backend-references backend identifier)))
+              (my-codex--xref-call
+               #'xref-backend-references backend identifier))
              (sections
               (delq nil
                     (list

@@ -163,9 +163,7 @@
           (buffer (process-buffer proc))
           (file (process-get proc 'my-codex-temp-file))
           (draft-buffer (process-get proc 'my-codex-draft-buffer)))
-      (when file
-        (ignore-errors
-          (delete-file file)))
+      (my-codex--github-delete-temp-file file)
       (if (zerop status)
           (progn
             (when (buffer-live-p buffer)
@@ -222,9 +220,14 @@
               (message "Creating GitHub issue with gh...")
               process)))
       (error
-       (ignore-errors
-         (delete-file file))
+       (my-codex--github-delete-temp-file file)
        (signal (car err) (cdr err))))))
+
+(defun my-codex--github-delete-temp-file (file)
+  "Delete temporary FILE, reporting cleanup failures as messages."
+  (when file
+    (with-demoted-errors "Failed to delete temporary file: %S"
+      (delete-file file))))
 
 (defun my-codex--github-issue-draft-fields ()
   "Return the edited GitHub issue draft fields in the current buffer."

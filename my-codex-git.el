@@ -762,8 +762,7 @@ Kill COMMIT-BUFFER after a successful commit when it is non-nil."
                      (when (memq (process-status proc) '(exit signal))
                        (let ((status (process-exit-status proc))
                              (buffer (process-buffer proc)))
-                         (ignore-errors
-                           (delete-file file))
+                         (my-codex--delete-temp-file file)
                          (if (zerop status)
                              (progn
                                (when (buffer-live-p commit-buffer)
@@ -784,9 +783,14 @@ Kill COMMIT-BUFFER after a successful commit when it is non-nil."
             (with-current-buffer output-buffer
               (setq default-directory root))))
       (error
-       (ignore-errors
-         (delete-file file))
+       (my-codex--delete-temp-file file)
        (signal (car err) (cdr err))))))
+
+(defun my-codex--delete-temp-file (file)
+  "Delete temporary FILE, reporting cleanup failures as messages."
+  (when file
+    (with-demoted-errors "Failed to delete temporary file: %S"
+      (delete-file file))))
 
 (defun my-codex--clear-marker (marker)
   "Detach MARKER from its buffer when MARKER is a marker."
