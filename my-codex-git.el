@@ -386,6 +386,39 @@ unsaved_modified_project_buffers:
    "%d" (number-to-string my-codex-commit-message-fill-column)
    my-codex-commit-message-prompt-template t t))
 
+(defun my-codex--git-diff-buffer-name (root staged)
+  "Return the diff buffer name for ROOT.
+When STAGED is non-nil, return the staged diff buffer name."
+  (format "*Codex diff:%s:%s*"
+          (my-codex--safe-root-name root)
+          (if staged "staged" "worktree")))
+
+(defun my-codex--show-git-diff (staged)
+  "Show a persistent `diff-mode' buffer for the current Git diff.
+When STAGED is non-nil, show the staged diff."
+  (my-codex--ensure-main-package)
+  (let* ((root (my-codex-project-root))
+         (default-directory root))
+    (my-codex--ensure-git-repository)
+    (setq root (my-codex--git-toplevel))
+    (let* ((default-directory root)
+           (buffer (get-buffer-create
+                    (my-codex--git-diff-buffer-name root staged)))
+           (args (if staged
+                     '("diff" "--cached" "--" ".")
+                   '("diff" "--" "."))))
+      (with-current-buffer buffer
+        (let ((inhibit-read-only t)
+              (previous-point (point)))
+          (setq-local default-directory root)
+          (erase-buffer)
+          (unless (eq 0 (apply #'process-file "git" nil t nil args))
+            (user-error "Unable to inspect Git diff"))
+          (goto-char (min previous-point (point-max)))
+          (diff-mode)
+          (setq buffer-read-only t)))
+      (display-buffer buffer))))
+
 ;;;###autoload
 (defun my-codex-send-git-diff ()
   "Ask Codex to review the current Git diff."
@@ -399,6 +432,18 @@ unsaved_modified_project_buffers:
   (interactive)
   (my-codex--ensure-main-package)
   (my-codex--send-git-prompt (my-codex--git-staged-diff-review-prompt)))
+
+;;;###autoload
+(defun my-codex-show-git-diff ()
+  "Show the current Git diff in a persistent `diff-mode' buffer."
+  (interactive)
+  (my-codex--show-git-diff nil))
+
+;;;###autoload
+(defun my-codex-show-git-staged-diff ()
+  "Show the staged Git diff in a persistent `diff-mode' buffer."
+  (interactive)
+  (my-codex--show-git-diff t))
 
 (defun my-codex--git-relative-file-name (file root)
   "Return FILE as a path relative to Git repository ROOT."

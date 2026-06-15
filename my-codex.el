@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.13.0
+;; Version: 0.14.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -1023,6 +1023,8 @@ Open the generated notes in an editable Markdown buffer when they are ready."
   "x"       #'my-codex-explain-symbol-at-point
   "g"       #'my-codex-send-git-diff
   "G"       #'my-codex-send-git-staged-diff
+  "v"       #'my-codex-show-git-diff
+  "V"       #'my-codex-show-git-staged-diff
   "d"       #'my-codex-ediff-current-file-against-head
   "D"       #'my-codex-ediff-changed-file-against-head
   "c"       #'my-codex-git-commit-with-latest-message
@@ -1060,6 +1062,8 @@ Open the generated notes in an editable Markdown buffer when they are ready."
    ["Git"
     ("g" "Review diff" my-codex-send-git-diff)
     ("G" "Review staged diff" my-codex-send-git-staged-diff)
+    ("v" "View diff" my-codex-show-git-diff)
+    ("V" "View staged diff" my-codex-show-git-staged-diff)
     ("d" "Ediff current file" my-codex-ediff-current-file-against-head)
     ("D" "Ediff changed file" my-codex-ediff-changed-file-against-head)
     ("c" "Commit with Codex message" my-codex-git-commit-with-latest-message)]
@@ -1187,6 +1191,12 @@ Open the generated notes in an editable Markdown buffer when they are ready."
      ["Review staged Git diff" my-codex-send-git-staged-diff
       :keys "F8 G"
       :help "Ask Codex to review the staged Git diff"]
+     ["View Git diff" my-codex-show-git-diff
+      :keys "F8 v"
+      :help "Show the current Git diff in a diff-mode buffer"]
+     ["View staged Git diff" my-codex-show-git-staged-diff
+      :keys "F8 V"
+      :help "Show the staged Git diff in a diff-mode buffer"]
      ["Ediff current file against HEAD" my-codex-ediff-current-file-against-head
       :keys "F8 d"
       :active (my-codex--current-or-left-file-available-p)

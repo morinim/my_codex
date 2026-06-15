@@ -189,6 +189,61 @@
     (should (string-match-p "feature-loaded" output))
     (should-not (string-match-p "void-variable" output))))
 
+(defun my-codex-test--init-git-repository ()
+  "Initialize a Git repository in `default-directory'."
+  (unless (executable-find "git")
+    (ert-skip "Git executable missing"))
+  (should (eq 0 (process-file "git" nil nil nil "init" "-q"))))
+
+(defun my-codex-test--write-file (file text)
+  "Write TEXT to FILE under `default-directory'."
+  (with-temp-file (expand-file-name file default-directory)
+    (insert text)))
+
+(ert-deftest my-codex-show-git-diff-populates-diff-mode-buffer ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-diff" t))))
+    (let ((default-directory root))
+      (my-codex-test--init-git-repository)
+      (my-codex-test--write-file "tracked.txt" "old\n")
+      (should (eq 0 (process-file "git" nil nil nil "add" "--" "tracked.txt")))
+      (my-codex-test--write-file "tracked.txt" "new\n")
+      (let ((buffer-name (my-codex--git-diff-buffer-name root nil)))
+        (unwind-protect
+            (cl-letf (((symbol-function 'my-codex-project-root)
+                       (lambda () root))
+                      ((symbol-function 'display-buffer)
+                       (lambda (buffer &rest _args) buffer)))
+              (my-codex-show-git-diff)
+              (with-current-buffer buffer-name
+                (should (derived-mode-p 'diff-mode))
+                (should buffer-read-only)
+                (should (equal default-directory root))
+                (should (string-match-p "^-old" (buffer-string)))
+                (should (string-match-p "^\\+new" (buffer-string)))))
+          (when-let ((buffer (get-buffer buffer-name)))
+            (kill-buffer buffer)))))))
+
+(ert-deftest my-codex-show-git-staged-diff-populates-diff-mode-buffer ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-diff" t))))
+    (let ((default-directory root))
+      (my-codex-test--init-git-repository)
+      (my-codex-test--write-file "staged.txt" "staged\n")
+      (should (eq 0 (process-file "git" nil nil nil "add" "--" "staged.txt")))
+      (let ((buffer-name (my-codex--git-diff-buffer-name root t)))
+        (unwind-protect
+            (cl-letf (((symbol-function 'my-codex-project-root)
+                       (lambda () root))
+                      ((symbol-function 'display-buffer)
+                       (lambda (buffer &rest _args) buffer)))
+              (my-codex-show-git-staged-diff)
+              (with-current-buffer buffer-name
+                (should (derived-mode-p 'diff-mode))
+                (should buffer-read-only)
+                (should (equal default-directory root))
+                (should (string-match-p "^\\+staged" (buffer-string)))))
+          (when-let ((buffer (get-buffer buffer-name)))
+            (kill-buffer buffer)))))))
+
 (ert-deftest my-codex-prompt-preset-transient-suffixes-empty-keeps-chooser ()
   (let* ((my-codex-prompt-presets nil)
          (suffixes (my-codex--prompt-preset-transient-suffixes nil))
