@@ -1272,6 +1272,27 @@ Supported forms include:
   src/foo.el#L42-L60
   Makefile:10")
 
+(defconst my-codex--wrapped-file-reference-regexp
+  (let ((part "[[:alnum:]_.@+-]+\\(?:\n[ \t]+[[:alnum:]_.@+-]+\\)*")
+        (wrap "\\(?:\n[ \t]+\\)?"))
+    (concat
+     "\\(?1:\\(?:"
+     part
+     "/"
+     wrap
+     "\\)*"
+     "\\(?:"
+     part
+     "\\.[[:alnum:]_.@+-]+\\|Makefile\\|Dockerfile\\|README\\|LICENSE\\)\\)"
+     "\\(?:"
+     ":\\(?2:[0-9]+\\)\\(?::\\(?3:[0-9]+\\)\\)?"
+     "\\|"
+     ":L\\(?4:[0-9]+\\)\\(?:-L?\\(?5:[0-9]+\\)\\)?"
+     "\\|"
+     "#L\\(?6:[0-9]+\\)\\(?:-L?\\(?7:[0-9]+\\)\\)?"
+     "\\)"))
+  "Regexp matching file references hard-wrapped inside the path.")
+
 (defconst my-codex--file-reference-context-lines 3
   "Number of preceding lines used to resolve split file references.")
 
@@ -1341,7 +1362,10 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
 
 (defun my-codex--file-reference-target-at-match ()
   "Return a plist describing the current file-reference regexp match."
-  (let ((file (match-string-no-properties 1))
+  (let ((file (replace-regexp-in-string
+               "\n[ \t]+" ""
+               (match-string-no-properties 1)
+               nil t))
         (line-str (or (match-string-no-properties 2)
                       (match-string-no-properties 4)
                       (match-string-no-properties 6)))
@@ -1408,6 +1432,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
     (cons
      (progn
        (goto-char beg)
+       (forward-line (- my-codex--file-reference-context-lines))
        (line-beginning-position))
      (progn
        (goto-char end)
@@ -1452,23 +1477,25 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
              (match-string-no-properties 0))))
 
         ;; File references.
-        (save-excursion
-          (goto-char rbeg)
-          (while (re-search-forward my-codex--file-reference-regexp rend t)
-            (unless (get-text-property (match-beginning 0)
-                                       'my-codex-session-link-type)
-              (let ((target (my-codex--file-reference-target-at-match))
-                    (match-beg (match-beginning 0))
-                    (match-end (match-end 0)))
-                (when-let ((resolved-target
-                            (save-match-data
-                              (my-codex--resolve-file-reference-target
-                               target match-beg))))
-                  (my-codex--add-session-link
-                   match-beg
-                   match-end
-                   'file
-                   resolved-target))))))))))
+        (dolist (regexp (list my-codex--file-reference-regexp
+                              my-codex--wrapped-file-reference-regexp))
+          (save-excursion
+            (goto-char rbeg)
+            (while (re-search-forward regexp rend t)
+              (unless (get-text-property (match-beginning 0)
+                                         'my-codex-session-link-type)
+                (let ((target (my-codex--file-reference-target-at-match))
+                      (match-beg (match-beginning 0))
+                      (match-end (match-end 0)))
+                  (when-let ((resolved-target
+                              (save-match-data
+                                (my-codex--resolve-file-reference-target
+                                 target match-beg))))
+                    (my-codex--add-session-link
+                     match-beg
+                     match-end
+                     'file
+                     resolved-target)))))))))))
 
 (define-minor-mode my-codex-session-links-mode
   "Make URLs and in-repository file references clickable in Codex buffers."
