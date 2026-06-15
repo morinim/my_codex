@@ -34,13 +34,13 @@
 (defvar my-codex-test-coverage-prompt)
 
 (declare-function my-codex--project-files "my-codex-git" (root))
+(declare-function my-codex--current-backend "my-codex" ())
 (declare-function my-codex--safe-root-name "my-codex" (root))
 (declare-function my-codex--warn-about-unsaved-project-buffers "my-codex" ())
+(declare-function my-codex-backend-send "my-codex" (backend prompt))
 (declare-function my-codex-buffer "my-codex" ())
 (declare-function my-codex-current-buffer-name "my-codex" ())
 (declare-function my-codex-project-root "my-codex" ())
-(declare-function vterm-send-return "vterm" ())
-(declare-function vterm-send-string "vterm" (string &optional paste-p))
 
 (defun my-codex--ensure-main-package ()
   "Load `my-codex' when this file was entered through an autoload."
@@ -79,18 +79,16 @@
       (user-error "Codex prompt canceled"))))
 
 (defun my-codex-send-prompt (prompt)
-  "Send PROMPT to the Codex vterm buffer and show it."
+  "Send PROMPT to the Codex backend buffer and show it."
   (my-codex--warn-about-unsaved-project-buffers)
   (my-codex--check-prompt-size prompt)
-  (let ((buffer (my-codex-buffer)))
+  (let ((buffer (my-codex-buffer))
+        (backend (my-codex--current-backend)))
     (if-let (window (get-buffer-window buffer t))
         (select-window window)
       (pop-to-buffer buffer))
     (redisplay t)
-    (with-current-buffer buffer
-      (goto-char (point-max))
-      (vterm-send-string prompt t)
-      (vterm-send-return))))
+    (my-codex-backend-send backend prompt)))
 
 (defun my-codex--prompt-preview-buffer-name (root)
   "Return the prompt preview buffer name for ROOT."

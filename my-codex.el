@@ -405,6 +405,77 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 (defvar my-codex--vterm-copy-mode-lighter :unset
   "Previous `vterm-copy-mode' lighter before my-codex changed it.")
 
+(cl-defstruct (my-codex-vterm-backend
+               (:constructor my-codex--make-vterm-backend (buffer-name)))
+  "Backend implementation that runs Codex in a vterm buffer."
+  buffer-name)
+
+(defvar my-codex--backend nil
+  "Current backend instance for the active project Codex session.")
+
+(cl-defgeneric my-codex-backend-start (backend project-root command)
+  "Start BACKEND in PROJECT-ROOT with COMMAND and return its buffer.")
+
+(cl-defgeneric my-codex-backend-send (backend prompt)
+  "Send PROMPT through BACKEND.")
+
+(cl-defgeneric my-codex-backend-live-p (backend)
+  "Return non-nil when BACKEND has a live Codex process.")
+
+(defun my-codex--backend-buffer-name (backend)
+  "Return BACKEND's buffer name."
+  (my-codex-vterm-backend-buffer-name backend))
+
+(defun my-codex--backend-buffer (backend)
+  "Return BACKEND's buffer, or nil when it does not exist."
+  (get-buffer (my-codex--backend-buffer-name backend)))
+
+(defun my-codex--current-backend ()
+  "Return the backend for the current project Codex session."
+  (let ((buffer-name (my-codex-current-buffer-name)))
+    (unless (and (my-codex-vterm-backend-p my-codex--backend)
+                 (equal (my-codex-vterm-backend-buffer-name my-codex--backend)
+                        buffer-name))
+      (setq my-codex--backend
+            (my-codex--make-vterm-backend buffer-name)))
+    my-codex--backend))
+
+(cl-defmethod my-codex-backend-live-p ((backend my-codex-vterm-backend))
+  "Return non-nil when BACKEND's vterm process is live."
+  (when-let (buffer (my-codex--backend-buffer backend))
+    (process-live-p (get-buffer-process buffer))))
+
+(cl-defmethod my-codex-backend-start
+  ((backend my-codex-vterm-backend) project-root command)
+  "Start BACKEND's vterm process in PROJECT-ROOT with COMMAND."
+  (let* ((default-directory project-root)
+         (buffer-name (my-codex--backend-buffer-name backend))
+         (buffer (get-buffer-create buffer-name)))
+    (with-current-buffer buffer
+      (unless (derived-mode-p 'vterm-mode)
+        (vterm-mode))
+      (when my-codex-enable-session-links
+        (my-codex-session-links-mode 1))
+      (let ((proc (get-buffer-process buffer)))
+        (unless (process-live-p proc)
+          (user-error "Failed to start vterm process in %s" buffer-name))
+        (set-process-query-on-exit-flag proc nil)
+        (goto-char (point-max))
+        (vterm-send-string (my-codex--shell-command-and-exit command))
+        (vterm-send-return)))
+    buffer))
+
+(cl-defmethod my-codex-backend-send
+  ((backend my-codex-vterm-backend) prompt)
+  "Send PROMPT through BACKEND's vterm buffer."
+  (let ((buffer (or (my-codex--backend-buffer backend)
+                    (user-error "No %s buffer found"
+                                (my-codex--backend-buffer-name backend)))))
+    (with-current-buffer buffer
+      (goto-char (point-max))
+      (vterm-send-string prompt t)
+      (vterm-send-return))))
+
 (defun my-codex--selected-window-is-codex-p ()
   "Return non-nil if the selected window shows Codex."
   (eq (selected-window)
@@ -687,41 +758,20 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
                (mapconcat #'buffer-name buffers ", ")))))
 
 (defun my-codex-two-column-layout-with-command (codex-command &optional focus-term)
-  "Display Codex and run CODEX-COMMAND in vterm if not running.
+  "Display Codex and run CODEX-COMMAND if the backend is not running.
 If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
   (cl-labels
-      ((live-buffer-p
-        (buffer)
-        (process-live-p (get-buffer-process buffer)))
-       (start-codex-buffer
-        (buffer-name)
-        (let* ((default-directory (my-codex-project-root))
-               (buffer (get-buffer-create buffer-name)))
-          (with-current-buffer buffer
-            (unless (derived-mode-p 'vterm-mode)
-              (vterm-mode))
-            (when my-codex-enable-session-links
-              (my-codex-session-links-mode 1))
-            (let ((proc (get-buffer-process buffer)))
-              (unless (process-live-p proc)
-                (user-error "Failed to start vterm process in %s"
-                            buffer-name))
-              (set-process-query-on-exit-flag proc nil)
-              (goto-char (point-max))
-              (vterm-send-string
-               (my-codex--shell-command-and-exit codex-command))
-              (vterm-send-return)))
-          buffer))
-       (display-codex-buffer
+      ((display-codex-buffer
         (buffer)
         (or (display-buffer buffer my-codex-display-buffer-action)
             (user-error "Failed to display %s" (buffer-name buffer)))))
-    (let* ((buffer-name (my-codex-current-buffer-name))
+    (let* ((backend (my-codex--current-backend))
+           (buffer-name (my-codex--backend-buffer-name backend))
            (existing-buf (get-buffer buffer-name)))
       (my-codex--fit-frame-to-right-layout)
 
       (when (and existing-buf
-                 (not (live-buffer-p existing-buf)))
+                 (not (my-codex-backend-live-p backend)))
         (with-current-buffer existing-buf
           (rename-buffer
            (generate-new-buffer-name
@@ -737,11 +787,12 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
         (my-codex--enable-edit-fill-column-indicator edit-window term-window)
         (select-window term-window)
         (when (and existing-buf
-                   (live-buffer-p existing-buf))
+                   (my-codex-backend-live-p backend))
           (set-window-buffer term-window existing-buf))
         (unless (and existing-buf
-                     (live-buffer-p existing-buf))
-          (start-codex-buffer buffer-name))
+                     (my-codex-backend-live-p backend))
+          (my-codex-backend-start
+           backend (my-codex-project-root) codex-command))
 
         (if focus-term
             (select-window term-window)
@@ -780,14 +831,14 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
   (my-codex-two-column-layout-with-command my-codex-resume-command t))
 
 (defun my-codex-buffer ()
-  "Return the current project's Codex vterm buffer, or raise an error."
-  (let* ((buffer-name (my-codex-current-buffer-name))
+  "Return the current project's Codex backend buffer, or raise an error."
+  (let* ((backend (my-codex--current-backend))
+         (buffer-name (my-codex--backend-buffer-name backend))
          (buffer (get-buffer buffer-name)))
     (unless buffer
       (user-error "No %s buffer found" buffer-name))
-    (let ((proc (get-buffer-process buffer)))
-      (unless (process-live-p proc)
-        (user-error "No running Codex process in %s" buffer-name)))
+    (unless (my-codex-backend-live-p backend)
+      (user-error "No running Codex process in %s" buffer-name))
     buffer))
 
 (defun my-codex--session-buffer ()
