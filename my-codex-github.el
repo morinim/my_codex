@@ -1,0 +1,335 @@
+;;; my-codex-github.el --- GitHub helpers for my-codex -*- lexical-binding: t; -*-
+
+;; Copyright (C) 2026 Manlio Morini
+
+;; This file is not part of GNU Emacs.
+
+;; This Source Code Form is subject to the terms of the Mozilla Public
+;; License, v. 2.0. If a copy of the MPL was not distributed with this
+;; file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+;;; Code:
+
+(require 'subr-x)
+
+(defvar my-codex--github-issue-creation-in-progress)
+(defvar my-codex--github-issue-repository)
+(defvar my-codex--session-summary-request-marker)
+(defvar my-codex-github-issue-summary-prompt)
+
+(declare-function my-codex--safe-root-name "my-codex" (root))
+(declare-function my-codex--session-export-mode "my-codex" ())
+(declare-function my-codex--session-summary-prompt
+                  "my-codex"
+                  (summary-prompt transcript begin-marker end-marker
+                                  &optional placeholder))
+(declare-function my-codex--unique-output-markers "my-codex" (name))
+(declare-function my-codex--wait-for-session-summary
+                  "my-codex-git"
+                  (buffer start-point root begin-marker end-marker
+                          &optional callback ready-message ignored-values))
+(declare-function my-codex-buffer "my-codex" ())
+(declare-function my-codex-project-root "my-codex" ())
+(declare-function my-codex-send-prompt "my-codex-prompts" (prompt))
+(declare-function my-codex-session-transcript "my-codex" ())
+
+(defun my-codex--ensure-main-package ()
+  "Load `my-codex' when this file was entered through an autoload."
+  (unless (featurep 'my-codex)
+    (require 'my-codex)))
+
+(defun my-codex--github-issue-output-buffer-name (root)
+  "Return the GitHub issue process buffer name for ROOT."
+  (format "*Codex GitHub issue:%s*" (my-codex--safe-root-name root)))
+
+(defun my-codex--github-ticket-list-buffer-name (root)
+  "Return the open issue list buffer name for ROOT."
+  (format "*Codex open issues:%s*" (my-codex--safe-root-name root)))
+
+(defun my-codex--github-issue-draft-buffer-name (root)
+  "Return the GitHub issue draft buffer name for ROOT."
+  (format "*Codex GitHub issue draft:%s*" (my-codex--safe-root-name root)))
+
+(defun my-codex--github-ticket-list-sentinel (proc _event)
+  "Handle completion of open issue list process PROC."
+  (when (memq (process-status proc) '(exit signal))
+    (let ((status (process-exit-status proc))
+          (buffer (process-buffer proc))
+          (content-start (process-get proc 'my-codex-content-start)))
+      (when (buffer-live-p buffer)
+        (with-current-buffer buffer
+          (let ((inhibit-read-only t))
+            (goto-char (point-max))
+            (cond
+             ((zerop status)
+              (when (and content-start (= (point-max) content-start))
+                (insert "No open issues.\n")))
+             (t
+              (insert (format "\nProcess %s exited with status %s\n"
+                              (process-name proc)
+                              status)))))
+          (goto-char (point-min))
+          (special-mode))
+        (unless (zerop status)
+          (display-buffer buffer))
+        (message "Open issue list %s."
+                 (if (zerop status) "updated" "failed"))))))
+
+;;;###autoload
+(defun my-codex-list-open-tickets ()
+  "List open GitHub issues for the current repository in a buffer."
+  (interactive)
+  (my-codex--ensure-main-package)
+  (unless (executable-find "gh")
+    (user-error "GitHub CLI `gh' not found in exec-path"))
+  (let* ((root (my-codex-project-root))
+         (buffer
+          (get-buffer-create (my-codex--github-ticket-list-buffer-name root))))
+    (with-current-buffer buffer
+      (read-only-mode -1)
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert (format "Open issues for %s\n\n" root)))
+      (setq default-directory root))
+    (pop-to-buffer buffer)
+    (let ((process
+           (let ((default-directory root))
+             (make-process
+              :name "my-codex-open-tickets"
+              :buffer buffer
+              :command (list "gh" "issue" "list"
+                             "--state" "open"
+                             "--limit" "100")
+              :connection-type 'pipe
+              :noquery t
+              :sentinel #'my-codex--github-ticket-list-sentinel))))
+      (process-put process 'my-codex-content-start
+                   (with-current-buffer buffer (point-max)))
+      (message "Listing open issues with gh...")
+      process)))
+
+(defun my-codex--github-repository-name (root)
+  "Return the GitHub repository name resolved by `gh' from ROOT."
+  (unless (executable-find "gh")
+    (user-error "GitHub CLI `gh' not found in exec-path"))
+  (with-temp-buffer
+    (let ((default-directory root))
+      (unless (eq 0 (process-file "gh" nil t nil
+                                  "repo" "view"
+                                  "--json" "nameWithOwner"
+                                  "--jq" ".nameWithOwner"))
+        (user-error "Unable to determine GitHub repository with gh")))
+    (let ((repository (string-trim (buffer-string))))
+      (when (string-empty-p repository)
+        (user-error "GitHub repository name is empty"))
+      repository)))
+
+(defun my-codex--parse-github-issue-draft (draft)
+  "Return issue fields parsed from DRAFT as a plist."
+  (let ((text (string-trim draft)))
+    (unless (string-match
+             (concat "\\`[ \t\n]*"
+                     "\\(?:Repository:[ \t]*\\([^\n]+\\)\n+[ \t]*\\)?"
+                     "Title:[ \t]*\\([^\n]+\\)\n+[ \t]*Body:[ \t]*\n*")
+             text)
+      (user-error "Could not parse GitHub issue draft"))
+    (let ((repository (when-let (repository (match-string 1 text))
+                        (string-trim repository)))
+          (title (string-trim (match-string 2 text)))
+          (body (string-trim (substring text (match-end 0)))))
+      (when (string-empty-p title)
+        (user-error "GitHub issue title is empty"))
+      (when (string-empty-p body)
+        (user-error "GitHub issue body is empty"))
+      (list :repository repository :title title :body body))))
+
+(defun my-codex--github-issue-draft-text (repository title body)
+  "Return editable GitHub issue draft text for REPOSITORY, TITLE, and BODY."
+  (format "Repository: %s\n\nTitle: %s\n\nBody:\n%s\n"
+          repository title (string-trim body)))
+
+(defun my-codex--github-issue-draft-header-line (&optional repository)
+  "Return the GitHub issue draft header line for REPOSITORY."
+  (if repository
+      (format
+       "Edit GitHub issue draft for %s. C-c C-c creates issue; C-c C-k cancels."
+       repository)
+    "Edit GitHub issue draft. C-c C-c creates issue; C-c C-k cancels."))
+
+(defun my-codex--github-issue-process-sentinel (proc _event)
+  "Handle completion of GitHub issue creation process PROC."
+  (when (memq (process-status proc) '(exit signal))
+    (let ((status (process-exit-status proc))
+          (buffer (process-buffer proc))
+          (file (process-get proc 'my-codex-temp-file))
+          (draft-buffer (process-get proc 'my-codex-draft-buffer)))
+      (when file
+        (ignore-errors
+          (delete-file file)))
+      (if (zerop status)
+          (progn
+            (when (buffer-live-p buffer)
+              (with-current-buffer buffer
+                (goto-char (point-min))
+                (message "GitHub issue created: %s"
+                         (string-trim (buffer-string)))))
+            (when (buffer-live-p draft-buffer)
+              (with-current-buffer draft-buffer
+                (setq my-codex--github-issue-creation-in-progress nil))
+              (quit-windows-on draft-buffer t)))
+        (when (buffer-live-p draft-buffer)
+          (with-current-buffer draft-buffer
+            (setq my-codex--github-issue-creation-in-progress nil)
+            (setq-local header-line-format
+                        (my-codex--github-issue-draft-header-line
+                         my-codex--github-issue-repository))))
+        (when (buffer-live-p buffer)
+          (with-current-buffer buffer
+            (goto-char (point-max))
+            (insert (format "\nProcess %s exited with status %s"
+                            (process-name proc)
+                            status))
+            (display-buffer buffer)))))))
+
+(defun my-codex--create-github-issue-with-body
+    (title body root &optional draft-buffer)
+  "Create a GitHub issue with TITLE and BODY in ROOT using `gh'."
+  (unless (executable-find "gh")
+    (user-error "GitHub CLI `gh' not found in exec-path"))
+  (let ((file (make-temp-file "my-codex-github-issue-" nil ".md"))
+        (output-buffer
+         (get-buffer-create (my-codex--github-issue-output-buffer-name root))))
+    (condition-case err
+        (progn
+          (with-temp-file file
+            (insert (string-trim body) "\n"))
+          (with-current-buffer output-buffer
+            (read-only-mode -1)
+            (erase-buffer))
+          (let ((default-directory root))
+            (let ((process
+                   (make-process
+                    :name "my-codex-github-issue"
+                    :buffer output-buffer
+                    :command (list "gh" "issue" "create"
+                                   "--title" title
+                                   "--body-file" file)
+                    :connection-type 'pipe
+                    :noquery t
+                    :sentinel #'my-codex--github-issue-process-sentinel)))
+              (process-put process 'my-codex-temp-file file)
+              (process-put process 'my-codex-draft-buffer draft-buffer)
+              (message "Creating GitHub issue with gh...")
+              process)))
+      (error
+       (ignore-errors
+         (delete-file file))
+       (signal (car err) (cdr err))))))
+
+(defun my-codex--github-issue-draft-fields ()
+  "Return the edited GitHub issue draft fields in the current buffer."
+  (my-codex--parse-github-issue-draft
+   (buffer-substring-no-properties (point-min) (point-max))))
+
+(defun my-codex--create-github-issue-from-draft ()
+  "Create a GitHub issue from the current editable draft buffer."
+  (interactive)
+  (when my-codex--github-issue-creation-in-progress
+    (user-error "GitHub issue creation is already in progress"))
+  (let* ((fields (my-codex--github-issue-draft-fields))
+         (repository (plist-get fields :repository))
+         (title (plist-get fields :title))
+         (body (plist-get fields :body))
+         (expected-repository my-codex--github-issue-repository)
+         (current-repository
+          (my-codex--github-repository-name default-directory)))
+    (unless repository
+      (user-error "GitHub issue repository is missing from draft"))
+    (unless (equal repository expected-repository)
+      (user-error "GitHub issue repository changed from %s to %s"
+                  expected-repository repository))
+    (unless (equal repository current-repository)
+      (user-error "GitHub repository changed from %s to %s"
+                  repository current-repository))
+    (setq my-codex--github-issue-creation-in-progress t)
+    (setq-local header-line-format
+                "Creating GitHub issue with gh; wait for completion.")
+    (condition-case err
+        (my-codex--create-github-issue-with-body
+         title body default-directory (current-buffer))
+      (error
+       (setq my-codex--github-issue-creation-in-progress nil)
+       (setq-local header-line-format
+                   (my-codex--github-issue-draft-header-line
+                    my-codex--github-issue-repository))
+       (signal (car err) (cdr err))))))
+
+(defun my-codex--cancel-github-issue-draft ()
+  "Cancel the current GitHub issue draft buffer."
+  (interactive)
+  (when my-codex--github-issue-creation-in-progress
+    (user-error "GitHub issue creation is already in progress"))
+  (quit-window 'kill)
+  (message "GitHub issue draft canceled."))
+
+(defun my-codex-edit-github-issue-draft (draft root)
+  "Open an editable GitHub issue DRAFT for ROOT."
+  (let* ((repository (my-codex--github-repository-name root))
+         (fields (my-codex--parse-github-issue-draft draft))
+         (title (plist-get fields :title))
+         (body (plist-get fields :body))
+         (buffer
+          (get-buffer-create
+           (my-codex--github-issue-draft-buffer-name root))))
+    (pop-to-buffer buffer)
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (insert (my-codex--github-issue-draft-text repository title body))
+      (goto-char (point-min)))
+    (setq default-directory root)
+    (my-codex--session-export-mode)
+    (setq my-codex--github-issue-repository repository)
+    (setq-local header-line-format
+                (my-codex--github-issue-draft-header-line repository))
+    (let ((map (define-keymap :parent (current-local-map)
+                 "C-c C-c" #'my-codex--create-github-issue-from-draft
+                 "C-c C-k" #'my-codex--cancel-github-issue-draft)))
+      (use-local-map map))
+    (message "Edit the GitHub issue draft, then press C-c C-c to create it.")))
+
+;;;###autoload
+(defun my-codex-summarize-session-to-github-issue ()
+  "Ask Codex to draft a GitHub issue from the current session.
+Open an editable issue draft before running `gh issue create'."
+  (interactive)
+  (my-codex--ensure-main-package)
+  (let* ((root (my-codex-project-root))
+         (buffer (my-codex-buffer))
+         (transcript (my-codex-session-transcript))
+         (markers (my-codex--unique-output-markers "GITHUB_ISSUE_DRAFT"))
+         (begin-marker (car markers))
+         (end-marker (cdr markers)))
+    (unless (executable-find "gh")
+      (user-error "GitHub CLI `gh' not found in exec-path"))
+    (when (string-empty-p transcript)
+      (user-error "Codex session transcript is empty"))
+    (let ((start-point (with-current-buffer buffer
+                         (copy-marker (point-max))))
+          (prompt (my-codex--session-summary-prompt
+                   my-codex-github-issue-summary-prompt
+                   transcript begin-marker end-marker
+                   "<GitHub issue draft here>")))
+      (with-current-buffer buffer
+        (setq my-codex--session-summary-request-marker start-point))
+      (my-codex-send-prompt prompt)
+      (my-codex--wait-for-session-summary
+       buffer start-point root begin-marker end-marker
+       (lambda (draft)
+         (my-codex-edit-github-issue-draft draft root))
+       "Codex GitHub issue draft is ready for editing."
+       '("<GitHub issue draft here>"))
+      (message "Asked Codex to draft a GitHub issue; waiting to open editor."))))
+
+(provide 'my-codex-github)
+
+;;; my-codex-github.el ends here

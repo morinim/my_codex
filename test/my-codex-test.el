@@ -112,6 +112,27 @@
               (buffer-string)))))
     (should (equal output shell-file-name))))
 
+(ert-deftest my-codex-git-autoload-command-loads-main-package ()
+  (let* ((script '(progn
+                    (require 'my-codex-git)
+                    (condition-case err
+                        (my-codex-send-git-diff)
+                      (error (princ (format "%S\n" err))))
+                    (princ (if (featurep 'my-codex)
+                               "feature-loaded"
+                             "feature-missing"))))
+         (output
+          (with-temp-buffer
+            (let ((exit-code
+                   (call-process invocation-name nil t nil
+                                 "--batch" "-Q" "-L" default-directory
+                                 "--eval" (prin1-to-string script))))
+              (unless (zerop exit-code)
+                (error "Nested Emacs failed: %s" (buffer-string)))
+              (buffer-string)))))
+    (should (string-match-p "feature-loaded" output))
+    (should-not (string-match-p "void-variable" output))))
+
 (ert-deftest my-codex-prompt-preset-transient-suffixes-empty-keeps-chooser ()
   (let* ((my-codex-prompt-presets nil)
          (suffixes (my-codex--prompt-preset-transient-suffixes nil))
