@@ -53,6 +53,62 @@
     (my-codex--normalize-marked-output "\r\n    first\n      second\n\n")
     "first\n  second")))
 
+(ert-deftest my-codex-latest-marked-output-after-finds-output-after-marker ()
+  (with-temp-buffer
+    (insert "old output\n")
+    (let ((start (copy-marker (point))))
+      (insert "BEGIN_COMMIT_MESSAGE\n"
+              "fix: extract latest commit message\n"
+              "END_COMMIT_MESSAGE\n")
+      (should
+       (equal
+        (my-codex-latest-commit-message-after (current-buffer) start)
+        "fix: extract latest commit message")))))
+
+(ert-deftest my-codex-latest-marked-output-after-ignores-before-marker ()
+  (with-temp-buffer
+    (insert "BEGIN_COMMIT_MESSAGE\n"
+            "fix: stale message\n"
+            "END_COMMIT_MESSAGE\n")
+    (let ((start (copy-marker (point))))
+      (insert "no generated output yet\n")
+      (should-not
+       (my-codex-latest-commit-message-after (current-buffer) start)))))
+
+(ert-deftest my-codex-latest-marked-output-after-uses-latest-block ()
+  (with-temp-buffer
+    (let ((start (copy-marker (point))))
+      (insert "BEGIN_COMMIT_MESSAGE\n"
+              "fix: first message\n"
+              "END_COMMIT_MESSAGE\n"
+              "BEGIN_COMMIT_MESSAGE\n"
+              "fix: latest message\n"
+              "END_COMMIT_MESSAGE\n")
+      (should
+       (equal
+        (my-codex-latest-commit-message-after (current-buffer) start)
+        "fix: latest message")))))
+
+(ert-deftest my-codex-latest-marked-output-after-ignores-placeholders ()
+  (with-temp-buffer
+    (let ((start (copy-marker (point))))
+      (insert "BEGIN_COMMIT_MESSAGE\n"
+              "...\n"
+              "END_COMMIT_MESSAGE\n")
+      (should-not
+       (my-codex-latest-commit-message-after (current-buffer) start)))))
+
+(ert-deftest my-codex-latest-marked-output-after-tolerates-terminal-spacing ()
+  (with-temp-buffer
+    (let ((start (copy-marker (point))))
+      (insert "B \r\nE\tG I N_COMMIT_MESSAGE\n"
+              "    fix: tolerate terminal spacing\r\n"
+              "E \r\nN\tD_COMMIT_MESSAGE\n")
+      (should
+       (equal
+        (my-codex-latest-commit-message-after (current-buffer) start)
+        "fix: tolerate terminal spacing")))))
+
 (ert-deftest my-codex-approx-token-count-rounds-up ()
   (should (= (my-codex--approx-token-count "") 0))
   (should (= (my-codex--approx-token-count "abcd") 1))
