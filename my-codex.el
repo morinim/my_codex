@@ -52,7 +52,10 @@
   :group 'convenience
   :prefix "my-codex-")
 
-(defcustom my-codex-buffer-name "*codex*"
+(defconst my-codex-default-buffer-name "*codex*"
+  "Default name of the vterm buffer used for Codex.")
+
+(defcustom my-codex-buffer-name my-codex-default-buffer-name
   "Name of the vterm buffer used for Codex."
   :type 'string
   :group 'my-codex)
@@ -803,7 +806,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
             (hash (substring (secure-hash 'sha1 root) 0 8)))
       (format "*codex:%s:%s*" name hash)
     (if (equal my-codex-buffer-name
-               (eval (car (get 'my-codex-buffer-name 'standard-value)) t))
+               my-codex-default-buffer-name)
         (let* ((root (file-truename (my-codex-project-root)))
                (name (file-name-nondirectory (directory-file-name root)))
                (hash (substring (secure-hash 'sha1 root) 0 8)))
