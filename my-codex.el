@@ -635,6 +635,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
     (with-current-buffer buffer
       (unless (derived-mode-p 'vterm-mode)
         (vterm-mode))
+      (setq-local show-trailing-whitespace nil)
       (when my-codex-enable-session-links
         (my-codex-session-links-mode 1))
       (let ((proc (get-buffer-process buffer)))
