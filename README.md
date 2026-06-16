@@ -24,7 +24,8 @@ separate sessions.
 
 ## Features
 
-- Start Codex in read-only, workspace-write, or resume mode.
+- Start the configured agent in read-only, workspace-write, or resume mode.
+- Choose Codex or Antigravity CLI per named session.
 - Use a right-side Codex layout and hide it without disturbing other windows.
 - Send selected code, symbols, the current file, Git diffs, or staged Git
   diffs.
@@ -54,6 +55,8 @@ separate sessions.
 - [`vterm`][vterm].
 - [`transient`][transient].
 - OpenAI [Codex CLI][codex] available as `codex`.
+- Optional Antigravity CLI available as `agy`, when using the Antigravity
+  agent profile.
 - Git, for Git-related commands.
 - GitHub CLI `gh`, for creating GitHub issues from session summaries.
 
@@ -129,11 +132,11 @@ session if the destination directory requires administrator rights.
 Start Codex first:
 
 ```text
-F8 o   start in read-only mode
-F8 w   start with workspace-write access
+F8 o   start the configured agent in read-only mode
+F8 w   start the configured agent with workspace-write access
 F8 S   open session commands
-F8 S o start the default session in read-only mode
-F8 S w start the default session with workspace-write access
+F8 S o choose an agent, then start its default read-only session
+F8 S w choose an agent, then start its default workspace-write session
 F8 S l list open sessions
 F8 S n start or show a named session
 F8 S q hide the selected session window
@@ -142,9 +145,13 @@ F8 r   resume a previous session
 
 Then use the `F8` prefix for everyday actions.
 
-Named sessions opened with `F8 S n` use separate Codex buffers and metadata.
-Everyday send commands such as `F8 a`, `F8 s`, and `F8 f` still target the
-default project session.
+Named sessions opened with `F8 S n` ask for a session name, agent, and access
+mode. They use separate buffers and metadata, so Codex and Antigravity sessions
+with the same project and session name can run side by side.
+Opening a default session with `F8 o`, `F8 w`, `F8 S o`, or `F8 S w` records
+that agent as active for the current project. Everyday send commands such as
+`F8 a`, `F8 s`, and `F8 f` target that project's active default session, falling
+back to `my-codex-agent` when no project agent has been recorded.
 
 Latest review-to-commit workflow:
 
@@ -169,13 +176,13 @@ Prefix bindings:
 
 | Key | Command | Description |
 | --- | --- | --- |
-| F8 o | `my-codex-read-only` | Show/start read-only Codex |
-| F8 w | `my-codex-workspace` | Show/start workspace-write Codex |
+| F8 o | `my-codex-read-only` | Show/start read-only configured agent |
+| F8 w | `my-codex-workspace` | Show/start workspace-write configured agent |
 | F8 S | `my-codex-session-transient` | Open Codex session commands |
-| F8 S o | `my-codex-default-read-only` | Show/start default read-only Codex |
-| F8 S w | `my-codex-default-workspace` | Show/start default workspace-write Codex |
+| F8 S o | `my-codex-default-read-only` | Choose an agent, then show/start its default read-only session |
+| F8 S w | `my-codex-default-workspace` | Choose an agent, then show/start its default workspace-write session |
 | F8 S l | `my-codex-list-sessions` | List open Codex sessions |
-| F8 S n | `my-codex-new-session` | Start or show a named Codex session |
+| F8 S n | `my-codex-new-session` | Start or show a named agent session |
 | F8 S q | `my-codex-restore-session-layout` | Hide the selected Codex session window |
 | F8 r | `my-codex-resume` | Resume a Codex session |
 | F8 q | `my-codex-restore-layout` | Hide the Codex window |
@@ -238,6 +245,14 @@ Common options:
 (setq my-codex-workspace-command
       "codex --sandbox workspace-write --ask-for-approval on-request")
 (setq my-codex-resume-command "codex resume")
+
+;; Use Antigravity for F8 o / F8 w / F8 r.
+(setq my-codex-agent 'antigravity)
+
+;; Adjust Antigravity commands if your `agy' CLI needs different arguments.
+(setf (plist-get (alist-get 'antigravity my-codex-agent-profiles)
+                 :workspace-command)
+      "agy")
 
 (setq my-codex-left-width 81)
 (setq my-codex-min-right-width 80)

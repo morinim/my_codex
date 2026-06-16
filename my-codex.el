@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.15.1
+;; Version: 0.16.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -16,10 +16,9 @@
 
 ;;; Commentary:
 
-;; my-codex.el runs the OpenAI Codex CLI inside an Emacs vterm buffer.
-;; It provides a two-column workflow, project-specific Codex sessions,
-;; helpers for Git diffs, selected regions, current files, compiler errors,
-;; and a configurable project build command.
+;; my-codex.el runs OpenAI Codex CLI or Google Antigravity inside an Emacs
+;; vterm buffer.  It provides a two-column layout, project-specific agent
+;; sessions, helpers for Git diffs, selected regions, and compiler errors.
 
 ;;; Code:
 
@@ -77,6 +76,43 @@
   "codex resume"
   "Command used to resume a previous Codex session."
   :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-agent 'codex
+  "Agent profile used by default Codex commands.
+Commands such as `my-codex-read-only', `my-codex-workspace', and
+`my-codex-resume' use this profile.  Named sessions can choose a
+different profile interactively."
+  :type 'symbol
+  :group 'my-codex)
+
+(defcustom my-codex-agent-profiles
+  '((codex
+     :label "Codex"
+     :buffer-prefix "codex"
+     :read-only-command my-codex-read-only-command
+     :workspace-command my-codex-workspace-command
+     :resume-command my-codex-resume-command)
+    (antigravity
+     :label "Antigravity"
+     :buffer-prefix "agy"
+     :read-only-command "agy"
+     :workspace-command "agy"
+     :resume-command "agy resume"))
+  "Agent profiles available to my-codex.
+Each entry has the form:
+
+  (ID :label LABEL
+      :buffer-prefix PREFIX
+      :read-only-command COMMAND
+      :workspace-command COMMAND
+      :resume-command COMMAND)
+
+ID is a symbol used for configuration and session metadata.  PREFIX is
+used in buffer names, so different agents can have sessions with the
+same project and session name without colliding.  COMMAND may be either
+a string or a symbol whose value is a string."
+  :type 'sexp
   :group 'my-codex)
 
 (defcustom my-codex-left-width 81
@@ -406,6 +442,9 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 (defvar-local my-codex-session-access-mode nil
   "Access mode used for the current Codex session buffer.")
 
+(defvar-local my-codex-session-agent nil
+  "Agent profile used for the current Codex session buffer.")
+
 (defvar-local my-codex--github-issue-creation-in-progress nil
   "Non-nil while the current GitHub issue draft is being submitted.")
 
@@ -432,8 +471,11 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 (defvar my-codex--backends (make-hash-table :test #'equal)
   "Backend instances keyed by Codex buffer name.")
 
+(defvar my-codex--project-active-agents (make-hash-table :test #'equal)
+  "Agent profile identifiers keyed by project root.")
+
 (cl-defgeneric my-codex-backend-start
-    (backend project-root command &optional session-name)
+    (backend project-root command &optional session-name agent access-mode)
   "Start BACKEND in PROJECT-ROOT with COMMAND and return its buffer.
 When SESSION-NAME is non-nil, mark the buffer as that named session.")
 
@@ -464,64 +506,130 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
   "Return the backend for the current project default Codex session."
   (my-codex--backend-for-buffer-name (my-codex-current-buffer-name)))
 
+(defun my-codex--agent-profile (agent)
+  "Return the profile for AGENT, or raise an error."
+  (or (alist-get agent my-codex-agent-profiles)
+      (user-error "Unknown my-codex agent profile: %s" agent)))
+
+(defun my-codex--agent-ids ()
+  "Return configured agent profile identifiers."
+  (mapcar #'car my-codex-agent-profiles))
+
+(defun my-codex--agent-label (agent)
+  "Return the display label for AGENT."
+  (or (plist-get (my-codex--agent-profile agent) :label)
+      (symbol-name agent)))
+
+(defun my-codex--agent-buffer-prefix (agent)
+  "Return the buffer prefix for AGENT."
+  (let ((prefix (plist-get (my-codex--agent-profile agent) :buffer-prefix)))
+    (cond
+     ((and (stringp prefix) (not (string-empty-p prefix))) prefix)
+     ((symbolp prefix) (symbol-name prefix))
+     (t (symbol-name agent)))))
+
+(defun my-codex--agent-command (agent access-mode)
+  "Return AGENT's command string for ACCESS-MODE."
+  (let* ((profile (my-codex--agent-profile agent))
+         (key (pcase access-mode
+                ('read-only :read-only-command)
+                ('workspace-write :workspace-command)
+                ('resume :resume-command)
+                (_ (user-error "Unknown access mode: %s" access-mode))))
+         (command (plist-get profile key)))
+    (cond
+     ((and (stringp command) (not (string-empty-p command))) command)
+     ((and (symbolp command)
+           (boundp command)
+           (stringp (symbol-value command))
+           (not (string-empty-p (symbol-value command))))
+      (symbol-value command))
+     ((symbolp command)
+      (user-error "Agent %s command %s is not a non-empty string"
+                  agent command))
+     (t
+      (user-error "Agent %s has no %s command" agent access-mode)))))
+
+(defun my-codex--read-agent ()
+  "Read and return an agent profile identifier."
+  (intern
+   (completing-read
+    "Agent: "
+    (mapcar #'symbol-name (my-codex--agent-ids))
+    nil t nil nil (symbol-name my-codex-agent))))
+
 (cl-defmethod my-codex-backend-live-p ((backend my-codex-vterm-backend))
   "Return non-nil when BACKEND's vterm process is live."
   (when-let (buffer (my-codex--backend-buffer backend))
     (process-live-p (get-buffer-process buffer))))
 
-(defun my-codex--session-access-mode (command)
+(defun my-codex--session-access-mode (command &optional agent)
   "Return the session access mode represented by COMMAND."
-  (cond
-   ((equal command my-codex-workspace-command) 'workspace-write)
-   ((equal command my-codex-read-only-command) 'read-only)
-   ((equal command my-codex-resume-command) 'resume)
-   (t 'custom)))
+  (let ((agent (or agent my-codex-agent)))
+    (cond
+     ((equal command (my-codex--agent-command agent 'workspace-write))
+      'workspace-write)
+     ((equal command (my-codex--agent-command agent 'read-only))
+      'read-only)
+     ((equal command (my-codex--agent-command agent 'resume)) 'resume)
+     (t 'custom))))
 
-(defun my-codex--default-session-id (project-root)
+(defun my-codex--default-session-id (project-root &optional agent)
   "Return the default session identifier for PROJECT-ROOT."
-  (format "default:%s"
+  (format "%s:default:%s"
+          (or agent my-codex-agent)
           (substring (secure-hash 'sha1 (file-truename project-root)) 0 8)))
 
-(defun my-codex--session-id (project-root session-name)
+(defun my-codex--session-id (project-root session-name &optional agent)
   "Return the named session identifier for PROJECT-ROOT and SESSION-NAME."
-  (format "session:%s:%s"
+  (format "%s:session:%s:%s"
+          (or agent my-codex-agent)
           (substring (secure-hash 'sha1 (file-truename project-root)) 0 8)
           (my-codex--safe-session-name session-name)))
 
 (defun my-codex--mark-session
-    (buffer session-id session-name project-root access-mode)
+    (buffer session-id session-name project-root access-mode agent)
   "Mark BUFFER as SESSION-ID named SESSION-NAME for PROJECT-ROOT."
   (with-current-buffer buffer
     (setq-local my-codex-session-id session-id)
     (setq-local my-codex-session-name session-name)
     (setq-local my-codex-session-project-root
                 (file-name-as-directory (file-truename project-root)))
-    (setq-local my-codex-session-access-mode access-mode)))
+    (setq-local my-codex-session-access-mode access-mode)
+    (setq-local my-codex-session-agent agent)))
 
-(defun my-codex--mark-default-session (buffer project-root access-mode)
+(defun my-codex--mark-default-session
+    (buffer project-root access-mode &optional agent)
   "Mark BUFFER as the default Codex session for PROJECT-ROOT."
-  (my-codex--mark-session
-   buffer
-   (my-codex--default-session-id project-root)
-   "default"
-   project-root
-   access-mode))
+  (let ((agent (or agent my-codex-agent)))
+    (my-codex--mark-session
+     buffer
+     (my-codex--default-session-id project-root agent)
+     "default"
+     project-root
+     access-mode
+     agent)))
 
 (defun my-codex--mark-named-session
-    (buffer session-name project-root access-mode)
+    (buffer session-name project-root access-mode &optional agent)
   "Mark BUFFER as SESSION-NAME for PROJECT-ROOT."
-  (my-codex--mark-session
-   buffer
-   (my-codex--session-id project-root session-name)
-   session-name
-   project-root
-   access-mode))
+  (let ((agent (or agent my-codex-agent)))
+    (my-codex--mark-session
+     buffer
+     (my-codex--session-id project-root session-name agent)
+     session-name
+     project-root
+     access-mode
+     agent)))
 
 (cl-defmethod my-codex-backend-start
   ((backend my-codex-vterm-backend) project-root command
-   &optional session-name)
+   &optional session-name agent access-mode)
   "Start BACKEND's vterm process in PROJECT-ROOT with COMMAND."
-  (let* ((default-directory project-root)
+  (let* ((agent (or agent my-codex-agent))
+         (access-mode
+          (or access-mode (my-codex--session-access-mode command agent)))
+         (default-directory project-root)
          (buffer-name (my-codex--backend-buffer-name backend))
          (buffer (get-buffer-create buffer-name)))
     (with-current-buffer buffer
@@ -538,9 +646,9 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
         (vterm-send-return)))
     (if session-name
         (my-codex--mark-named-session
-         buffer session-name project-root (my-codex--session-access-mode command))
+         buffer session-name project-root access-mode agent)
       (my-codex--mark-default-session
-       buffer project-root (my-codex--session-access-mode command)))
+       buffer project-root access-mode agent))
     buffer))
 
 (cl-defmethod my-codex-backend-send
@@ -799,20 +907,41 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
        (project-root project)
      default-directory)))
 
-(defun my-codex-current-buffer-name ()
+(defun my-codex--project-key (&optional root)
+  "Return the stable project key for ROOT or the current project."
+  (file-name-as-directory
+   (file-truename (or root (my-codex-project-root)))))
+
+(defun my-codex--active-agent (&optional root)
+  "Return the active agent profile for ROOT or the current project."
+  (or (gethash (my-codex--project-key root)
+               my-codex--project-active-agents)
+      my-codex-agent))
+
+(defun my-codex--set-active-agent (agent &optional root)
+  "Record AGENT as the active agent for ROOT or the current project."
+  (puthash (my-codex--project-key root)
+           agent
+           my-codex--project-active-agents))
+
+(defun my-codex-current-buffer-name (&optional agent)
   "Return the buffer name for the current Codex session."
-  (if-let* ((project (project-current))
-            (root (file-truename (project-root project)))
-            (name (file-name-nondirectory (directory-file-name root)))
-            (hash (substring (secure-hash 'sha1 root) 0 8)))
-      (format "*codex:%s:%s*" name hash)
-    (if (equal my-codex-buffer-name
-               my-codex-default-buffer-name)
+  (let ((agent (or agent (my-codex--active-agent))))
+    (if-let* ((project (project-current))
+              (root (file-truename (project-root project)))
+              (name (file-name-nondirectory (directory-file-name root)))
+              (hash (substring (secure-hash 'sha1 root) 0 8)))
+        (format "*%s:%s:%s*"
+                (my-codex--agent-buffer-prefix agent) name hash)
+      (if (and (eq agent 'codex)
+               (not (equal my-codex-buffer-name
+                           my-codex-default-buffer-name)))
+          my-codex-buffer-name
         (let* ((root (file-truename (my-codex-project-root)))
                (name (file-name-nondirectory (directory-file-name root)))
                (hash (substring (secure-hash 'sha1 root) 0 8)))
-          (format "*codex:%s:%s*" name hash))
-      my-codex-buffer-name)))
+          (format "*%s:%s:%s*"
+                  (my-codex--agent-buffer-prefix agent) name hash))))))
 
 (defun my-codex--normalise-session-name (name)
   "Return a normalised Codex session NAME, or raise an error."
@@ -832,10 +961,10 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
          (hash (substring (secure-hash 'sha1 normalised) 0 8)))
     (format "%s-%s" slug hash)))
 
-(defun my-codex-session-buffer-name (session-name)
+(defun my-codex-session-buffer-name (session-name &optional agent)
   "Return the buffer name for SESSION-NAME in the current project."
   (let* ((safe-name (my-codex--safe-session-name session-name))
-         (default-name (my-codex-current-buffer-name)))
+         (default-name (my-codex-current-buffer-name agent)))
     (if (string-suffix-p "*" default-name)
         (concat (substring default-name 0 -1) ":" safe-name "*")
       (format "%s:%s" default-name safe-name))))
@@ -853,6 +982,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
   "Major mode for selecting open Codex sessions."
   (setq tabulated-list-format
         [("Buffer" 32 t)
+         ("Agent" 12 t)
          ("Name" 18 t)
          ("Access" 16 t)
          ("Project" 0 t)])
@@ -941,14 +1071,16 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
         (setq tabulated-list-entries
               (mapcar
                (lambda (buffer)
-                 (let (name access root)
+                 (let (agent name access root)
                    (with-current-buffer buffer
-                     (setq name my-codex-session-name
+                     (setq agent my-codex-session-agent
+                           name my-codex-session-name
                            access my-codex-session-access-mode
                            root my-codex-session-project-root))
                    (list (buffer-name buffer)
                          (vector
                           (buffer-name buffer)
+                          (if agent (symbol-name agent) "")
                           (or name "")
                           (if access (symbol-name access) "")
                           (or root "")))))
@@ -978,23 +1110,27 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
                (mapconcat #'buffer-name buffers ", ")))))
 
 (defun my-codex-two-column-layout-with-command
-    (codex-command &optional focus-term session-name)
+    (codex-command &optional focus-term session-name agent access-mode)
   "Display Codex and run CODEX-COMMAND if the backend is not running.
 If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window.
-When SESSION-NAME is non-nil, use that named session instead of default."
+When SESSION-NAME is non-nil, use that named session instead of default.
+AGENT identifies the agent profile used for buffer names and metadata."
   (cl-labels
       ((display-codex-buffer
         (buffer)
         (or (display-buffer buffer my-codex-display-buffer-action)
             (user-error "Failed to display %s" (buffer-name buffer)))))
-    (let* ((session-name (when session-name
+    (let* ((agent (or agent (my-codex--active-agent)))
+           (session-name (when session-name
                            (my-codex--normalise-session-name session-name)))
            (buffer-name (if session-name
-                            (my-codex-session-buffer-name session-name)
-                          (my-codex-current-buffer-name)))
+                            (my-codex-session-buffer-name session-name agent)
+                          (my-codex-current-buffer-name agent)))
            (backend (my-codex--backend-for-buffer-name buffer-name))
            (project-root (my-codex-project-root))
            (existing-buf (get-buffer buffer-name)))
+      (unless session-name
+        (my-codex--set-active-agent agent project-root))
       (my-codex--fit-frame-to-right-layout)
 
       (when (and existing-buf
@@ -1019,7 +1155,7 @@ When SESSION-NAME is non-nil, use that named session instead of default."
         (unless (and existing-buf
                      (my-codex-backend-live-p backend))
           (my-codex-backend-start
-           backend project-root codex-command session-name))
+           backend project-root codex-command session-name agent access-mode))
 
         (if focus-term
             (select-window term-window)
@@ -1064,51 +1200,67 @@ When SESSION-NAME is non-nil, use that named session instead of default."
 (defun my-codex-read-only ()
   "Show Codex, starting it in read-only mode if needed."
   (interactive)
-  (my-codex-two-column-layout-with-command my-codex-read-only-command))
+  (my-codex-two-column-layout-with-command
+   (my-codex--agent-command my-codex-agent 'read-only)
+   nil nil my-codex-agent 'read-only))
 
 ;;;###autoload
 (defun my-codex-workspace ()
   "Show Codex, starting it with workspace write access if needed."
   (interactive)
-  (my-codex-two-column-layout-with-command my-codex-workspace-command))
+  (my-codex-two-column-layout-with-command
+   (my-codex--agent-command my-codex-agent 'workspace-write)
+   nil nil my-codex-agent 'workspace-write))
 
 ;;;###autoload
-(defun my-codex-default-read-only ()
-  "Show the default Codex session in read-only mode."
-  (interactive)
-  (my-codex-read-only))
+(defun my-codex-default-read-only (agent)
+  "Show the default AGENT session in read-only mode."
+  (interactive (list (my-codex--read-agent)))
+  (my-codex-two-column-layout-with-command
+   (my-codex--agent-command agent 'read-only)
+   nil nil agent 'read-only))
 
 ;;;###autoload
-(defun my-codex-default-workspace ()
-  "Show the default Codex session with workspace write access."
-  (interactive)
-  (my-codex-workspace))
+(defun my-codex-default-workspace (agent)
+  "Show the default AGENT session with workspace write access."
+  (interactive (list (my-codex--read-agent)))
+  (my-codex-two-column-layout-with-command
+   (my-codex--agent-command agent 'workspace-write)
+   nil nil agent 'workspace-write))
 
-(defun my-codex--read-session-access-command ()
-  "Read and return a Codex command for a new named session."
+(defun my-codex--read-session-access-mode ()
+  "Read and return an access mode for a new named session."
   (pcase (completing-read
           "Session access: "
           '("read-only" "workspace-write")
           nil t nil nil "read-only")
-    ("read-only" my-codex-read-only-command)
-    ("workspace-write" my-codex-workspace-command)))
+    ("read-only" 'read-only)
+    ("workspace-write" 'workspace-write)))
 
 ;;;###autoload
-(defun my-codex-new-session (name command)
-  "Start or show a named Codex session NAME using COMMAND."
+(defun my-codex-new-session (name agent &optional access-mode)
+  "Start or show a named Codex session NAME using AGENT and ACCESS-MODE.
+For compatibility, AGENT may also be a command string when ACCESS-MODE is nil."
   (interactive
    (list
     (read-string "Session name: ")
-    (my-codex--read-session-access-command)))
+    (my-codex--read-agent)
+    (my-codex--read-session-access-mode)))
   (let ((session-name (my-codex--normalise-session-name name)))
-    (my-codex-two-column-layout-with-command
-     command nil session-name)))
+    (if (and (stringp agent) (null access-mode))
+        (my-codex-two-column-layout-with-command
+         agent nil session-name my-codex-agent)
+      (my-codex-two-column-layout-with-command
+       (my-codex--agent-command agent access-mode)
+       nil session-name agent access-mode))))
 
 ;;;###autoload
 (defun my-codex-resume ()
   "Show Codex, resuming a previous session if needed and focusing the window."
   (interactive)
-  (my-codex-two-column-layout-with-command my-codex-resume-command t))
+  (my-codex-two-column-layout-with-command
+   (my-codex--agent-command my-codex-agent 'resume)
+   t nil my-codex-agent 'resume))
 
 (defun my-codex-buffer ()
   "Return the current project's Codex backend buffer, or raise an error."

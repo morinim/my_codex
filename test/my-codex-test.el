@@ -128,6 +128,79 @@
    (eq (my-codex--session-access-mode "codex --custom")
        'custom)))
 
+(ert-deftest my-codex-agent-command-resolves-symbol-backed-codex-commands ()
+  (let ((my-codex-read-only-command "codex-ro")
+        (my-codex-workspace-command "codex-ww")
+        (my-codex-resume-command "codex-resume"))
+    (should
+     (equal (my-codex--agent-command 'codex 'read-only)
+            "codex-ro"))
+    (should
+     (equal (my-codex--agent-command 'codex 'workspace-write)
+            "codex-ww"))
+    (should
+     (equal (my-codex--agent-command 'codex 'resume)
+            "codex-resume"))))
+
+(ert-deftest my-codex-agent-buffer-name-supports-mixed-agents ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-buffer" t))))
+    (unwind-protect
+        (let ((default-directory root)
+              (my-codex-agent 'codex))
+          (should
+           (string-match-p
+            (rx bos "*codex:" (+ anything) ":" (= 8 xdigit) "*")
+            (my-codex-current-buffer-name)))
+          (should
+           (string-match-p
+            (rx bos "*agy:" (+ anything) ":" (= 8 xdigit) "*")
+            (my-codex-current-buffer-name 'antigravity))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-current-buffer-name-uses-project-active-agent ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-buffer" t))))
+    (unwind-protect
+        (let ((default-directory root)
+              (my-codex-agent 'codex)
+              (my-codex--project-active-agents
+               (make-hash-table :test #'equal)))
+          (cl-letf (((symbol-function 'project-current)
+                     (lambda (&optional _maybe-prompt _directory)
+                       nil)))
+            (my-codex--set-active-agent 'antigravity root)
+            (should
+             (string-match-p
+              (rx bos "*agy:" (+ anything) ":" (= 8 xdigit) "*")
+              (my-codex-current-buffer-name)))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-buffer-resolves-project-active-agent-session ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-buffer" t)))
+        buffer)
+    (unwind-protect
+        (let ((default-directory root)
+              (my-codex-agent 'codex)
+              (my-codex--project-active-agents
+               (make-hash-table :test #'equal)))
+          (cl-letf (((symbol-function 'project-current)
+                     (lambda (&optional _maybe-prompt _directory)
+                       nil))
+                    ((symbol-function 'get-buffer-process)
+                     (lambda (candidate)
+                       (eq candidate buffer)))
+                    ((symbol-function 'process-live-p)
+                     (lambda (process) process)))
+            (setq buffer
+                  (get-buffer-create
+                   (my-codex-current-buffer-name 'antigravity)))
+            (my-codex--mark-default-session
+             buffer root 'workspace-write 'antigravity)
+            (my-codex--set-active-agent 'antigravity root)
+            (should (eq (my-codex-buffer) buffer))))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer))
+      (delete-directory root t))))
+
 (ert-deftest my-codex-mark-default-session-sets-buffer-local-metadata ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-session" t))))
     (unwind-protect
@@ -136,12 +209,13 @@
            (current-buffer) root 'workspace-write)
           (should (local-variable-p 'my-codex-session-id))
           (should
-           (string-prefix-p "default:" my-codex-session-id))
+           (string-prefix-p "codex:default:" my-codex-session-id))
           (should (equal my-codex-session-name "default"))
           (should
            (equal my-codex-session-project-root
                   (file-name-as-directory (file-truename root))))
-          (should (eq my-codex-session-access-mode 'workspace-write)))
+          (should (eq my-codex-session-access-mode 'workspace-write))
+          (should (eq my-codex-session-agent 'codex)))
       (delete-directory root t))))
 
 (ert-deftest my-codex-mark-named-session-sets-buffer-local-metadata ()
@@ -149,17 +223,18 @@
     (unwind-protect
         (with-temp-buffer
           (my-codex--mark-named-session
-           (current-buffer) "plan" root 'read-only)
+           (current-buffer) "plan" root 'read-only 'antigravity)
           (should (local-variable-p 'my-codex-session-id))
           (should
-           (string-prefix-p "session:" my-codex-session-id))
+           (string-prefix-p "antigravity:session:" my-codex-session-id))
           (should (string-match-p ":plan-[[:xdigit:]]\\{8\\}\\'"
                                   my-codex-session-id))
           (should (equal my-codex-session-name "plan"))
           (should
            (equal my-codex-session-project-root
                   (file-name-as-directory (file-truename root))))
-          (should (eq my-codex-session-access-mode 'read-only)))
+          (should (eq my-codex-session-access-mode 'read-only))
+          (should (eq my-codex-session-agent 'antigravity)))
       (delete-directory root t))))
 
 (ert-deftest my-codex-session-buffer-name-appends-safe-session-name ()
@@ -171,6 +246,17 @@
             (rx bos "*codex:" (+ anything)
                 ":review!docs-" (= 8 xdigit) "*")
             (my-codex-session-buffer-name "review docs"))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-session-buffer-name-includes-agent-prefix ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-buffer" t))))
+    (unwind-protect
+        (let ((default-directory root))
+          (should
+           (string-match-p
+            (rx bos "*agy:" (+ anything)
+                ":review!docs-" (= 8 xdigit) "*")
+            (my-codex-session-buffer-name "review docs" 'antigravity))))
       (delete-directory root t))))
 
 (ert-deftest my-codex-safe-session-name-preserves-distinct-names ()
@@ -229,6 +315,7 @@
             (should (derived-mode-p 'my-codex-sessions-mode))
             (should (string-match-p "\\*codex-sessions-render\\*"
                                     (buffer-string)))
+            (should (string-match-p "codex" (buffer-string)))
             (should (string-match-p "plan" (buffer-string)))
             (should (string-match-p "read-only" (buffer-string)))))
       (delete-directory root t)
@@ -329,18 +416,58 @@
       (when-let ((buffer (get-buffer my-codex-sessions-buffer-name)))
         (kill-buffer buffer)))))
 
-(ert-deftest my-codex-default-session-commands-use-existing-entry-points ()
+(ert-deftest my-codex-default-session-commands-use-selected-agent ()
   (let (called)
-    (cl-letf (((symbol-function 'my-codex-read-only)
-               (lambda ()
-                 (setq called 'read-only))))
-      (my-codex-default-read-only)
-      (should (eq called 'read-only)))
-    (cl-letf (((symbol-function 'my-codex-workspace)
-               (lambda ()
-                 (setq called 'workspace))))
-      (my-codex-default-workspace)
-      (should (eq called 'workspace)))))
+    (cl-letf (((symbol-function 'my-codex-two-column-layout-with-command)
+               (lambda (command focus-term session-name agent access-mode)
+                 (setq called
+                       (list command focus-term session-name
+                             agent access-mode)))))
+      (my-codex-default-read-only 'antigravity)
+      (should
+       (equal called
+              '("agy" nil nil antigravity read-only))))
+    (cl-letf (((symbol-function 'my-codex-two-column-layout-with-command)
+               (lambda (command focus-term session-name agent access-mode)
+                 (setq called
+                       (list command focus-term session-name
+                             agent access-mode)))))
+      (my-codex-default-workspace 'antigravity)
+      (should
+       (equal called
+              '("agy" nil nil antigravity workspace-write))))))
+
+(ert-deftest my-codex-default-session-layout-records-active-agent ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-active" t))))
+    (unwind-protect
+        (let ((default-directory root)
+              (my-codex-agent 'codex)
+              (my-codex--backends (make-hash-table :test #'equal))
+              (my-codex--project-active-agents
+               (make-hash-table :test #'equal)))
+          (cl-letf (((symbol-function 'my-codex--fit-frame-to-right-layout)
+                     #'ignore)
+                    ((symbol-function 'my-codex--apply-display-window-width)
+                     #'ignore)
+                    ((symbol-function 'my-codex--resize-edit-window-for-right-layout)
+                     #'ignore)
+                    ((symbol-function 'my-codex--enable-edit-fill-column-indicator)
+                     #'ignore)
+                    ((symbol-function 'my-codex-project-root)
+                     (lambda () root))
+                    ((symbol-function 'my-codex-backend-start)
+                     (lambda (&rest _args) nil))
+                    ((symbol-function 'display-buffer)
+                     (lambda (buf &rest _args)
+                       (set-window-buffer (selected-window) buf)
+                       (selected-window))))
+            (my-codex-default-workspace 'antigravity)
+            (should (eq (my-codex--active-agent root) 'antigravity))
+            (should
+             (string-match-p
+              "\\`\\*agy:"
+              (my-codex-current-buffer-name)))))
+      (delete-directory root t))))
 
 (ert-deftest my-codex-named-session-layout-starts-session-buffer ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-named" t)))
@@ -356,13 +483,16 @@
                      #'ignore)
                     ((symbol-function 'my-codex--enable-edit-fill-column-indicator)
                      #'ignore)
+                    ((symbol-function 'my-codex-project-root)
+                     (lambda () root))
                     ((symbol-function 'my-codex-backend-start)
                      (lambda (backend project-root command
-                              &optional session-name)
+                              &optional session-name agent access-mode)
                        (setq started
                              (list
                               (my-codex--backend-buffer-name backend)
-                              project-root command session-name))))
+                              project-root command session-name
+                              agent access-mode))))
                     ((symbol-function 'display-buffer)
                      (lambda (buf &rest _args)
                        (set-window-buffer (selected-window) buf)
@@ -372,8 +502,49 @@
             (should (equal (nth 1 started) root))
             (should (equal (nth 2 started) my-codex-read-only-command))
             (should (equal (nth 3 started) "plan"))
+            (should (eq (nth 4 started) 'codex))
+            (should-not (nth 5 started))
             (should
              (string-match-p ":plan-[[:xdigit:]]\\{8\\}\\*\\'"
+                             (car started)))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-named-session-layout-starts-selected-agent-buffer ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-named" t)))
+        started)
+    (unwind-protect
+        (let ((default-directory root)
+              (my-codex--backends (make-hash-table :test #'equal)))
+          (cl-letf (((symbol-function 'my-codex--fit-frame-to-right-layout)
+                     #'ignore)
+                    ((symbol-function 'my-codex--apply-display-window-width)
+                     #'ignore)
+                    ((symbol-function 'my-codex--resize-edit-window-for-right-layout)
+                     #'ignore)
+                    ((symbol-function 'my-codex--enable-edit-fill-column-indicator)
+                     #'ignore)
+                    ((symbol-function 'my-codex-project-root)
+                     (lambda () root))
+                    ((symbol-function 'my-codex-backend-start)
+                     (lambda (backend project-root command
+                              &optional session-name agent access-mode)
+                       (setq started
+                             (list
+                              (my-codex--backend-buffer-name backend)
+                              project-root command session-name
+                              agent access-mode))))
+                    ((symbol-function 'display-buffer)
+                     (lambda (buf &rest _args)
+                       (set-window-buffer (selected-window) buf)
+                       (selected-window))))
+            (my-codex-new-session "plan" 'antigravity 'workspace-write)
+            (should (equal (nth 1 started) root))
+            (should (equal (nth 2 started) "agy"))
+            (should (equal (nth 3 started) "plan"))
+            (should (eq (nth 4 started) 'antigravity))
+            (should (eq (nth 5 started) 'workspace-write))
+            (should
+             (string-match-p "\\`\\*agy:.*:plan-[[:xdigit:]]\\{8\\}\\*\\'"
                              (car started)))))
       (delete-directory root t))))
 
@@ -424,6 +595,10 @@
                          #'ignore)
                         ((symbol-function 'my-codex--enable-edit-fill-column-indicator)
                          #'ignore)
+                        ((symbol-function 'my-codex-project-root)
+                         (lambda () root-b))
+                        ((symbol-function 'my-codex-current-buffer-name)
+                         (lambda (&optional _agent) buffer-name))
                         ((symbol-function 'my-codex-backend-live-p)
                          (lambda (_backend) t))
                         ((symbol-function 'my-codex-backend-start)

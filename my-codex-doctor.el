@@ -15,11 +15,13 @@
 (require 'subr-x)
 
 (defvar my-codex-doctor-terminal-timeout)
+(defvar my-codex-agent)
 (defvar my-codex-project-build-command)
 (defvar my-codex-read-only-command)
 (defvar my-codex-resume-command)
 (defvar my-codex-workspace-command)
 
+(declare-function my-codex--agent-command "my-codex" (agent access-mode))
 (declare-function my-codex-project-root "my-codex" ())
 (declare-function vterm-mode "vterm" ())
 
@@ -206,6 +208,15 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
        "workspace" my-codex-workspace-command)
       (my-codex--doctor-command-status
        "resume" my-codex-resume-command)
+      (my-codex--doctor-command-status
+       (format "agent %s read-only" my-codex-agent)
+       (my-codex--agent-command my-codex-agent 'read-only))
+      (my-codex--doctor-command-status
+       (format "agent %s workspace" my-codex-agent)
+       (my-codex--agent-command my-codex-agent 'workspace-write))
+      (my-codex--doctor-command-status
+       (format "agent %s resume" my-codex-agent)
+       (my-codex--agent-command my-codex-agent 'resume))
       (list "command: project build"
             (if my-codex-project-build-command 'ok 'warn)
             (or my-codex-project-build-command
