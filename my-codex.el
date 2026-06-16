@@ -78,6 +78,15 @@
   :type 'string
   :group 'my-codex)
 
+(defcustom my-codex-antigravity-read-only-command
+  (concat "agy --sandbox -i \"System policy: "
+          "This is a read-only session. "
+          "Do not write/edit files or execute commands "
+          "that alter the codebase.\"")
+  "Command used to start Antigravity in read-only mode."
+  :type 'string
+  :group 'my-codex)
+
 (defcustom my-codex-agent 'codex
   "Agent profile used by default Codex commands.
 Commands such as `my-codex-read-only', `my-codex-workspace', and
@@ -96,7 +105,7 @@ different profile interactively."
     (antigravity
      :label "Antigravity"
      :buffer-prefix "agy"
-     :read-only-command "agy"
+     :read-only-command my-codex-antigravity-read-only-command
      :workspace-command "agy"
      :resume-command "agy resume"))
   "Agent profiles available to my-codex.

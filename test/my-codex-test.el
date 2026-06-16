@@ -426,7 +426,8 @@
       (my-codex-default-read-only 'antigravity)
       (should
        (equal called
-              '("agy" nil nil antigravity read-only))))
+              (list my-codex-antigravity-read-only-command
+                    nil nil 'antigravity 'read-only))))
     (cl-letf (((symbol-function 'my-codex-two-column-layout-with-command)
                (lambda (command focus-term session-name agent access-mode)
                  (setq called
