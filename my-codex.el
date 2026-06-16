@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.15.0
+;; Version: 0.15.1
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -859,6 +859,44 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
   (setq tabulated-list-padding 2)
   (tabulated-list-init-header))
 
+(defun my-codex--visible-session-window (&optional source-window)
+  "Return the visible Codex session window for SOURCE-WINDOW."
+  (let* ((source-window (or source-window (selected-window)))
+         (term-buffer (window-parameter source-window
+                                        'my-codex-term-buffer)))
+    (or (and (buffer-live-p term-buffer)
+             (get-buffer-window term-buffer nil))
+        (seq-find
+         (lambda (window)
+           (with-current-buffer (window-buffer window)
+             (bound-and-true-p my-codex-session-id)))
+         (window-list nil 'no-minibuf)))))
+
+(defun my-codex--edit-windows-for-session-buffer (buffer)
+  "Return edit windows associated with Codex session BUFFER."
+  (seq-filter
+   (lambda (window)
+     (eq (window-parameter window 'my-codex-term-buffer) buffer))
+   (window-list nil 'no-minibuf)))
+
+(defun my-codex--switch-active-session-buffer (buffer)
+  "Switch the active Codex session window to BUFFER."
+  (let* ((source-window (selected-window))
+         (term-window (my-codex--visible-session-window source-window))
+         (previous-buffer (and (window-live-p term-window)
+                               (window-buffer term-window))))
+    (if (window-live-p term-window)
+        (progn
+          (set-window-buffer term-window buffer)
+          (dolist (window
+                   (my-codex--edit-windows-for-session-buffer
+                    previous-buffer))
+            (set-window-parameter window 'my-codex-term-buffer buffer))
+          (select-window term-window))
+      (select-window
+       (or (display-buffer buffer my-codex-display-buffer-action)
+           (user-error "Failed to display %s" (buffer-name buffer)))))))
+
 (defun my-codex-sessions-visit ()
   "Visit the Codex session at point."
   (interactive)
@@ -866,7 +904,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
          (buffer (and buffer-name (get-buffer buffer-name))))
     (unless buffer
       (user-error "No Codex session on this line"))
-    (pop-to-buffer buffer)))
+    (my-codex--switch-active-session-buffer buffer)))
 
 (defun my-codex-sessions-mouse-visit (event)
   "Visit the Codex session clicked in EVENT."
