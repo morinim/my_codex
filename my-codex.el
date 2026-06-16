@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.14.0
+;; Version: 0.15.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -836,6 +836,48 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
         (concat (substring default-name 0 -1) ":" safe-name "*")
       (format "%s:%s" default-name safe-name))))
 
+(defconst my-codex-sessions-buffer-name "*Codex sessions*"
+  "Buffer name used to display open Codex sessions.")
+
+(defun my-codex--session-buffers ()
+  "Return open Codex session buffers."
+  (seq-sort-by
+   #'buffer-name #'string<
+   (seq-filter
+    (lambda (buffer)
+      (with-current-buffer buffer
+        (and (bound-and-true-p my-codex-session-id)
+             (when-let ((process (get-buffer-process buffer)))
+               (process-live-p process)))))
+    (buffer-list))))
+
+;;;###autoload
+(defun my-codex-list-sessions ()
+  "List open Codex session buffers."
+  (interactive)
+  (let ((buffers (my-codex--session-buffers)))
+    (if (null buffers)
+        (message "No open Codex sessions.")
+      (with-current-buffer (get-buffer-create my-codex-sessions-buffer-name)
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (insert (format "%-32s %-18s %-16s %s\n"
+                          "Buffer" "Name" "Access" "Project"))
+          (insert (make-string 79 ?-) "\n")
+          (dolist (buffer buffers)
+            (let (name access root)
+              (with-current-buffer buffer
+                (setq name my-codex-session-name
+                      access my-codex-session-access-mode
+                      root my-codex-session-project-root))
+              (insert (format "%-32s %-18s %-16s %s\n"
+                              (buffer-name buffer)
+                              (or name "")
+                              (or access "")
+                              (or root ""))))))
+        (special-mode)
+        (pop-to-buffer (current-buffer))))))
+
 (defun my-codex-modified-project-buffers ()
   "Return modified file-visiting buffers belonging to the current project."
   (if-let (project (project-current))
@@ -1207,6 +1249,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     ("o" "Read-only" my-codex-default-read-only)
     ("w" "Workspace" my-codex-default-workspace)]
    ["Session"
+    ("l" "List" my-codex-list-sessions)
     ("n" "New named" my-codex-new-session)
     ("r" "Resume" my-codex-resume)
     ("q" "Hide Codex" my-codex-restore-session-layout)]])
@@ -1327,6 +1370,9 @@ Open the generated notes in an editable Markdown buffer when they are ready."
      ["Show/start default workspace-write" my-codex-default-workspace
       :keys "F8 S w"
       :help "Show the default Codex session with workspace write access"]
+     ["List open sessions" my-codex-list-sessions
+      :keys "F8 S l"
+      :help "List open Codex session buffers"]
      ["New named session" my-codex-new-session
       :keys "F8 S n"
       :help "Start or show a named Codex session"]

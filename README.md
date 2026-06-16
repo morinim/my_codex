@@ -134,6 +134,7 @@ F8 w   start with workspace-write access
 F8 S   open session commands
 F8 S o start the default session in read-only mode
 F8 S w start the default session with workspace-write access
+F8 S l list open sessions
 F8 S n start or show a named session
 F8 S q hide the selected session window
 F8 r   resume a previous session
@@ -173,6 +174,7 @@ Prefix bindings:
 | F8 S | `my-codex-session-transient` | Open Codex session commands |
 | F8 S o | `my-codex-default-read-only` | Show/start default read-only Codex |
 | F8 S w | `my-codex-default-workspace` | Show/start default workspace-write Codex |
+| F8 S l | `my-codex-list-sessions` | List open Codex sessions |
 | F8 S n | `my-codex-new-session` | Start or show a named Codex session |
 | F8 S q | `my-codex-restore-session-layout` | Hide the selected Codex session window |
 | F8 r | `my-codex-resume` | Resume a Codex session |

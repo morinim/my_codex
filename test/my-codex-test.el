@@ -180,6 +180,63 @@
                      (mapcar #'my-codex--safe-session-name names)))
             (length names)))))
 
+(ert-deftest my-codex-session-buffers-returns-open-session-buffers ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-sessions" t)))
+        (default-buffer (get-buffer-create "*codex-sessions-default*"))
+        (named-buffer (get-buffer-create "*codex-sessions-named*"))
+        (old-buffer (get-buffer-create "*codex-sessions-named*<old>"))
+        (other-buffer (get-buffer-create "*codex-sessions-other*")))
+    (unwind-protect
+        (progn
+          (my-codex--mark-default-session
+           default-buffer root 'workspace-write)
+          (my-codex--mark-named-session
+           named-buffer "plan" root 'read-only)
+          (my-codex--mark-named-session
+           old-buffer "plan" root 'read-only)
+          (with-current-buffer other-buffer
+            (setq-local my-codex-session-name "not a session"))
+          (cl-letf (((symbol-function 'get-buffer-process)
+                     (lambda (buffer)
+                       (memq buffer (list default-buffer named-buffer))))
+                    ((symbol-function 'process-live-p)
+                     (lambda (process) process)))
+            (should
+             (equal (mapcar #'buffer-name (my-codex--session-buffers))
+                    '("*codex-sessions-default*"
+                      "*codex-sessions-named*")))))
+      (delete-directory root t)
+      (mapc (lambda (buffer)
+              (when (buffer-live-p buffer)
+                (kill-buffer buffer)))
+            (list default-buffer named-buffer old-buffer other-buffer)))))
+
+(ert-deftest my-codex-list-sessions-renders-session-buffer ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-sessions" t)))
+        (session-buffer (get-buffer-create "*codex-sessions-render*")))
+    (unwind-protect
+        (progn
+          (my-codex--mark-named-session
+           session-buffer "plan" root 'read-only)
+          (cl-letf (((symbol-function 'get-buffer-process)
+                     (lambda (buffer)
+                       (eq buffer session-buffer)))
+                    ((symbol-function 'process-live-p)
+                     (lambda (process) process))
+                    ((symbol-function 'pop-to-buffer) #'ignore))
+            (my-codex-list-sessions))
+          (with-current-buffer my-codex-sessions-buffer-name
+            (should (derived-mode-p 'special-mode))
+            (should (string-match-p "\\*codex-sessions-render\\*"
+                                    (buffer-string)))
+            (should (string-match-p "plan" (buffer-string)))
+            (should (string-match-p "read-only" (buffer-string)))))
+      (delete-directory root t)
+      (when (buffer-live-p session-buffer)
+        (kill-buffer session-buffer))
+      (when-let ((buffer (get-buffer my-codex-sessions-buffer-name)))
+        (kill-buffer buffer)))))
+
 (ert-deftest my-codex-default-session-commands-use-existing-entry-points ()
   (let (called)
     (cl-letf (((symbol-function 'my-codex-read-only)
