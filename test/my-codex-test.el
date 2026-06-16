@@ -226,11 +226,40 @@
                     ((symbol-function 'pop-to-buffer) #'ignore))
             (my-codex-list-sessions))
           (with-current-buffer my-codex-sessions-buffer-name
-            (should (derived-mode-p 'special-mode))
+            (should (derived-mode-p 'my-codex-sessions-mode))
             (should (string-match-p "\\*codex-sessions-render\\*"
                                     (buffer-string)))
             (should (string-match-p "plan" (buffer-string)))
             (should (string-match-p "read-only" (buffer-string)))))
+      (delete-directory root t)
+      (when (buffer-live-p session-buffer)
+        (kill-buffer session-buffer))
+      (when-let ((buffer (get-buffer my-codex-sessions-buffer-name)))
+        (kill-buffer buffer)))))
+
+(ert-deftest my-codex-sessions-visit-opens-session-buffer ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-sessions" t)))
+        (session-buffer (get-buffer-create "*codex-sessions-select*"))
+        visited)
+    (unwind-protect
+        (progn
+          (my-codex--mark-named-session
+           session-buffer "plan" root 'read-only)
+          (cl-letf (((symbol-function 'get-buffer-process)
+                     (lambda (buffer)
+                       (eq buffer session-buffer)))
+                    ((symbol-function 'process-live-p)
+                     (lambda (process) process))
+                    ((symbol-function 'pop-to-buffer)
+                     (lambda (buffer-or-name &rest _args)
+                       (setq visited (get-buffer buffer-or-name)))))
+            (my-codex-list-sessions)
+            (with-current-buffer my-codex-sessions-buffer-name
+              (goto-char (point-min))
+              (search-forward "*codex-sessions-select*")
+              (beginning-of-line)
+              (my-codex-sessions-visit))
+            (should (eq visited session-buffer))))
       (delete-directory root t)
       (when (buffer-live-p session-buffer)
         (kill-buffer session-buffer))

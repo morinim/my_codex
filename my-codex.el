@@ -32,6 +32,7 @@
 (require 'project)
 (require 'seq)
 (require 'subr-x)
+(require 'tabulated-list)
 (require 'thingatpt)
 (require 'transient)
 (require 'xref)
@@ -842,6 +843,42 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
 (defconst my-codex-sessions-buffer-name "*Codex sessions*"
   "Buffer name used to display open Codex sessions.")
 
+(defvar-keymap my-codex-sessions-mode-map
+  :parent tabulated-list-mode-map
+  "RET" #'my-codex-sessions-visit
+  "<mouse-1>" #'my-codex-sessions-mouse-visit)
+
+(define-derived-mode my-codex-sessions-mode tabulated-list-mode
+  "Codex sessions"
+  "Major mode for selecting open Codex sessions."
+  (setq tabulated-list-format
+        [("Buffer" 32 t)
+         ("Name" 18 t)
+         ("Access" 16 t)
+         ("Project" 0 t)])
+  (setq tabulated-list-padding 2)
+  (tabulated-list-init-header))
+
+(defun my-codex-sessions-visit ()
+  "Visit the Codex session at point."
+  (interactive)
+  (let* ((buffer-name (tabulated-list-get-id))
+         (buffer (and buffer-name (get-buffer buffer-name))))
+    (unless buffer
+      (user-error "No Codex session on this line"))
+    (pop-to-buffer buffer)))
+
+(defun my-codex-sessions-mouse-visit (event)
+  "Visit the Codex session clicked in EVENT."
+  (interactive "e")
+  (let* ((end (event-end event))
+         (window (posn-window end))
+         (point (posn-point end)))
+    (when (and (windowp window) (integer-or-marker-p point))
+      (select-window window)
+      (goto-char point)
+      (my-codex-sessions-visit))))
+
 (defun my-codex--session-buffers ()
   "Return open Codex session buffers."
   (seq-sort-by
@@ -862,23 +899,23 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
     (if (null buffers)
         (message "No open Codex sessions.")
       (with-current-buffer (get-buffer-create my-codex-sessions-buffer-name)
-        (let ((inhibit-read-only t))
-          (erase-buffer)
-          (insert (format "%-32s %-18s %-16s %s\n"
-                          "Buffer" "Name" "Access" "Project"))
-          (insert (make-string 79 ?-) "\n")
-          (dolist (buffer buffers)
-            (let (name access root)
-              (with-current-buffer buffer
-                (setq name my-codex-session-name
-                      access my-codex-session-access-mode
-                      root my-codex-session-project-root))
-              (insert (format "%-32s %-18s %-16s %s\n"
-                              (buffer-name buffer)
-                              (or name "")
-                              (or access "")
-                              (or root ""))))))
-        (special-mode)
+        (my-codex-sessions-mode)
+        (setq tabulated-list-entries
+              (mapcar
+               (lambda (buffer)
+                 (let (name access root)
+                   (with-current-buffer buffer
+                     (setq name my-codex-session-name
+                           access my-codex-session-access-mode
+                           root my-codex-session-project-root))
+                   (list (buffer-name buffer)
+                         (vector
+                          (buffer-name buffer)
+                          (or name "")
+                          (if access (symbol-name access) "")
+                          (or root "")))))
+               buffers))
+        (tabulated-list-print t)
         (pop-to-buffer (current-buffer))))))
 
 (defun my-codex-modified-project-buffers ()
