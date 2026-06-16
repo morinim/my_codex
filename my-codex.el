@@ -390,6 +390,18 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 (defvar-local my-codex--session-summary-wait-timer nil
   "Active timer waiting for a Codex session summary.")
 
+(defvar-local my-codex-session-id nil
+  "Identifier for the Codex session owned by the current buffer.")
+
+(defvar-local my-codex-session-name nil
+  "Human-readable Codex session name for the current buffer.")
+
+(defvar-local my-codex-session-project-root nil
+  "Project root associated with the current Codex session buffer.")
+
+(defvar-local my-codex-session-access-mode nil
+  "Access mode used for the current Codex session buffer.")
+
 (defvar-local my-codex--github-issue-creation-in-progress nil
   "Non-nil while the current GitHub issue draft is being submitted.")
 
@@ -445,6 +457,29 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
   (when-let (buffer (my-codex--backend-buffer backend))
     (process-live-p (get-buffer-process buffer))))
 
+(defun my-codex--session-access-mode (command)
+  "Return the session access mode represented by COMMAND."
+  (cond
+   ((equal command my-codex-workspace-command) 'workspace-write)
+   ((equal command my-codex-read-only-command) 'read-only)
+   ((equal command my-codex-resume-command) 'resume)
+   (t 'custom)))
+
+(defun my-codex--default-session-id (project-root)
+  "Return the default session identifier for PROJECT-ROOT."
+  (format "default:%s"
+          (substring (secure-hash 'sha1 (file-truename project-root)) 0 8)))
+
+(defun my-codex--mark-default-session (buffer project-root access-mode)
+  "Mark BUFFER as the default Codex session for PROJECT-ROOT."
+  (with-current-buffer buffer
+    (setq-local my-codex-session-id
+                (my-codex--default-session-id project-root))
+    (setq-local my-codex-session-name "default")
+    (setq-local my-codex-session-project-root
+                (file-name-as-directory (file-truename project-root)))
+    (setq-local my-codex-session-access-mode access-mode)))
+
 (cl-defmethod my-codex-backend-start
   ((backend my-codex-vterm-backend) project-root command)
   "Start BACKEND's vterm process in PROJECT-ROOT with COMMAND."
@@ -463,6 +498,8 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
         (goto-char (point-max))
         (vterm-send-string (my-codex--shell-command-and-exit command))
         (vterm-send-return)))
+    (my-codex--mark-default-session
+     buffer project-root (my-codex--session-access-mode command))
     buffer))
 
 (cl-defmethod my-codex-backend-send
@@ -767,6 +804,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
             (user-error "Failed to display %s" (buffer-name buffer)))))
     (let* ((backend (my-codex--current-backend))
            (buffer-name (my-codex--backend-buffer-name backend))
+           (project-root (my-codex-project-root))
            (existing-buf (get-buffer buffer-name)))
       (my-codex--fit-frame-to-right-layout)
 
@@ -792,7 +830,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
         (unless (and existing-buf
                      (my-codex-backend-live-p backend))
           (my-codex-backend-start
-           backend (my-codex-project-root) codex-command))
+           backend project-root codex-command))
 
         (if focus-term
             (select-window term-window)

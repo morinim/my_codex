@@ -114,6 +114,77 @@
   (should (= (my-codex--approx-token-count "abcd") 1))
   (should (= (my-codex--approx-token-count "abcde") 2)))
 
+(ert-deftest my-codex-session-access-mode-recognizes-default-commands ()
+  (should
+   (eq (my-codex--session-access-mode my-codex-read-only-command)
+       'read-only))
+  (should
+   (eq (my-codex--session-access-mode my-codex-workspace-command)
+       'workspace-write))
+  (should
+   (eq (my-codex--session-access-mode my-codex-resume-command)
+       'resume))
+  (should
+   (eq (my-codex--session-access-mode "codex --custom")
+       'custom)))
+
+(ert-deftest my-codex-mark-default-session-sets-buffer-local-metadata ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-session" t))))
+    (unwind-protect
+        (with-temp-buffer
+          (my-codex--mark-default-session
+           (current-buffer) root 'workspace-write)
+          (should (local-variable-p 'my-codex-session-id))
+          (should
+           (string-prefix-p "default:" my-codex-session-id))
+          (should (equal my-codex-session-name "default"))
+          (should
+           (equal my-codex-session-project-root
+                  (file-name-as-directory (file-truename root))))
+          (should (eq my-codex-session-access-mode 'workspace-write)))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-reused-live-buffer-preserves-session-metadata ()
+  (let ((root-a (file-name-as-directory (make-temp-file "my-codex-a" t)))
+        (root-b (file-name-as-directory (make-temp-file "my-codex-b" t)))
+        (buffer-name "*codex-shared-test*"))
+    (unwind-protect
+        (let ((buffer (get-buffer-create buffer-name))
+              (my-codex-buffer-name buffer-name)
+              (my-codex--backend nil))
+          (my-codex--mark-default-session buffer root-a 'read-only)
+          (let ((expected-id (with-current-buffer buffer my-codex-session-id))
+                (expected-root
+                 (with-current-buffer buffer my-codex-session-project-root)))
+            (let ((default-directory root-b))
+              (cl-letf (((symbol-function 'my-codex--fit-frame-to-right-layout)
+                         #'ignore)
+                        ((symbol-function 'my-codex--apply-display-window-width)
+                         #'ignore)
+                        ((symbol-function 'my-codex--resize-edit-window-for-right-layout)
+                         #'ignore)
+                        ((symbol-function 'my-codex--enable-edit-fill-column-indicator)
+                         #'ignore)
+                        ((symbol-function 'my-codex-backend-live-p)
+                         (lambda (_backend) t))
+                        ((symbol-function 'my-codex-backend-start)
+                         (lambda (&rest _args)
+                           (error "Should not restart a live buffer")))
+                        ((symbol-function 'display-buffer)
+                         (lambda (buf &rest _args)
+                           (set-window-buffer (selected-window) buf)
+                           (selected-window))))
+                (my-codex-two-column-layout-with-command
+                 my-codex-workspace-command)))
+            (with-current-buffer buffer
+              (should (equal my-codex-session-id expected-id))
+              (should (equal my-codex-session-project-root expected-root))
+              (should (eq my-codex-session-access-mode 'read-only)))))
+      (when-let ((buffer (get-buffer buffer-name)))
+        (kill-buffer buffer))
+      (delete-directory root-a t)
+      (delete-directory root-b t))))
+
 (defmacro my-codex-test-with-vterm-shell (shell &rest body)
   "Bind `vterm-shell' to SHELL while running BODY."
   (declare (indent 1))
