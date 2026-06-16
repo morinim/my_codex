@@ -144,6 +144,116 @@
           (should (eq my-codex-session-access-mode 'workspace-write)))
       (delete-directory root t))))
 
+(ert-deftest my-codex-mark-named-session-sets-buffer-local-metadata ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-session" t))))
+    (unwind-protect
+        (with-temp-buffer
+          (my-codex--mark-named-session
+           (current-buffer) "plan" root 'read-only)
+          (should (local-variable-p 'my-codex-session-id))
+          (should
+           (string-prefix-p "session:" my-codex-session-id))
+          (should (string-match-p ":plan-[[:xdigit:]]\\{8\\}\\'"
+                                  my-codex-session-id))
+          (should (equal my-codex-session-name "plan"))
+          (should
+           (equal my-codex-session-project-root
+                  (file-name-as-directory (file-truename root))))
+          (should (eq my-codex-session-access-mode 'read-only)))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-session-buffer-name-appends-safe-session-name ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-buffer" t))))
+    (unwind-protect
+        (let ((default-directory root))
+          (should
+           (string-match-p
+            (rx bos "*codex:" (+ anything)
+                ":review!docs-" (= 8 xdigit) "*")
+            (my-codex-session-buffer-name "review docs"))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-safe-session-name-preserves-distinct-names ()
+  (let ((names '("review docs" "review:docs" "review!docs")))
+    (should
+     (equal (length (delete-dups
+                     (mapcar #'my-codex--safe-session-name names)))
+            (length names)))))
+
+(ert-deftest my-codex-default-session-commands-use-existing-entry-points ()
+  (let (called)
+    (cl-letf (((symbol-function 'my-codex-read-only)
+               (lambda ()
+                 (setq called 'read-only))))
+      (my-codex-default-read-only)
+      (should (eq called 'read-only)))
+    (cl-letf (((symbol-function 'my-codex-workspace)
+               (lambda ()
+                 (setq called 'workspace))))
+      (my-codex-default-workspace)
+      (should (eq called 'workspace)))))
+
+(ert-deftest my-codex-named-session-layout-starts-session-buffer ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-named" t)))
+        started)
+    (unwind-protect
+        (let ((default-directory root)
+              (my-codex--backends (make-hash-table :test #'equal)))
+          (cl-letf (((symbol-function 'my-codex--fit-frame-to-right-layout)
+                     #'ignore)
+                    ((symbol-function 'my-codex--apply-display-window-width)
+                     #'ignore)
+                    ((symbol-function 'my-codex--resize-edit-window-for-right-layout)
+                     #'ignore)
+                    ((symbol-function 'my-codex--enable-edit-fill-column-indicator)
+                     #'ignore)
+                    ((symbol-function 'my-codex-backend-start)
+                     (lambda (backend project-root command
+                              &optional session-name)
+                       (setq started
+                             (list
+                              (my-codex--backend-buffer-name backend)
+                              project-root command session-name))))
+                    ((symbol-function 'display-buffer)
+                     (lambda (buf &rest _args)
+                       (set-window-buffer (selected-window) buf)
+                       (selected-window))))
+            (my-codex-two-column-layout-with-command
+             my-codex-read-only-command nil "plan")
+            (should (equal (nth 1 started) root))
+            (should (equal (nth 2 started) my-codex-read-only-command))
+            (should (equal (nth 3 started) "plan"))
+            (should
+             (string-match-p ":plan-[[:xdigit:]]\\{8\\}\\*\\'"
+                             (car started)))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-restore-session-layout-hides-associated-session ()
+  (let ((default-buffer (get-buffer-create "*codex-default-test*"))
+        (session-buffer (get-buffer-create "*codex-session-test*"))
+        term-window
+        hidden)
+    (unwind-protect
+        (let ((edit-window (selected-window)))
+          (setq term-window (split-window-right))
+          (set-window-buffer term-window session-buffer)
+          (set-window-parameter
+           edit-window 'my-codex-term-buffer session-buffer)
+          (select-window edit-window)
+          (cl-letf (((symbol-function 'my-codex-current-buffer-name)
+                     (lambda () (buffer-name default-buffer)))
+                    ((symbol-function 'quit-window)
+                     (lambda (&optional _kill window)
+                       (setq hidden (window-buffer window)))))
+            (my-codex-restore-session-layout)
+            (should (eq hidden session-buffer))))
+      (set-window-parameter
+       (selected-window) 'my-codex-term-buffer nil)
+      (when (window-live-p term-window)
+        (delete-window term-window))
+      (kill-buffer default-buffer)
+      (kill-buffer session-buffer))))
+
 (ert-deftest my-codex-reused-live-buffer-preserves-session-metadata ()
   (let ((root-a (file-name-as-directory (make-temp-file "my-codex-a" t)))
         (root-b (file-name-as-directory (make-temp-file "my-codex-b" t)))

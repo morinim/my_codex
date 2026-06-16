@@ -425,8 +425,13 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 (defvar my-codex--backend nil
   "Current backend instance for the active project Codex session.")
 
-(cl-defgeneric my-codex-backend-start (backend project-root command)
-  "Start BACKEND in PROJECT-ROOT with COMMAND and return its buffer.")
+(defvar my-codex--backends (make-hash-table :test #'equal)
+  "Backend instances keyed by Codex buffer name.")
+
+(cl-defgeneric my-codex-backend-start
+    (backend project-root command &optional session-name)
+  "Start BACKEND in PROJECT-ROOT with COMMAND and return its buffer.
+When SESSION-NAME is non-nil, mark the buffer as that named session.")
 
 (cl-defgeneric my-codex-backend-send (backend prompt)
   "Send PROMPT through BACKEND.")
@@ -442,15 +447,18 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
   "Return BACKEND's buffer, or nil when it does not exist."
   (get-buffer (my-codex--backend-buffer-name backend)))
 
+(defun my-codex--backend-for-buffer-name (buffer-name)
+  "Return the backend for BUFFER-NAME."
+  (let ((backend (gethash buffer-name my-codex--backends)))
+    (unless (my-codex-vterm-backend-p backend)
+      (setq backend (my-codex--make-vterm-backend buffer-name))
+      (puthash buffer-name backend my-codex--backends))
+    (setq my-codex--backend backend)
+    backend))
+
 (defun my-codex--current-backend ()
-  "Return the backend for the current project Codex session."
-  (let ((buffer-name (my-codex-current-buffer-name)))
-    (unless (and (my-codex-vterm-backend-p my-codex--backend)
-                 (equal (my-codex-vterm-backend-buffer-name my-codex--backend)
-                        buffer-name))
-      (setq my-codex--backend
-            (my-codex--make-vterm-backend buffer-name)))
-    my-codex--backend))
+  "Return the backend for the current project default Codex session."
+  (my-codex--backend-for-buffer-name (my-codex-current-buffer-name)))
 
 (cl-defmethod my-codex-backend-live-p ((backend my-codex-vterm-backend))
   "Return non-nil when BACKEND's vterm process is live."
@@ -470,18 +478,44 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
   (format "default:%s"
           (substring (secure-hash 'sha1 (file-truename project-root)) 0 8)))
 
-(defun my-codex--mark-default-session (buffer project-root access-mode)
-  "Mark BUFFER as the default Codex session for PROJECT-ROOT."
+(defun my-codex--session-id (project-root session-name)
+  "Return the named session identifier for PROJECT-ROOT and SESSION-NAME."
+  (format "session:%s:%s"
+          (substring (secure-hash 'sha1 (file-truename project-root)) 0 8)
+          (my-codex--safe-session-name session-name)))
+
+(defun my-codex--mark-session
+    (buffer session-id session-name project-root access-mode)
+  "Mark BUFFER as SESSION-ID named SESSION-NAME for PROJECT-ROOT."
   (with-current-buffer buffer
-    (setq-local my-codex-session-id
-                (my-codex--default-session-id project-root))
-    (setq-local my-codex-session-name "default")
+    (setq-local my-codex-session-id session-id)
+    (setq-local my-codex-session-name session-name)
     (setq-local my-codex-session-project-root
                 (file-name-as-directory (file-truename project-root)))
     (setq-local my-codex-session-access-mode access-mode)))
 
+(defun my-codex--mark-default-session (buffer project-root access-mode)
+  "Mark BUFFER as the default Codex session for PROJECT-ROOT."
+  (my-codex--mark-session
+   buffer
+   (my-codex--default-session-id project-root)
+   "default"
+   project-root
+   access-mode))
+
+(defun my-codex--mark-named-session
+    (buffer session-name project-root access-mode)
+  "Mark BUFFER as SESSION-NAME for PROJECT-ROOT."
+  (my-codex--mark-session
+   buffer
+   (my-codex--session-id project-root session-name)
+   session-name
+   project-root
+   access-mode))
+
 (cl-defmethod my-codex-backend-start
-  ((backend my-codex-vterm-backend) project-root command)
+  ((backend my-codex-vterm-backend) project-root command
+   &optional session-name)
   "Start BACKEND's vterm process in PROJECT-ROOT with COMMAND."
   (let* ((default-directory project-root)
          (buffer-name (my-codex--backend-buffer-name backend))
@@ -498,8 +532,11 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
         (goto-char (point-max))
         (vterm-send-string (my-codex--shell-command-and-exit command))
         (vterm-send-return)))
-    (my-codex--mark-default-session
-     buffer project-root (my-codex--session-access-mode command))
+    (if session-name
+        (my-codex--mark-named-session
+         buffer session-name project-root (my-codex--session-access-mode command))
+      (my-codex--mark-default-session
+       buffer project-root (my-codex--session-access-mode command)))
     buffer))
 
 (cl-defmethod my-codex-backend-send
@@ -773,6 +810,32 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
           (format "*codex:%s:%s*" name hash))
       my-codex-buffer-name)))
 
+(defun my-codex--normalise-session-name (name)
+  "Return a normalised Codex session NAME, or raise an error."
+  (let ((normalised (string-trim name)))
+    (when (string-empty-p normalised)
+      (user-error "Session name cannot be empty"))
+    (when (string-equal normalised "default")
+      (user-error "Use F8 S o or F8 S w for the default session"))
+    normalised))
+
+(defun my-codex--safe-session-name (name)
+  "Return a buffer-name-safe representation of session NAME."
+  (let* ((normalised (my-codex--normalise-session-name name))
+         (slug (replace-regexp-in-string
+                "[^[:alnum:]._-]+" "!"
+                normalised))
+         (hash (substring (secure-hash 'sha1 normalised) 0 8)))
+    (format "%s-%s" slug hash)))
+
+(defun my-codex-session-buffer-name (session-name)
+  "Return the buffer name for SESSION-NAME in the current project."
+  (let* ((safe-name (my-codex--safe-session-name session-name))
+         (default-name (my-codex-current-buffer-name)))
+    (if (string-suffix-p "*" default-name)
+        (concat (substring default-name 0 -1) ":" safe-name "*")
+      (format "%s:%s" default-name safe-name))))
+
 (defun my-codex-modified-project-buffers ()
   "Return modified file-visiting buffers belonging to the current project."
   (if-let (project (project-current))
@@ -794,16 +857,22 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
       (message "Codex warning: unsaved buffer(s): %s"
                (mapconcat #'buffer-name buffers ", ")))))
 
-(defun my-codex-two-column-layout-with-command (codex-command &optional focus-term)
+(defun my-codex-two-column-layout-with-command
+    (codex-command &optional focus-term session-name)
   "Display Codex and run CODEX-COMMAND if the backend is not running.
-If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
+If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window.
+When SESSION-NAME is non-nil, use that named session instead of default."
   (cl-labels
       ((display-codex-buffer
         (buffer)
         (or (display-buffer buffer my-codex-display-buffer-action)
             (user-error "Failed to display %s" (buffer-name buffer)))))
-    (let* ((backend (my-codex--current-backend))
-           (buffer-name (my-codex--backend-buffer-name backend))
+    (let* ((session-name (when session-name
+                           (my-codex--normalise-session-name session-name)))
+           (buffer-name (if session-name
+                            (my-codex-session-buffer-name session-name)
+                          (my-codex-current-buffer-name)))
+           (backend (my-codex--backend-for-buffer-name buffer-name))
            (project-root (my-codex-project-root))
            (existing-buf (get-buffer buffer-name)))
       (my-codex--fit-frame-to-right-layout)
@@ -830,7 +899,7 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
         (unless (and existing-buf
                      (my-codex-backend-live-p backend))
           (my-codex-backend-start
-           backend project-root codex-command))
+           backend project-root codex-command session-name))
 
         (if focus-term
             (select-window term-window)
@@ -850,6 +919,27 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
         (quit-window nil window)))
     (message "Codex window hidden")))
 
+(defun my-codex--session-layout-buffer ()
+  "Return the Codex buffer associated with the selected session layout."
+  (or (window-parameter (selected-window) 'my-codex-term-buffer)
+      (when (bound-and-true-p my-codex-session-id)
+        (current-buffer))
+      (get-buffer (my-codex-current-buffer-name))
+      (user-error "Codex window is not visible")))
+
+;;;###autoload
+(defun my-codex-restore-session-layout ()
+  "Hide visible windows showing the selected Codex session buffer."
+  (interactive)
+  (let* ((buffer (my-codex--session-layout-buffer))
+         (windows (get-buffer-window-list buffer nil t)))
+    (unless windows
+      (user-error "Codex window is not visible"))
+    (dolist (window windows)
+      (when (window-live-p window)
+        (quit-window nil window)))
+    (message "Codex window hidden")))
+
 ;;;###autoload
 (defun my-codex-read-only ()
   "Show Codex, starting it in read-only mode if needed."
@@ -861,6 +951,38 @@ If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window."
   "Show Codex, starting it with workspace write access if needed."
   (interactive)
   (my-codex-two-column-layout-with-command my-codex-workspace-command))
+
+;;;###autoload
+(defun my-codex-default-read-only ()
+  "Show the default Codex session in read-only mode."
+  (interactive)
+  (my-codex-read-only))
+
+;;;###autoload
+(defun my-codex-default-workspace ()
+  "Show the default Codex session with workspace write access."
+  (interactive)
+  (my-codex-workspace))
+
+(defun my-codex--read-session-access-command ()
+  "Read and return a Codex command for a new named session."
+  (pcase (completing-read
+          "Session access: "
+          '("read-only" "workspace-write")
+          nil t nil nil "read-only")
+    ("read-only" my-codex-read-only-command)
+    ("workspace-write" my-codex-workspace-command)))
+
+;;;###autoload
+(defun my-codex-new-session (name command)
+  "Start or show a named Codex session NAME using COMMAND."
+  (interactive
+   (list
+    (read-string "Session name: ")
+    (my-codex--read-session-access-command)))
+  (let ((session-name (my-codex--normalise-session-name name)))
+    (my-codex-two-column-layout-with-command
+     command nil session-name)))
 
 ;;;###autoload
 (defun my-codex-resume ()
@@ -1048,6 +1170,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
   :doc "Prefix keymap for Codex commands."
   "o"       #'my-codex-read-only
   "w"       #'my-codex-workspace
+  "S"       #'my-codex-session-transient
   "r"       #'my-codex-resume
   "q"       #'my-codex-restore-layout
   "a"       #'my-codex-ask
@@ -1078,11 +1201,23 @@ Open the generated notes in an editable Markdown buffer when they are ready."
   "<tab>"   #'my-codex-toggle-focus)
 
 ;;;###autoload
+(transient-define-prefix my-codex-session-transient ()
+  "Show Codex session commands."
+  [["Default session"
+    ("o" "Read-only" my-codex-default-read-only)
+    ("w" "Workspace" my-codex-default-workspace)]
+   ["Session"
+    ("n" "New named" my-codex-new-session)
+    ("r" "Resume" my-codex-resume)
+    ("q" "Hide Codex" my-codex-restore-session-layout)]])
+
+;;;###autoload
 (transient-define-prefix my-codex-transient ()
   "Show Codex commands."
   [["Session"
     ("o" "Read-only" my-codex-read-only)
     ("w" "Workspace" my-codex-workspace)
+    ("S" "Sessions" my-codex-session-transient)
     ("r" "Resume" my-codex-resume)
     ("q" "Hide Codex" my-codex-restore-layout)
     ("<tab>" "Toggle focus" my-codex-toggle-focus)]
@@ -1180,9 +1315,24 @@ Open the generated notes in an editable Markdown buffer when they are ready."
      ["Show/start workspace-write" my-codex-workspace
       :keys "F8 w"
       :help "Show Codex, starting it with workspace write access if needed"]
+     ["Session commands" my-codex-session-transient
+      :keys "F8 S"
+      :help "Open default and future Codex session commands"]
      ["Resume session" my-codex-resume
       :keys "F8 r"
       :help "Resume a previous Codex session"]
+     ["Show/start default read-only" my-codex-default-read-only
+      :keys "F8 S o"
+      :help "Show the default Codex session in read-only mode"]
+     ["Show/start default workspace-write" my-codex-default-workspace
+      :keys "F8 S w"
+      :help "Show the default Codex session with workspace write access"]
+     ["New named session" my-codex-new-session
+      :keys "F8 S n"
+      :help "Start or show a named Codex session"]
+     ["Hide selected session window" my-codex-restore-session-layout
+      :keys "F8 S q"
+      :help "Hide the Codex window associated with the selected session"]
      ["Hide Codex window" my-codex-restore-layout
       :keys "F8 q"
       :help "Hide the visible Codex window"]
