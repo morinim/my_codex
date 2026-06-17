@@ -1348,6 +1348,31 @@
             (should-not (string-match-p "summary: \"beta\"" section))))
       (delete-directory root t))))
 
+(ert-deftest my-codex-dynamic-helper-buffer-names-support-active-agent ()
+  (let* ((root "/mock/project")
+         (my-codex-agent-profiles
+          '((codex
+             :label "Codex"
+             :buffer-prefix "codex")
+            (antigravity
+             :label "Antigravity"
+             :buffer-prefix "agy")))
+         (my-codex--project-active-agents (make-hash-table :test #'equal)))
+    (puthash (file-name-as-directory "/mock/project") 'antigravity
+             my-codex--project-active-agents)
+    (should
+     (string-prefix-p "*Antigravity prompt preview:"
+                      (my-codex--prompt-preview-buffer-name root)))
+    (should
+     (string-prefix-p "*Antigravity GitHub issue:"
+                      (my-codex--github-issue-output-buffer-name root)))
+    (should
+     (string-prefix-p "*Antigravity open issues:"
+                      (my-codex--github-ticket-list-buffer-name root)))
+    (should
+     (string-prefix-p "*Antigravity GitHub issue draft:"
+                      (my-codex--github-issue-draft-buffer-name root)))))
+
 (provide 'my-codex-test)
 
 ;;; my-codex-test.el ends here

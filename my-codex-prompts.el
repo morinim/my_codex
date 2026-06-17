@@ -34,6 +34,8 @@
 (defvar my-codex-test-coverage-prompt)
 
 (declare-function my-codex--project-files "my-codex-git" (root))
+(declare-function my-codex--active-agent "my-codex" (&optional root))
+(declare-function my-codex--agent-label "my-codex" (agent))
 (declare-function my-codex--current-backend "my-codex" ())
 (declare-function my-codex--safe-root-name "my-codex" (root))
 (declare-function my-codex--warn-about-unsaved-project-buffers "my-codex" ())
@@ -92,7 +94,9 @@
 
 (defun my-codex--prompt-preview-buffer-name (root)
   "Return the prompt preview buffer name for ROOT."
-  (format "*Codex prompt preview:%s*" (my-codex--safe-root-name root)))
+  (let* ((agent (my-codex--active-agent root))
+         (label (my-codex--agent-label agent)))
+    (format "*%s prompt preview:%s*" label (my-codex--safe-root-name root))))
 
 (defun my-codex--display-prompt-preview-buffer (buffer origin-window)
   "Display prompt preview BUFFER, preferring ORIGIN-WINDOW."

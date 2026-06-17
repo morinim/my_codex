@@ -17,6 +17,8 @@
 (defvar my-codex--session-summary-request-marker)
 (defvar my-codex-github-issue-summary-prompt)
 
+(declare-function my-codex--active-agent "my-codex" (&optional root))
+(declare-function my-codex--agent-label "my-codex" (agent))
 (declare-function my-codex--safe-root-name "my-codex" (root))
 (declare-function my-codex--session-export-mode "my-codex" ())
 (declare-function my-codex--session-summary-prompt
@@ -40,15 +42,21 @@
 
 (defun my-codex--github-issue-output-buffer-name (root)
   "Return the GitHub issue process buffer name for ROOT."
-  (format "*Codex GitHub issue:%s*" (my-codex--safe-root-name root)))
+  (let* ((agent (my-codex--active-agent root))
+         (label (my-codex--agent-label agent)))
+    (format "*%s GitHub issue:%s*" label (my-codex--safe-root-name root))))
 
 (defun my-codex--github-ticket-list-buffer-name (root)
   "Return the open issue list buffer name for ROOT."
-  (format "*Codex open issues:%s*" (my-codex--safe-root-name root)))
+  (let* ((agent (my-codex--active-agent root))
+         (label (my-codex--agent-label agent)))
+    (format "*%s open issues:%s*" label (my-codex--safe-root-name root))))
 
 (defun my-codex--github-issue-draft-buffer-name (root)
   "Return the GitHub issue draft buffer name for ROOT."
-  (format "*Codex GitHub issue draft:%s*" (my-codex--safe-root-name root)))
+  (let* ((agent (my-codex--active-agent root))
+         (label (my-codex--agent-label agent)))
+    (format "*%s GitHub issue draft:%s*" label (my-codex--safe-root-name root))))
 
 (defun my-codex--github-ticket-list-sentinel (proc _event)
   "Handle completion of open issue list process PROC."
