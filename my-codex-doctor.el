@@ -20,6 +20,9 @@
 (defvar my-codex-read-only-command)
 (defvar my-codex-resume-command)
 (defvar my-codex-workspace-command)
+(defvar my-codex-antigravity-read-only-command)
+(defvar my-codex-antigravity-workspace-command)
+(defvar my-codex-antigravity-resume-command)
 
 (declare-function my-codex--agent-command "my-codex" (agent access-mode))
 (declare-function my-codex-project-root "my-codex" ())
@@ -127,7 +130,9 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
   "Return diagnostic rows for `my-codex-doctor'."
   (let* ((root (my-codex-project-root))
          (project (project-current nil default-directory))
-         (codex (executable-find "codex"))
+         (agent-cmd (my-codex--agent-command my-codex-agent 'read-only))
+         (agent-exec (my-codex--doctor-command-executable-token agent-cmd))
+         (agent-path (and agent-exec (executable-find agent-exec)))
          (git (executable-find "git"))
          (gh (executable-find "gh"))
          (vterm-status (my-codex--doctor-require-vterm))
@@ -137,19 +142,21 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
       (list "Emacs version"
             (if (my-codex--version>= emacs-version "29.1") 'ok 'fail)
             (format "%s (requires 29.1 or newer)" emacs-version))
-      (list "codex executable"
-            (if codex 'ok 'fail)
-            (or codex "Not found in exec-path"))
-      (if codex
+      (list (format "%s executable" (or agent-exec (symbol-name my-codex-agent)))
+            (if agent-path 'ok 'fail)
+            (or agent-path "Not found in exec-path"))
+      (if agent-path
           (pcase-let ((`(,status . ,output)
                        (my-codex--doctor-process-output
-                        "codex" "--version")))
-            (list "codex --version"
+                        agent-exec "--version")))
+            (list (format "%s --version" agent-exec)
                   (if (eq status 0) 'ok 'fail)
                   (if (string-empty-p output)
                       (format "Exited with status %s and no output" status)
                     output)))
-        (list "codex --version" 'fail "Skipped; codex not found"))
+        (list (format "%s --version" (or agent-exec "agent"))
+              'fail
+              (format "Skipped; %s not found" (or agent-exec "executable"))))
       (list "vterm package"
             (if vterm-loadable 'ok 'fail)
             (cdr vterm-status))
@@ -202,12 +209,6 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
                 (expand-file-name "AGENTS.md" root)
               (format "Not found in %s" root))))
      (list
-      (my-codex--doctor-command-status
-       "read-only" my-codex-read-only-command)
-      (my-codex--doctor-command-status
-       "workspace" my-codex-workspace-command)
-      (my-codex--doctor-command-status
-       "resume" my-codex-resume-command)
       (my-codex--doctor-command-status
        (format "agent %s read-only" my-codex-agent)
        (my-codex--agent-command my-codex-agent 'read-only))
