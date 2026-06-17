@@ -15,57 +15,36 @@
 └───────────────┴───────────────┘
 ```
 
-`my-codex.el` runs the OpenAI Codex CLI (`codex`) or Google Antigravity CLI (`agy`) inside Emacs using `vterm`.
+`my-codex.el` runs the Google Antigravity CLI (`agy`) or OpenAI Codex CLI (`codex`) inside Emacs using `vterm`.
 
-It keeps code on the left and the active agent CLI on the right, with small helpers for Regions, files, Git diffs, build output, project instructions, and commit messages. Agent buffers are project-specific, so different projects keep separate sessions.
+> [!NOTE]
+> The package is named `my-codex.el` because it initially supported only the OpenAI Codex CLI. It has since been expanded to support Google Antigravity as a first-class agent.
+
+It keeps your code on the left and the active agent CLI on the right, providing helpers for regions, files, Git diffs, compiler errors, build commands, and commit messages. Agent buffers are project-specific, keeping separate sessions per project.
 
 ## Features
 
-- Start the configured agent in read-only, workspace-write, or resume mode.
-- Choose Codex or Antigravity CLI per named session.
-- Use a right-side agent layout and hide it without disturbing other windows.
-- Send selected code, symbols, the current file, Git diffs, or staged Git
-  diffs.
-- Draft low-risk refactoring plans for selected file ranges without sending
-  the selected code.
-- Analyse an implementation alongside its test file for missing coverage.
-- Ask free-form questions from the minibuffer.
-- Ask from customisable prompt presets for common transformations.
-- Draft a commit message from staged changes, then open an editable commit.
-- Explain selected compiler/test errors or the symbol at point.
-- Open project instruction files such as `AGENTS.md`.
-- Send a compact project overview for agent orientation.
-- Run a configurable project build command.
-- Open clickable URLs and in-project file references from the agent's output.
-- Export an agent session transcript to Markdown.
-- Ask the agent to summarize a session transcript into organized Markdown notes.
-- Create GitHub issues from agent session summaries with `gh`.
-- Warn when project buffers have unsaved changes before sending prompts.
-- Run a health check for Emacs, the active agent, vterm, Git, project state, configured
-  commands, and terminal startup.
-- Optionally enable useful display defaults with `my-codex-global-mode`.
-- Provide global keys and an agent command menu.
+- **Multi-Agent CLI Support**: start, resume, and manage sessions with Google Antigravity or OpenAI Codex, with granular workspace write-access control.
+- **Side-by-Side Layout**: code on the left, interactive agent terminal on the right.
+- **Context-Aware Prompts**: send regions, files, Git diffs, compiler errors, or project structure overviews directly to the agent.
+- **Refactoring & Coverage**: draft low-risk refactoring plans for file ranges and analyze implementation files against tests for missing coverage.
+- **Integration Tools**: export session transcripts, summarize transcripts into Markdown notes, and draft commits or GitHub issues directly from Emacs.
+- **Interactive UI**: insert agent output back into your code, and open clickable file references and URLs directly from the terminal.
+- **Diagnostics**: verify Emacs, agent binaries, vterm, and Git configuration using the `my-codex-doctor` health check.
 
 ## Requirements
 
 - Emacs 29.1 or newer.
 - [`vterm`][vterm].
 - [`transient`][transient].
-- OpenAI [Codex CLI][codex] and/or [Google Antigravity CLI][agy].
-- Git, for Git-related commands.
-- GitHub CLI `gh`, for creating GitHub issues from session summaries.
+- Google [Antigravity CLI][agy] and/or OpenAI [Codex CLI][codex].
+- Git (for Git commands) and GitHub CLI `gh` (for issue creation).
 
-`vterm` is loaded lazily, only when an agent session is started.
+`vterm` is loaded lazily only when an agent session is started.
 
 ## Installation
 
-Clone the repository somewhere in your Emacs load path:
-
-```sh
-git clone https://github.com/morinim/my_codex.git ~/.emacs.d/lisp/my_codex
-```
-
-Then add:
+Clone the repository and add it to your Emacs load path:
 
 ```elisp
 (add-to-list 'load-path "~/.emacs.d/lisp/my_codex")
@@ -73,25 +52,58 @@ Then add:
 (my-codex-global-mode 1)
 ```
 
-## Companion Skills
+## Key Bindings & Usage
 
-The `skills/` directory contains optional agent skills that complement this package. They are provided as editable source, are not installed automatically, and are not required for the Emacs package to work.
+Press `F8` to open the agent command menu.
 
-Expert users can copy, symlink, modify, or ignore them according to their own agent setup.
+### Session Management
+- `F8 o` / `F8 w` : start/show the default read-only or workspace-write session.
+- `F8 S o` / `F8 S w` : select an agent, then start its default read-only or write session.
+- `F8 S n` : start or show a named session (allows side-by-side Codex & Antigravity sessions).
+- `F8 S l` / `F8 S q` : list open sessions or hide the selected session window.
+- `F8 r` : resume a previous session.
 
-Example invocations:
+### Prompts & Refactoring
+- `F8 a` / `F8 A` : ask a free-form question or open the customizable prompt preset menu.
+- `F8 s` / `F8 R` : send the selected region, or draft a low-risk refactoring plan for it.
+- `F8 Left` / `F8 TAB` : insert agent text into code, or toggle focus between code and agent.
+- `F8 f` / `F8 C` : ask the agent to inspect the current file, or analyze its test coverage.
+- `F8 x` / `F8 e` : explain the symbol at point, or explain a selected error.
 
-| Skill | Description | Example invocation |
-| --- | --- | --- |
-| `grill-me` | Stress-test a plan or design by asking focused questions one at a time. | `$grill-me stress-test this refactoring plan` |
-| `handoff` | Create a disposable Markdown context transfer for continuing focused work in another agent session. | `$handoff continue the Firebird SQL refactoring` |
+### Git & GitHub Workflow
+- `F8 g` / `F8 G` : review the current Git diff or the staged Git diff.
+- `F8 d` / `F8 D` : ediff the current or a changed file against `HEAD`.
+- `F8 c` : draft or reuse an agent-generated commit message, edit it, then commit.
+- `F8 X` / `F8 M` : export the session transcript, or summarize the session to Markdown notes.
+- `F8 t` / `F8 T` : list open GitHub issues, or draft a GitHub issue from the session.
 
-Attribution:
+### Diagnostics & Build
+- `F8 !` : run `my-codex-doctor` diagnostics.
+- `F7` : run the project build command.
 
-| Skill      | Attribution    | Reference |
-| ---        | ---            | ---       |
-| `grill-me` | Matt Pocock    | [grill-me: Stress-Test a Plan Before You Build][aihero-grillme] |
-| `handoff`  | Matt Pocock    | [handoff: Move Context Between Agent Sessions][aihero-handoff] |
+## Customisation
+
+Configure options via `M-x customize-group RET my-codex RET`.
+
+```elisp
+;; Set the default agent profile
+(setq my-codex-agent 'antigravity)
+
+;; Customize agent launch commands
+(setq my-codex-antigravity-workspace-command "agy --sandbox")
+(setq my-codex-antigravity-resume-command "agy resume")
+
+;; Layout & build commands
+(setq my-codex-right-width 80)
+(setq my-codex-project-build-command "./setup_build")
+(setq my-codex-project-instruction-files
+      '("AGENTS.md" "CODEX.md" "ANTIGRAVITY.md"))
+
+;; Prompt & warning thresholds
+(setq my-codex-enable-prompt-preview t)
+(setq my-codex-large-prompt-warning-chars 12000)
+(setq my-codex-warn-about-unsaved-project-buffers t)
+```
 
 ## Updating CLI binaries
 
@@ -121,190 +133,29 @@ The scripts are intentionally conservative. They only update installations where
 
 Depending on where `codex` is installed, the Linux script may ask for `sudo`. On Windows, close running Codex sessions first and use an elevated PowerShell session if the destination directory requires administrator rights.
 
-## Basic Usage
+## Companion Skills
 
-Start the agent session first:
+The `skills/` directory contains optional agent skills that complement this package. They are provided as editable source, are not installed automatically, and are not required for the Emacs package to work.
 
-```text
-F8 o   start the configured agent in read-only mode
-F8 w   start the configured agent with workspace-write access
-F8 S   open session commands
-F8 S o choose an agent, then start its default read-only session
-F8 S w choose an agent, then start its default workspace-write session
-F8 S l list open sessions
-F8 S n start or show a named session
-F8 S q hide the selected session window
-F8 r   resume a previous session
-```
+Expert users can copy, symlink, modify, or ignore them according to their own agent setup.
 
-Then use the `F8` prefix for everyday actions.
+Example invocations:
 
-Named sessions opened with `F8 S n` ask for a session name, agent, and access mode. They use separate buffers and metadata, so sessions with the same project and session name, but different agent, can run side by side. Opening a default session with `F8 o`, `F8 w`, `F8 S o`, or `F8 S w` records that agent as active for the current project. Everyday send commands such as `F8 a`, `F8 s`, and `F8 f` target that project's active default session, falling back to `my-codex-agent` when no project agent has been recorded.
-
-Latest review-to-commit workflow:
-
-```text
-F8 g/G review the current Git diff or the staged Git diff
-F8 c   draft or reuse an agent-generated commit message, edit it, then commit
-F8 X   export the session transcript
-F8 M   summarize the session
-```
-
-`my-codex-commit-message-from-diff` remains available via `M-x` when you want to draft a commit message without opening the commit editor.
-
-## Key Bindings
-
-| Key | Command | Description |
+| Skill | Description | Example invocation |
 | --- | --- | --- |
-| F7 | `my-codex-project-build` | Run the project build command |
-| F8 | `my-codex-transient-preserve-selection` | Open the agent command menu |
+| `grill-me` | Stress-test a plan or design by asking focused questions one at a time. | `$grill-me stress-test this refactoring plan` |
+| `handoff` | Create a disposable Markdown context transfer for continuing focused work in another agent session. | `$handoff continue the Firebird SQL refactoring` |
 
-Prefix bindings:
+Attribution:
 
-| Key | Command | Description |
-| --- | --- | --- |
-| F8 o | `my-codex-read-only` | Show/start read-only configured agent |
-| F8 w | `my-codex-workspace` | Show/start workspace-write configured agent |
-| F8 S | `my-codex-session-transient` | Open agent session commands |
-| F8 S o | `my-codex-default-read-only` | Choose an agent, then show/start its default read-only session |
-| F8 S w | `my-codex-default-workspace` | Choose an agent, then show/start its default workspace-write session |
-| F8 S l | `my-codex-list-sessions` | List open agent sessions |
-| F8 S n | `my-codex-new-session` | Start or show a named agent session |
-| F8 S q | `my-codex-restore-session-layout` | Hide the selected agent session window |
-| F8 r | `my-codex-resume` | Resume an agent session |
-| F8 q | `my-codex-restore-layout` | Hide the agent window |
-| F8 a | `my-codex-ask` | Ask a free-form question |
-| F8 A | `my-codex-ask-preset-transient` | Open the prompt preset menu |
-| F8 s | `my-codex-send-region` | Send the selected region |
-| F8 Right | `my-codex-send-region` | Send the selected region |
-| F8 R | `my-codex-plan-refactor-region` | Draft a refactoring plan for the selected file range |
-| F8 Left | `my-codex-insert-selection-into-code` | Insert selected agent text into code |
-| F8 TAB | `my-codex-toggle-focus` | Toggle focus between code and the agent |
-| F8 f | `my-codex-send-current-file` | Ask the agent to inspect the current file |
-| F8 C | `my-codex-analyse-test-coverage` | Analyse missing test coverage for the current file |
-| F8 x | `my-codex-explain-symbol-at-point` | Explain the symbol at point |
-| F8 g | `my-codex-send-git-diff` | Review the current Git diff |
-| F8 G | `my-codex-send-git-staged-diff` | Review the staged Git diff |
-| F8 d | `my-codex-ediff-current-file-against-head` | Ediff current file against `HEAD` |
-| F8 D | `my-codex-ediff-changed-file-against-head` | Choose a changed file to Ediff against `HEAD` |
-| F8 c | `my-codex-git-commit-with-latest-message` | Draft or reuse an agent-generated message, edit it, then commit |
-| F8 e | `my-codex-explain-region-as-error` | Explain a selected error |
-| F8 i | `my-codex-open-project-instructions` | Open project instructions |
-| F8 p | `my-codex-send-project-overview` | Send project structure and state |
-| F8 X | `my-codex-export-session-to-markdown` | Export the session transcript to Markdown |
-| F8 M | `my-codex-summarize-session-to-markdown` | Summarize the session into an editable Markdown buffer |
-| F8 t | `my-codex-list-open-tickets` | List open GitHub issues in a buffer |
-| F8 T | `my-codex-summarize-session-to-github-issue` | Draft a GitHub issue from the session |
-| F8 ! | `my-codex-doctor` | Run a health check |
-
-Commit message edit buffer:
-
-| Key | Command |
-| --- | --- |
-| C-c C-c | Commit staged changes with the edited message |
-| C-c C-k | Cancel the commit buffer |
-
-Inside `vterm`:
-
-| Key | Command |
-| --- | --- |
-| F8 | Open the agent command menu |
-| RET / mouse-1 | Open a clickable URL or file reference |
-| Shift Insert | Paste into `vterm` |
-| C-c C-t | Toggle `vterm` copy mode |
-| Page Up / Page Down | Scroll the terminal buffer |
-
-From the agent `vterm`, `F8 d` Ediffs the file shown in the window to its left.
-
-## Customisation
-
-Use:
-
-```text
-M-x customize-group RET my-codex RET
-```
-
-Common options:
-
-```elisp
-(setq my-codex-read-only-command
-      "codex --sandbox read-only --ask-for-approval on-request")
-(setq my-codex-workspace-command
-      "codex --sandbox workspace-write --ask-for-approval on-request")
-(setq my-codex-resume-command "codex resume")
-
-;; Use Antigravity for F8 o / F8 w / F8 r.
-(setq my-codex-agent 'antigravity)
-
-;; Adjust Antigravity commands if your `agy' CLI needs different arguments.
-(setq my-codex-antigravity-workspace-command "agy")
-
-(setq my-codex-left-width 81)
-(setq my-codex-min-right-width 80)
-(setq my-codex-right-width 80)
-(setq my-codex-enforce-right-side-layout nil)
-(setq my-codex-display-buffer-action
-      '((display-buffer-in-side-window)
-        (side . right)
-        (slot . 0)
-        (window-width . my-codex--right-window-width)))
-
-(setq my-codex-project-build-command "./setup_build")
-(setq my-codex-project-instruction-files
-      '("AGENTS.md" "CODEX.md" ".codex/instructions.md"))
-
-(setq my-codex-project-overview-max-files 80)
-(setq my-codex-project-overview-tree-max-entries 12)
-(setq my-codex-enable-prompt-preview nil)
-(setq my-codex-large-prompt-warning-chars 12000)
-(setq my-codex-large-prompt-error-chars nil)
-(setq my-codex-region-reference-threshold-chars 12000)
-(setq my-codex-symbol-include-xref-context t)
-(setq my-codex-symbol-xref-definition-limit 2)
-(setq my-codex-symbol-xref-reference-limit 8)
-(setq my-codex-symbol-xref-context-lines 4)
-(setq my-codex-warn-about-unsaved-project-buffers t)
-(setq my-codex-enable-global-auto-revert t)
-(setq my-codex-enable-display-defaults nil)
-(setq my-codex-enable-session-links t)
-```
-
-Prompt templates, polling intervals, prompt presets, and summary prompts are also customisable from the `my-codex` group.
-
-When `my-codex-enable-display-defaults` is non-nil, `my-codex-global-mode` also enables trailing whitespace display and column numbers. When the agent opens beside an edit buffer, that buffer gets a fill-column indicator at column 80.
-
-`my-codex-enforce-right-side-layout` is disabled by default. Enable it only if you want my-codex to widen the selected frame and keep the edit/agent windows at the configured widths. Leave it disabled when packages such as `shackle` or `golden-ratio`, your own `display-buffer-alist`, or an external window manager should control the layout.
-
-In the prompt preset menu (`F8 A`), the `Additional instructions` minibuffer supports project file completion when the current line starts with `@`. Type `@` followed by part of a project-relative path, then press `TAB`.
-
-`my-codex-analyse-test-coverage` (`F8 C`) sends `@` references for the current buffer and a test file to the agent for read-only coverage analysis. If Projectile is loaded, it tries `projectile-toggle-between-implementation-and-test` first. Otherwise it checks common test file names and asks you to choose the test file when needed.
-
-When `my-codex-enable-prompt-preview` is non-nil, prompts open an editable prompt preview buffer before sending. Press `C-c C-c` to send the edited prompt, or `C-c C-k` to cancel. The preview header shows the initial prompt size with an approximate token estimate. When the agent is visible, previews open in the left-hand editing window.
-
-In `my-codex-commit-message-prompt-template`, `%d` is replaced with `my-codex-commit-message-fill-column`. Keep the `BEGIN_COMMIT_MESSAGE` and `END_COMMIT_MESSAGE` markers if you want my-codex to extract the generated message automatically.
-
-For projects with more files than `my-codex-project-overview-max-files`, the project overview uses a compact tree summary instead of a long flat file list. `my-codex-project-overview-tree-max-entries` controls how many entries are shown for each directory in that summary.
-
-## Notes
-
-Use `F8 s` or `F8 Right` for small snippets, and `F8 x` for a quick explanation of the symbol at point. Symbol explanations include nearby code and, when `my-codex-symbol-include-xref-context` is non-nil, bounded xref definition and reference excerpts. Use `F8 R` to ask for a low-risk refactoring plan for the selected file range; it sends an `@file lines START-END` reference rather than the selected text. For larger reviews, prefer `F8 f`, `F8 g`, or `F8 G`, which ask the agent to inspect files or diffs directly.
-
-To copy text from the agent, use `C-c C-t` in the `vterm` buffer, select text, then press `F8`. While `vterm-copy-mode` is active, my-codex shows a header-line reminder. The selected text is captured and the live terminal selection is cleared so it does not extend to the prompt. Use `Left` in the menu to insert the captured text into the coding window.
-
-Clickable file references are limited to readable files inside the current project. A basename reference can inherit a directory prefix from a nearby preceding line, such as `src/kernel/` followed by `layered_population.tcc:240`.
-
-Use `F8 X` to export the current project-specific agent session to an editable Markdown buffer. The export keeps a cleaned raw transcript with project, source-buffer, and timestamp metadata. If `markdown-mode` is available, the buffer uses it; otherwise it falls back to `text-mode`.
-
-Use `F8 M` to send the cleaned transcript back to the agent, wait for organized Markdown notes, and open the generated summary in an editable Markdown buffer. This is useful before saving the session as project documentation or turning it into an issue. `my-codex-summarize-session-to-markdown` appends unique per-request markers to the prompt so older summaries echoed in the transcript cannot be mistaken for the new response.
-
-Use `F8 T` to ask the agent for a GitHub issue title and body from the current session transcript. The generated draft opens in an editable buffer with the target `Repository: owner/repo` shown above the title and body. Press `C-c C-c` to create the issue in that repository with `gh issue create --title TITLE --body-file FILE`, or `C-c C-k` to cancel. The repository is checked again before submission, and the command uses unique markers in the same way as `my-codex-summarize-session-to-markdown`.
-
-Use `F8 t` to list open GitHub issues for the current repository in a read-only buffer. This runs `gh issue list --state open --limit 100` from the project root.
+| Skill      | Attribution    | Reference |
+| ---        | ---            | ---       |
+| `grill-me` | Matt Pocock    | [grill-me: Stress-Test a Plan Before You Build][aihero-grillme] |
+| `handoff`  | Matt Pocock    | [handoff: Move Context Between Agent Sessions][aihero-handoff] |
 
 ## Licence
 
 [Mozilla Public License v2.0][mpl2], also available in [LICENSE][license].
-
 
 [agy]: https://antigravity.google/product/antigravity-cli
 [aihero-grillme]: https://www.aihero.dev/skills-grill-me
