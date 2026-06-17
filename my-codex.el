@@ -577,10 +577,12 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
 (defun my-codex--read-agent ()
   "Read and return an agent profile identifier."
   (intern
-   (completing-read
-    "Agent: "
-    (mapcar #'symbol-name (my-codex--agent-ids))
-    nil t nil nil (symbol-name my-codex-agent))))
+   (minibuffer-with-setup-hook
+       (lambda () (minibuffer-completion-help))
+     (completing-read
+      "Agent: "
+      (mapcar #'symbol-name (my-codex--agent-ids))
+      nil t nil nil (symbol-name my-codex-agent)))))
 
 (cl-defmethod my-codex-backend-live-p ((backend my-codex-vterm-backend))
   "Return non-nil when BACKEND's vterm process is live."
