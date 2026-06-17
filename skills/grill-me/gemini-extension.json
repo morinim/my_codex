@@ -1,0 +1,12 @@
+{
+  "extension": {
+    "name": "grill-me",
+    "routing_policy": {
+      "allow_implicit_invocation": false,
+      "command_only": true
+    },
+    "metadata": {
+      "disable-model-invocation": true
+    }
+  }
+}

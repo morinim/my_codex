@@ -1,0 +1,7 @@
+{
+  "skills": {
+    "handoff": {
+      "disable-model-invocation": true
+    }
+  }
+}

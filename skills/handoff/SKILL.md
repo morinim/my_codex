@@ -1,9 +1,6 @@
 ---
 name: handoff
 description: Compact the current conversation into a handoff document for another agent to continue the work.
-argument-hint: What will the next session be used for?
-metadata:
-  version: "1.0"
 ---
 
 - Write a concise Markdown handoff document summarising the current conversation so a fresh agent can continue the work.
