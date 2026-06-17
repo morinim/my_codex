@@ -170,8 +170,8 @@ different placement, such as a bottom side window or a dedicated frame."
   :group 'my-codex)
 
 (defcustom my-codex-project-instruction-files
-  '("AGENTS.md" "CODEX.md" ".codex/instructions.md")
-  "Candidate project instruction files for Codex."
+  '("AGENTS.md" "CODEX.md" "ANTIGRAVITY.md" ".codex/instructions.md" ".antigravity/instructions.md")
+  "Candidate project instruction files for Codex/Antigravity."
   :type '(repeat string)
   :group 'my-codex)
 
