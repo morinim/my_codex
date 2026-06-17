@@ -442,6 +442,9 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 (defvar-local my-codex--commit-buffer-staged-signature nil
   "Staged diff signature for the current editable commit message.")
 
+(defvar-local my-codex--commit-buffer-codex-buffer nil
+  "Codex session buffer associated with the current editable commit message.")
+
 (defvar-local my-codex--commit-message-wait-timer nil
   "Active timer waiting for a Codex commit message.")
 

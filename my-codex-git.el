@@ -14,6 +14,7 @@
 (require 'subr-x)
 
 (defvar my-codex--commit-buffer-staged-signature)
+(defvar my-codex--commit-buffer-codex-buffer)
 (defvar my-codex--commit-message-request-marker)
 (defvar my-codex--commit-message-request-signature)
 (defvar my-codex-commit-message-fill-column)
@@ -736,7 +737,8 @@ Return nil when no matching message is available."
                        (my-codex--staged-diff-signature))
           (user-error
            "Staged changes changed after the commit message was drafted"))))
-    (my-codex-git-commit-with-message message root (current-buffer))))
+    (my-codex-git-commit-with-message
+     message root (current-buffer) my-codex--commit-buffer-codex-buffer)))
 
 (defun my-codex--cancel-git-commit ()
   "Cancel the current Codex commit message buffer."
@@ -750,9 +752,10 @@ Return nil when no matching message is available."
     (quit-windows-on buffer t)))
 
 (defun my-codex-edit-git-commit-with-message
-    (message root &optional staged-signature)
+    (message root &optional staged-signature codex-buffer)
   "Open an editable Git commit buffer with MESSAGE from ROOT.
-STAGED-SIGNATURE is the staged diff signature MESSAGE was drafted for."
+STAGED-SIGNATURE is the staged diff signature MESSAGE was drafted for.
+CODEX-BUFFER is the Codex session buffer that requested MESSAGE."
   (let ((buffer (get-buffer-create (my-codex--commit-message-buffer-name root))))
     (pop-to-buffer buffer)
     (let ((inhibit-read-only t))
@@ -770,6 +773,7 @@ STAGED-SIGNATURE is the staged diff signature MESSAGE was drafted for."
                 (or staged-signature
                     (let ((default-directory root))
                       (my-codex--staged-diff-signature))))
+    (setq-local my-codex--commit-buffer-codex-buffer codex-buffer)
     (setq-local header-line-format
                 "Edit commit message. C-c C-c commits staged changes; C-c C-k cancels.")
     (let ((map (define-keymap :parent (current-local-map)
@@ -778,11 +782,16 @@ STAGED-SIGNATURE is the staged diff signature MESSAGE was drafted for."
       (use-local-map map))
     (message "Edit the commit message, then press C-c C-c to commit.")))
 
-(defun my-codex-git-commit-with-message (message root &optional commit-buffer)
+(defun my-codex-git-commit-with-message
+    (message root &optional commit-buffer codex-buffer)
   "Run `git commit -F FILE' with MESSAGE from ROOT.
-Kill COMMIT-BUFFER after a successful commit when it is non-nil."
+Kill COMMIT-BUFFER after a successful commit when it is non-nil.
+Clear request state in CODEX-BUFFER after a successful commit when it is live."
   (let ((file (make-temp-file "my-codex-commit-" nil ".txt"))
-        (output-buffer (get-buffer-create "*Codex git commit*")))
+        (output-buffer (get-buffer-create "*Codex git commit*"))
+        (codex-buffer (or codex-buffer
+                          (let ((default-directory root))
+                            (get-buffer (my-codex-current-buffer-name))))))
     (condition-case err
         (progn
           (with-temp-file file
@@ -814,6 +823,10 @@ Kill COMMIT-BUFFER after a successful commit when it is non-nil."
                                  (my-codex--quit-commit-buffer commit-buffer))
                                (when (buffer-live-p buffer)
                                  (kill-buffer buffer))
+                               (when (buffer-live-p codex-buffer)
+                                 (with-current-buffer codex-buffer
+                                   (setq my-codex--commit-message-request-signature nil)
+                                   (my-codex--clear-marker my-codex--commit-message-request-marker)))
                                (message "Git commit finished successfully."))
                            (when (buffer-live-p buffer)
                              (with-current-buffer buffer
@@ -864,7 +877,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
    "BEGIN_COMMIT_MESSAGE"
    "END_COMMIT_MESSAGE"
    (lambda (msg)
-     (my-codex-edit-git-commit-with-message msg root staged-signature))
+     (my-codex-edit-git-commit-with-message msg root staged-signature buffer))
    "Timed out waiting for Codex commit message."
    "Codex commit message is ready for editing."
    my-codex-commit-message-poll-interval
@@ -928,7 +941,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
           (if-let (message (my-codex-latest-commit-message-after buffer marker))
               (progn
                 (my-codex-edit-git-commit-with-message
-                 message root request-signature)
+                 message root request-signature buffer)
                 (message "Editing latest Codex commit message."))
             (my-codex--wait-for-commit-message
              buffer marker root request-signature)
