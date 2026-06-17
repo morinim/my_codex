@@ -29,6 +29,7 @@
 (defvar my-codex-session-summary-poll-interval)
 
 (declare-function my-codex--preview-and-send-prompt "my-codex-prompts" (prompt))
+(declare-function my-codex--process-output-lines "my-codex" (program &rest args))
 (declare-function my-codex--safe-root-name "my-codex" (root))
 (declare-function my-codex--session-export-mode "my-codex" ())
 (declare-function my-codex--session-summary-buffer-name "my-codex" (root))
@@ -130,11 +131,6 @@
   (unless (my-codex--git-repository-p)
     (user-error "Not inside a Git repository (or Git executable missing)")))
 
-(defun my-codex--process-output-lines (program &rest args)
-  "Return PROGRAM output lines for ARGS, or nil when PROGRAM fails."
-  (with-temp-buffer
-    (when (eq 0 (apply #'process-file program nil t nil args))
-      (split-string (string-trim-right (buffer-string)) "\n" t))))
 
 (defun my-codex--git-toplevel ()
   "Return the Git repository toplevel for `default-directory'."

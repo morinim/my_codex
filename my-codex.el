@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.18.0
+;; Version: 0.19.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -469,6 +469,15 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 (defvar-local my-codex-session-agent nil
   "Agent profile used for the current Codex session buffer.")
 
+(defvar-local my-codex-session-start-time nil
+  "Time when the Codex session started.")
+
+(defvar-local my-codex-session-last-activity nil
+  "Time of the last prompt sent to Codex.")
+
+(defvar-local my-codex-session-prompt-count 0
+  "Number of prompts sent during this Codex session.")
+
 (defvar-local my-codex--github-issue-creation-in-progress nil
   "Non-nil while the current GitHub issue draft is being submitted.")
 
@@ -622,7 +631,10 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
     (setq-local my-codex-session-project-root
                 (file-name-as-directory (file-truename project-root)))
     (setq-local my-codex-session-access-mode access-mode)
-    (setq-local my-codex-session-agent agent)))
+    (setq-local my-codex-session-agent agent)
+    (setq-local my-codex-session-start-time (current-time))
+    (setq-local my-codex-session-last-activity (current-time))
+    (setq-local my-codex-session-prompt-count 0)))
 
 (defun my-codex--mark-default-session
     (buffer project-root access-mode &optional agent)
@@ -687,7 +699,9 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
     (with-current-buffer buffer
       (goto-char (point-max))
       (vterm-send-string prompt t)
-      (vterm-send-return))))
+      (vterm-send-return)
+      (setq my-codex-session-last-activity (current-time))
+      (setq my-codex-session-prompt-count (1+ (or my-codex-session-prompt-count 0))))))
 
 (defun my-codex--selected-window-is-codex-p ()
   "Return non-nil if the selected window shows Codex."
@@ -1115,6 +1129,138 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
         (tabulated-list-print t)
         (pop-to-buffer (current-buffer))))))
 
+(defun my-codex--process-output-lines (program &rest args)
+  "Return PROGRAM output lines for ARGS, or nil when PROGRAM fails."
+  (with-temp-buffer
+    (when (eq 0 (apply #'process-file program nil t nil args))
+      (split-string (string-trim-right (buffer-string)) "\n" t))))
+
+(defun my-codex--all-session-buffers ()
+  "Return all Codex session buffers, including dead ones."
+  (seq-sort-by
+   #'buffer-name #'string<
+   (seq-filter
+    (lambda (buffer)
+      (with-current-buffer buffer
+        (bound-and-true-p my-codex-session-id)))
+    (buffer-list))))
+
+(defun my-codex--format-duration (start end)
+  "Format duration between START and END as a human-readable string."
+  (if (and start end)
+      (let* ((diff (floor (float-time (time-subtract end start))))
+             (mins (/ diff 60))
+             (hours (/ mins 60)))
+        (cond
+         ((>= hours 24) (format "%dd" (/ hours 24)))
+         ((>= hours 1) (format "%dh" hours))
+         ((>= mins 1) (format "%dm" mins))
+         (t (format "%ds" diff))))
+    "—"))
+
+(defvar-keymap my-codex-top-mode-map
+  :parent tabulated-list-mode-map
+  "RET" #'my-codex-sessions-visit
+  "k"   #'my-codex-top-kill-session
+  "d"   #'my-codex-top-project-diff
+  "g"   #'revert-buffer)
+
+(define-derived-mode my-codex-top-mode tabulated-list-mode
+  "Codex Top"
+  "Major mode for monitoring Codex sessions."
+  (setq tabulated-list-format
+        [("Project" 12 t)
+         ("Session" 10 t)
+         ("Buffer" 28 t)
+         ("State" 6 t)
+         ("PID" 8 t)
+         ("Branch" 12 t)
+         ("Git" 8 t)
+         ("Prompts" 8 t)
+         ("Lines" 8 t)
+         ("Age" 6 t)
+         ("Activity" 8 t)])
+  (setq tabulated-list-padding 1)
+  (setq revert-buffer-function #'my-codex-top-refresh)
+  (tabulated-list-init-header))
+
+(defun my-codex-top-refresh (&rest _)
+  "Refresh the Codex dashboard entries."
+  (setq tabulated-list-entries (my-codex-top--make-entries))
+  (tabulated-list-print t))
+
+(defun my-codex-top--make-entries ()
+  "Build tabulated list entries for all Codex sessions."
+  (mapcar
+   (lambda (buffer)
+     (let (project session state pid branch git prompts lines age last-act)
+       (with-current-buffer buffer
+         (let ((root my-codex-session-project-root)
+               (now (current-time)))
+           (setq project (if root (file-name-nondirectory (directory-file-name root)) "")
+                 session (or my-codex-session-name "")
+                 state (if-let ((proc (get-buffer-process buffer)))
+                           (if (process-live-p proc) "live" "dead")
+                         "dead")
+                 pid (if-let ((proc (get-buffer-process buffer)))
+                         (format "%d" (process-id proc))
+                       "—")
+                 lines (format "%d" (count-lines (point-min) (point-max)))
+                 prompts (format "%d" (or my-codex-session-prompt-count 0))
+                 age (my-codex--format-duration my-codex-session-start-time now)
+                 last-act (my-codex--format-duration my-codex-session-last-activity now))
+           (if (and root (file-directory-p root))
+               (let ((default-directory root))
+                 (setq branch (or (car (my-codex--process-output-lines "git" "branch" "--show-current"))
+                                  "—")
+                       git (if (my-codex--process-output-lines "git" "status" "--porcelain")
+                               "dirty"
+                             "clean")))
+             (setq branch "—"
+                   git "—"))))
+       (list (buffer-name buffer)
+             (vector project session (buffer-name buffer) state pid branch git prompts lines age last-act))))
+   (my-codex--all-session-buffers)))
+
+(defun my-codex-top-kill-session ()
+  "Kill the Codex session process and buffer at point."
+  (interactive)
+  (let* ((buffer-name (tabulated-list-get-id))
+         (buffer (and buffer-name (get-buffer buffer-name))))
+    (unless buffer
+      (user-error "No Codex session on this line"))
+    (when (yes-or-no-p (format "Kill session %s? " buffer-name))
+      (with-current-buffer buffer
+        (when-let ((proc (get-buffer-process buffer)))
+          (when (process-live-p proc)
+            (kill-process proc))))
+      (kill-buffer buffer)
+      (revert-buffer))))
+
+(defun my-codex-top-project-diff ()
+  "Show git diff for the selected session's project."
+  (interactive)
+  (let* ((buffer-name (tabulated-list-get-id))
+         (buffer (and buffer-name (get-buffer buffer-name))))
+    (unless buffer
+      (user-error "No Codex session on this line"))
+    (let ((root (with-current-buffer buffer my-codex-session-project-root)))
+      (if (and root (file-directory-p root))
+          (let ((default-directory root))
+            (if (fboundp 'magit-status)
+                (magit-status root)
+              (vc-diff)))
+        (user-error "Invalid project root directory for session")))))
+
+;;;###autoload
+(defun my-codex-top ()
+  "Display a dashboard of all active and inactive Codex sessions."
+  (interactive)
+  (with-current-buffer (get-buffer-create "*Codex Top*")
+    (my-codex-top-mode)
+    (my-codex-top-refresh)
+    (pop-to-buffer (current-buffer))))
+
 (defun my-codex-modified-project-buffers ()
   "Return modified file-visiting buffers belonging to the current project."
   (if-let (project (project-current))
@@ -1507,6 +1653,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     ("w" "Workspace" my-codex-default-workspace)]
    ["Session"
     ("l" "List" my-codex-list-sessions)
+    ("t" "Top Dashboard" my-codex-top)
     ("n" "New named" my-codex-new-session)
     ("r" "Resume" my-codex-resume)
     ("q" "Hide Codex" my-codex-restore-session-layout)]])
@@ -1630,6 +1777,9 @@ Open the generated notes in an editable Markdown buffer when they are ready."
      ["List open sessions" my-codex-list-sessions
       :keys "F8 S l"
       :help "List open Codex session buffers"]
+     ["Top dashboard" my-codex-top
+      :keys "F8 S t"
+      :help "Display a dashboard of all Codex sessions"]
      ["New named session" my-codex-new-session
       :keys "F8 S n"
       :help "Start or show a named Codex session"]
