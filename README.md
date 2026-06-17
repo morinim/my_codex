@@ -7,7 +7,7 @@
 
 ```text
 ┌───────────────┬───────────────┐
-│ code          │ codex         │
+│ code          │ agent CLI     │
 │ 1  </>        │ >_            │
 │ 2  ─────      │ ─────────     │
 │ 3  ───────    │ ─────         │
@@ -60,25 +60,27 @@ Press `F8` to open the agent command menu.
 - `F8 o` / `F8 w` : start/show the default read-only or workspace-write session.
 - `F8 S o` / `F8 S w` : select an agent, then start its default read-only or write session.
 - `F8 S n` : start or show a named session (allows side-by-side Codex & Antigravity sessions).
-- `F8 S l` / `F8 S q` : list open sessions or hide the selected session window.
-- `F8 r` : resume a previous session.
+- `F8 S l` / `F8 S q` / `F8 S t` : list open sessions, hide the selected session window, or view the sessions dashboard.
+- `F8 r` / `F8 q` : resume a previous session, or hide the active agent window.
 
 ### Prompts & Refactoring
 - `F8 a` / `F8 A` : ask a free-form question or open the customizable prompt preset menu.
-- `F8 s` / `F8 R` : send the selected region, or draft a low-risk refactoring plan for it.
+- `F8 s` (or `F8 Right`) / `F8 R` : send the selected region, or draft a low-risk refactoring plan for it.
 - `F8 Left` / `F8 TAB` : insert agent text into code, or toggle focus between code and agent.
-- `F8 f` / `F8 C` : ask the agent to inspect the current file, or analyze its test coverage.
+- `F8 f` / `F8 C` / `F8 p` : ask the agent to inspect the current file, analyze test coverage, or send a project overview.
 - `F8 x` / `F8 e` : explain the symbol at point, or explain a selected error.
 
 ### Git & GitHub Workflow
 - `F8 g` / `F8 G` : review the current Git diff or the staged Git diff.
+- `F8 v` / `F8 V` : view the current or staged Git diff locally.
 - `F8 d` / `F8 D` : ediff the current or a changed file against `HEAD`.
 - `F8 c` : draft or reuse an agent-generated commit message, edit it, then commit.
 - `F8 X` / `F8 M` : export the session transcript, or summarize the session to Markdown notes.
 - `F8 t` / `F8 T` : list open GitHub issues, or draft a GitHub issue from the session.
 
-### Diagnostics & Build
+### Diagnostics, Build & Instructions
 - `F8 !` : run `my-codex-doctor` diagnostics.
+- `F8 i` : open project instruction files (e.g., `AGENTS.md`, `CODEX.md`).
 - `F7` : run the project build command.
 
 ## Customisation
