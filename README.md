@@ -143,6 +143,7 @@ Example invocations:
 
 | Skill | Description | Example invocation |
 | --- | --- | --- |
+| `consilium` | Codebase advisor and plan manager. Finds improvements and writes implementation plans. | `$consilium audit codebase` |
 | `grill-me` | Stress-test a plan or design by asking focused questions one at a time. | `$grill-me stress-test this refactoring plan` |
 | `handoff` | Create a disposable Markdown context transfer for continuing focused work in another agent session. | `$handoff continue the Firebird SQL refactoring` |
 
