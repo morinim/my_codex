@@ -87,6 +87,18 @@
   :type 'string
   :group 'my-codex)
 
+(defcustom my-codex-antigravity-workspace-command
+  "agy"
+  "Command used to start Antigravity with workspace write access."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-antigravity-resume-command
+  "agy resume"
+  "Command used to resume a previous Antigravity session."
+  :type 'string
+  :group 'my-codex)
+
 (defcustom my-codex-agent 'codex
   "Agent profile used by default Codex commands.
 Commands such as `my-codex-read-only', `my-codex-workspace', and
@@ -106,8 +118,8 @@ different profile interactively."
      :label "Antigravity"
      :buffer-prefix "agy"
      :read-only-command my-codex-antigravity-read-only-command
-     :workspace-command "agy"
-     :resume-command "agy resume"))
+     :workspace-command my-codex-antigravity-workspace-command
+     :resume-command my-codex-antigravity-resume-command))
   "Agent profiles available to my-codex.
 Each entry has the form:
 

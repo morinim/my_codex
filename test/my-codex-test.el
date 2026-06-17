@@ -128,10 +128,13 @@
    (eq (my-codex--session-access-mode "codex --custom")
        'custom)))
 
-(ert-deftest my-codex-agent-command-resolves-symbol-backed-codex-commands ()
+(ert-deftest my-codex-agent-command-resolves-symbol-backed-commands ()
   (let ((my-codex-read-only-command "codex-ro")
         (my-codex-workspace-command "codex-ww")
-        (my-codex-resume-command "codex-resume"))
+        (my-codex-resume-command "codex-resume")
+        (my-codex-antigravity-read-only-command "agy-ro")
+        (my-codex-antigravity-workspace-command "agy-ww")
+        (my-codex-antigravity-resume-command "agy-resume"))
     (should
      (equal (my-codex--agent-command 'codex 'read-only)
             "codex-ro"))
@@ -140,7 +143,16 @@
             "codex-ww"))
     (should
      (equal (my-codex--agent-command 'codex 'resume)
-            "codex-resume"))))
+            "codex-resume"))
+    (should
+     (equal (my-codex--agent-command 'antigravity 'read-only)
+            "agy-ro"))
+    (should
+     (equal (my-codex--agent-command 'antigravity 'workspace-write)
+            "agy-ww"))
+    (should
+     (equal (my-codex--agent-command 'antigravity 'resume)
+            "agy-resume"))))
 
 (ert-deftest my-codex-agent-buffer-name-supports-mixed-agents ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-buffer" t))))
@@ -436,7 +448,8 @@
       (my-codex-default-workspace 'antigravity)
       (should
        (equal called
-              '("agy" nil nil antigravity workspace-write))))))
+              (list my-codex-antigravity-workspace-command
+                    nil nil 'antigravity 'workspace-write))))))
 
 (ert-deftest my-codex-default-session-layout-records-active-agent ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-active" t))))
