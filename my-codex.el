@@ -1013,6 +1013,80 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
 (defconst my-codex-sessions-buffer-name "*Codex sessions*"
   "Buffer name used to display open Codex sessions.")
 
+(defvar-local my-codex--header-string nil
+  "Cached space-padded header string for horizontal scrolling.")
+
+(defun my-codex--build-header-string ()
+  "Build a space-padded propertized string of column headers."
+  (let* ((x (max tabulated-list-padding 0))
+         (button-props `(help-echo "Click to sort by column"
+                         mouse-face header-line-highlight
+                         keymap ,tabulated-list-sort-button-map))
+         (len (length tabulated-list-format))
+         (cols nil))
+    (push (make-string x ?\s) cols)
+    (dotimes (n len)
+      (let* ((col (aref tabulated-list-format n))
+             (not-last-col (< n (1- len)))
+             (label (nth 0 col))
+             (lablen (length label))
+             (pname label)
+             (width (nth 1 col))
+             (props (nthcdr 3 col))
+             (pad-right (or (plist-get props :pad-right) 1))
+             (right-align (plist-get props :right-align))
+             (available-space width))
+        (when (and (>= lablen 3)
+                   not-last-col
+                   (> lablen available-space))
+          (setq label (truncate-string-to-width label available-space nil nil t)))
+        (let ((col-str
+               (cond
+                ((not (nth 2 col))
+                 (propertize label 'tabulated-list-column-name pname))
+                ((equal (car col) (car tabulated-list-sort-key))
+                 (apply 'propertize
+                        (concat label
+                                (cond
+                                 ((and (< lablen 3) not-last-col) "")
+                                 ((cdr tabulated-list-sort-key)
+                                  (format " %c" tabulated-list-gui-sort-indicator-desc))
+                                 (t (format " %c" tabulated-list-gui-sort-indicator-asc))))
+                        'face 'bold
+                        'tabulated-list-column-name pname
+                        button-props))
+                (t (apply 'propertize label
+                          'tabulated-list-column-name pname
+                          button-props)))))
+          (let* ((col-width (string-width col-str))
+                 (padding-len (- width col-width)))
+            (if right-align
+                (progn
+                  (when (> padding-len 0)
+                    (push (make-string padding-len ?\s) cols))
+                  (push col-str cols))
+              (push col-str cols)
+              (when (and not-last-col (> padding-len 0))
+                (push (make-string padding-len ?\s) cols))))
+          (when (and not-last-col (>= pad-right 0))
+            (push (propertize (make-string pad-right ?\s) 'face 'fixed-pitch) cols)))))
+    (apply #'concat (nreverse cols))))
+
+(defun my-codex--sync-header-hscroll ()
+  "Configure the buffer-local `header-line-format` to align with `window-hscroll`."
+  (when (memq major-mode '(my-codex-sessions-mode my-codex-top-mode))
+    (setq-local my-codex--header-string (my-codex--build-header-string))
+    (setq-local header-line-format
+                '("" header-line-indent
+                  (:eval
+                   (let ((hscroll (window-hscroll)))
+                     (if (< hscroll (length my-codex--header-string))
+                         (substring my-codex--header-string hscroll)
+                       "")))))
+    (add-hook 'post-command-hook #'force-mode-line-update nil t)))
+
+(advice-add 'tabulated-list-init-header :after #'my-codex--sync-header-hscroll)
+
 (defvar-keymap my-codex-sessions-mode-map
   :parent tabulated-list-mode-map
   "RET" #'my-codex-sessions-visit
@@ -1028,7 +1102,8 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
          ("Access" 16 t)
          ("Project" 0 t)])
   (setq tabulated-list-padding 2)
-  (tabulated-list-init-header))
+  (tabulated-list-init-header)
+  (my-codex--sync-header-hscroll))
 
 (defun my-codex--visible-session-window (&optional source-window)
   "Return the visible Codex session window for SOURCE-WINDOW."
@@ -1182,7 +1257,8 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
          ("Activity" 8 t)])
   (setq tabulated-list-padding 1)
   (setq revert-buffer-function #'my-codex-top-refresh)
-  (tabulated-list-init-header))
+  (tabulated-list-init-header)
+  (my-codex--sync-header-hscroll))
 
 (defun my-codex-top-refresh (&rest _)
   "Refresh the Codex dashboard entries."
