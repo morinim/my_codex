@@ -1233,11 +1233,24 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
          (t (format "%ds" diff))))
     "—"))
 
+(defface my-codex-top-live-face
+  '((t :inherit success :weight bold))
+  "Face used for live sessions in the Codex dashboard."
+  :group 'my-codex)
+
+(defface my-codex-top-dead-face
+  '((t :inherit shadow))
+  "Face used for dead/inactive sessions in the Codex dashboard."
+  :group 'my-codex)
+
 (defvar-keymap my-codex-top-mode-map
   :parent tabulated-list-mode-map
   "RET" #'my-codex-sessions-visit
   "k"   #'my-codex-top-kill-session
   "d"   #'my-codex-top-project-diff
+  "D"   #'my-codex-top-dired-project
+  "b"   #'my-codex-top-build-project
+  "R"   #'my-codex-top-rename-session
   "g"   #'revert-buffer)
 
 (define-derived-mode my-codex-top-mode tabulated-list-mode
@@ -1276,8 +1289,10 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
            (setq project (if root (file-name-nondirectory (directory-file-name root)) "")
                  session (or my-codex-session-name "")
                  state (if-let ((proc (get-buffer-process buffer)))
-                           (if (process-live-p proc) "live" "dead")
-                         "dead")
+                           (if (process-live-p proc)
+                               (propertize "live" 'face 'my-codex-top-live-face)
+                             (propertize "dead" 'face 'my-codex-top-dead-face))
+                         (propertize "dead" 'face 'my-codex-top-dead-face))
                  pid (if-let ((proc (get-buffer-process buffer)))
                          (format "%d" (process-id proc))
                        "—")
@@ -1327,6 +1342,55 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
                 (magit-status root)
               (vc-diff)))
         (user-error "Invalid project root directory for session")))))
+
+(defun my-codex-top-dired-project ()
+  "Open dired at the selected session's project root directory."
+  (interactive)
+  (let* ((buffer-name (tabulated-list-get-id))
+         (buffer (and buffer-name (get-buffer buffer-name))))
+    (unless buffer
+      (user-error "No Codex session on this line"))
+    (let ((root (with-current-buffer buffer my-codex-session-project-root)))
+      (if (and root (file-directory-p root))
+          (dired root)
+        (user-error "Invalid project root directory for session")))))
+
+(defun my-codex-top-build-project ()
+  "Run the project build command with `compile` for the selected session."
+  (interactive)
+  (let* ((buffer-name (tabulated-list-get-id))
+         (buffer (and buffer-name (get-buffer buffer-name))))
+    (unless buffer
+      (user-error "No Codex session on this line"))
+    (let ((root (with-current-buffer buffer my-codex-session-project-root)))
+      (if (and root (file-directory-p root))
+          (let ((default-directory root))
+            (compile (or (with-current-buffer buffer my-codex-project-build-command)
+                         my-codex-project-build-command
+                         compile-command)))
+        (user-error "Invalid project root directory for session")))))
+
+(defun my-codex-top-rename-session ()
+  "Rename the session name (my-codex-session-name) for the session at point."
+  (interactive)
+  (let* ((buffer-name (tabulated-list-get-id))
+         (buffer (and buffer-name (get-buffer buffer-name))))
+    (unless buffer
+      (user-error "No Codex session on this line"))
+    (let* ((current-name (with-current-buffer buffer my-codex-session-name))
+           (new-name (read-string (format "Rename session %s to: " (or current-name "default"))
+                                  current-name)))
+      (when (string-empty-p (string-trim new-name))
+        (user-error "Session name cannot be empty"))
+      (with-current-buffer buffer
+        (let* ((agent my-codex-session-agent)
+               (root my-codex-session-project-root)
+               (new-id (my-codex--session-id root new-name agent))
+               (new-buf-name (my-codex-session-buffer-name new-name agent)))
+          (setq-local my-codex-session-name new-name)
+          (setq-local my-codex-session-id new-id)
+          (rename-buffer new-buf-name t)))
+      (revert-buffer))))
 
 ;;;###autoload
 (defun my-codex-top ()
