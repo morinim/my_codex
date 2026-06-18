@@ -10,6 +10,8 @@
 
 ;;; Code:
 
+(require 'my-codex)
+
 (defvar my-codex--vterm-copy-mode-lighter)
 (defvar my-codex--vterm-integration-keymap-bindings)
 (defvar vterm-copy-mode)
@@ -18,11 +20,6 @@
 
 (declare-function my-codex-transient-preserve-selection "my-codex" ())
 (declare-function vterm-yank "vterm" ())
-
-(defun my-codex--ensure-main-package ()
-  "Load `my-codex' when this file was entered through an autoload."
-  (unless (featurep 'my-codex)
-    (require 'my-codex)))
 
 (defvar-local my-codex--vterm-copy-mode-saved-header-line-format :unset
   "Previous `header-line-format' before showing the vterm copy mode hint.")
@@ -125,7 +122,6 @@
   "Global minor mode for my-codex vterm integration."
   :global t
   :group 'my-codex
-  (my-codex--ensure-main-package)
   (if my-codex-vterm-integration-mode
       (with-eval-after-load 'vterm
         (when my-codex-vterm-integration-mode

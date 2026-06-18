@@ -13,6 +13,7 @@
 (require 'project)
 (require 'seq)
 (require 'subr-x)
+(require 'my-codex)
 
 (defvar my-codex-doctor-terminal-timeout)
 (defvar my-codex-agent)
@@ -27,11 +28,6 @@
 (declare-function my-codex--agent-command "my-codex" (agent access-mode))
 (declare-function my-codex-project-root "my-codex" ())
 (declare-function vterm-mode "vterm" ())
-
-(defun my-codex--ensure-main-package ()
-  "Load `my-codex' when this file was entered through an autoload."
-  (unless (featurep 'my-codex)
-    (require 'my-codex)))
 
 (defun my-codex--version>= (version minimum)
   "Return non-nil when VERSION is greater than or equal to MINIMUM."
@@ -248,7 +244,6 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
 (defun my-codex-doctor ()
   "Run a health check for the local Codex Emacs integration."
   (interactive)
-  (my-codex--ensure-main-package)
   (let ((buffer (get-buffer-create "*my-codex-doctor*"))
         (root default-directory)
         rows)

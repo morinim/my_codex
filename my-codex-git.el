@@ -12,6 +12,7 @@
 
 (require 'ediff)
 (require 'subr-x)
+(require 'my-codex)
 
 (defvar my-codex--commit-buffer-staged-signature)
 (defvar my-codex--commit-buffer-codex-buffer)
@@ -37,11 +38,6 @@
 (declare-function my-codex-current-buffer-name "my-codex" ())
 (declare-function my-codex-modified-project-buffers "my-codex" ())
 (declare-function my-codex-project-root "my-codex" ())
-
-(defun my-codex--ensure-main-package ()
-  "Load `my-codex' when this file was entered through an autoload."
-  (unless (featurep 'my-codex)
-    (require 'my-codex)))
 
 (defun my-codex--commit-message-trailer-line-p (line)
   "Return non-nil if LINE looks like a Git commit message trailer."
@@ -246,7 +242,6 @@
 (defun my-codex-send-project-overview ()
   "Send a compact summary of the current project structure to Codex."
   (interactive)
-  (my-codex--ensure-main-package)
   (let* ((root (my-codex-project-root))
          (default-directory root)
          (files (my-codex--project-files root))
@@ -393,7 +388,6 @@ When STAGED is non-nil, return the staged diff buffer name."
 (defun my-codex--show-git-diff (staged)
   "Show a persistent `diff-mode' buffer for the current Git diff.
 When STAGED is non-nil, show the staged diff."
-  (my-codex--ensure-main-package)
   (let* ((root (my-codex-project-root))
          (default-directory root))
     (my-codex--ensure-git-repository)
@@ -420,14 +414,12 @@ When STAGED is non-nil, show the staged diff."
 (defun my-codex-send-git-diff ()
   "Ask Codex to review the current Git diff."
   (interactive)
-  (my-codex--ensure-main-package)
   (my-codex--send-git-prompt (my-codex--git-diff-review-prompt)))
 
 ;;;###autoload
 (defun my-codex-send-git-staged-diff ()
   "Ask Codex to review the staged Git diff."
   (interactive)
-  (my-codex--ensure-main-package)
   (my-codex--send-git-prompt (my-codex--git-staged-diff-review-prompt)))
 
 ;;;###autoload
@@ -510,7 +502,6 @@ repository toplevel."
   "Review the current file's uncommitted changes against HEAD using Ediff.
 When invoked from the Codex vterm, use the file in the window to its left."
   (interactive)
-  (my-codex--ensure-main-package)
   (let ((file (my-codex--current-or-left-file-name))
         (root (my-codex-project-root)))
     (let ((default-directory root))
@@ -521,7 +512,6 @@ When invoked from the Codex vterm, use the file in the window to its left."
 (defun my-codex-ediff-changed-file-against-head ()
   "Choose a tracked changed file and review it against HEAD using Ediff."
   (interactive)
-  (my-codex--ensure-main-package)
   (let ((root (my-codex-project-root)))
     (let* ((default-directory root)
            (_ (my-codex--ensure-git-repository))
@@ -540,7 +530,6 @@ When invoked from the Codex vterm, use the file in the window to its left."
 (defun my-codex-commit-message-from-diff ()
   "Ask Codex to draft a commit message from the staged Git diff."
   (interactive)
-  (my-codex--ensure-main-package)
   (let* ((buffer (my-codex-buffer))
          (root (my-codex-project-root))
          (default-directory root)
@@ -914,7 +903,6 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
 (defun my-codex-git-commit-with-latest-message ()
   "Edit a commit with the latest Codex message, or ask Codex for one and wait."
   (interactive)
-  (my-codex--ensure-main-package)
   (let ((root (my-codex-project-root))
         current-signature)
     (let ((default-directory root))

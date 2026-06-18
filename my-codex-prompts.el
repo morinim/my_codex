@@ -16,6 +16,7 @@
 (require 'thingatpt)
 (require 'transient)
 (require 'xref)
+(require 'my-codex)
 
 (defvar my-codex--captured-selection)
 (defvar my-codex--prompt-preview-origin-window)
@@ -43,11 +44,6 @@
 (declare-function my-codex-buffer "my-codex" ())
 (declare-function my-codex-current-buffer-name "my-codex" ())
 (declare-function my-codex-project-root "my-codex" ())
-
-(defun my-codex--ensure-main-package ()
-  "Load `my-codex' when this file was entered through an autoload."
-  (unless (featurep 'my-codex)
-    (require 'my-codex)))
 
 (defun my-codex--approx-token-count (text)
   "Return a rough token count estimate for TEXT."
@@ -176,7 +172,6 @@
 (defun my-codex-send-region (beg end)
   "Send the region between BEG and END to Codex with exact file context."
   (interactive "r")
-  (my-codex--ensure-main-package)
   (unless (use-region-p)
     (user-error "No active region"))
   (my-codex--preview-and-send-prompt
@@ -186,7 +181,6 @@
 (defun my-codex-send-current-file ()
   "Ask Codex to inspect the current file directly."
   (interactive)
-  (my-codex--ensure-main-package)
   (unless buffer-file-name
     (user-error "Current buffer is not visiting a file"))
   (let* ((root (my-codex-project-root))
@@ -292,7 +286,6 @@ IMPLEMENTATION-RELATIVE and TEST-RELATIVE are project-relative file names."
 (defun my-codex-analyse-test-coverage ()
   "Ask Codex to analyse coverage of the current file by its test file."
   (interactive)
-  (my-codex--ensure-main-package)
   (unless buffer-file-name
     (user-error "Current buffer is not visiting a file"))
   (let* ((root (my-codex-project-root))
@@ -463,7 +456,6 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
 (defun my-codex-explain-symbol-at-point ()
   "Ask Codex to explain the symbol at point with nearby file context."
   (interactive)
-  (my-codex--ensure-main-package)
   (unless buffer-file-name
     (user-error "Current buffer is not visiting a file"))
   (let* ((root (my-codex-project-root))
@@ -560,7 +552,6 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
   "Ask Codex for a safe refactoring plan for the active region.
 Send only a file and line-range reference, not the selected text."
   (interactive "r")
-  (my-codex--ensure-main-package)
   (unless (use-region-p)
     (user-error "No active region"))
   (my-codex--preview-and-send-prompt
@@ -572,7 +563,6 @@ Send only a file and line-range reference, not the selected text."
 (defun my-codex-open-project-instructions ()
   "Open the project Codex/agent instruction file, if present."
   (interactive)
-  (my-codex--ensure-main-package)
   (let* ((root (my-codex-project-root))
          (file (seq-find (lambda (name)
                            (file-exists-p (expand-file-name name root)))
@@ -614,7 +604,6 @@ Send only a file and line-range reference, not the selected text."
 (defun my-codex-toggle-focus ()
   "Toggle focus between the Codex vterm and the coding window."
   (interactive)
-  (my-codex--ensure-main-package)
   (let ((codex-window (my-codex-visible-window)))
     (cond
      ((eq (selected-window) codex-window) (my-codex-back-to-code))
@@ -642,7 +631,6 @@ Send only a file and line-range reference, not the selected text."
 (defun my-codex-insert-selection-into-code ()
   "Insert selected Codex text into the coding window."
   (interactive)
-  (my-codex--ensure-main-package)
   (let ((text (my-codex-selected-text))
         (code-window (my-codex-code-window)))
     (select-window code-window)
@@ -652,7 +640,6 @@ Send only a file and line-range reference, not the selected text."
 (defun my-codex-ask (prompt)
   "Read PROMPT in the minibuffer and send it straight to Codex."
   (interactive "sAsk Codex: ")
-  (my-codex--ensure-main-package)
   (when (string-blank-p prompt)
     (user-error "Prompt cannot be empty"))
   (my-codex--preview-and-send-prompt prompt))
@@ -726,7 +713,6 @@ after the at-sign with `completion-at-point'."
 After selecting a preset, read extra instructions from the minibuffer.
 When a region is active, include exact file and line context for it."
   (interactive)
-  (my-codex--ensure-main-package)
   (my-codex--ask-with-prompt-preset (my-codex--read-prompt-preset)))
 
 (defconst my-codex--preset-transient-keys
@@ -764,7 +750,6 @@ When a region is active, include exact file and line context for it."
 (transient-define-prefix my-codex-ask-preset-transient ()
   "Ask Codex using a prompt preset."
   (interactive)
-  (my-codex--ensure-main-package)
   [:class transient-column
    :setup-children my-codex--prompt-preset-transient-suffixes])
 

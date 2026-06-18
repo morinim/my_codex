@@ -11,6 +11,7 @@
 ;;; Code:
 
 (require 'subr-x)
+(require 'my-codex)
 
 (defvar my-codex--github-issue-creation-in-progress)
 (defvar my-codex--github-issue-repository)
@@ -34,11 +35,6 @@
 (declare-function my-codex-project-root "my-codex" ())
 (declare-function my-codex-send-prompt "my-codex-prompts" (prompt))
 (declare-function my-codex-session-transcript "my-codex" ())
-
-(defun my-codex--ensure-main-package ()
-  "Load `my-codex' when this file was entered through an autoload."
-  (unless (featurep 'my-codex)
-    (require 'my-codex)))
 
 (defun my-codex--github-issue-output-buffer-name (root)
   "Return the GitHub issue process buffer name for ROOT."
@@ -87,7 +83,6 @@
 (defun my-codex-list-open-tickets ()
   "List open GitHub issues for the current repository in a buffer."
   (interactive)
-  (my-codex--ensure-main-package)
   (unless (executable-find "gh")
     (user-error "GitHub CLI `gh' not found in exec-path"))
   (let* ((root (my-codex-project-root))
@@ -313,7 +308,6 @@
   "Ask Codex to draft a GitHub issue from the current session.
 Open an editable issue draft before running `gh issue create'."
   (interactive)
-  (my-codex--ensure-main-package)
   (let* ((root (my-codex-project-root))
          (buffer (my-codex-buffer))
          (transcript (my-codex-session-transcript))

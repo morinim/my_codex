@@ -1745,13 +1745,6 @@ Open the generated notes in an editable Markdown buffer when they are ready."
        buffer start-point root begin-marker end-marker)
       (message "Asked Codex to summarize the session; waiting to open editor."))))
 
-(require 'my-codex-prompts)
-(require 'my-codex-git)
-(require 'my-codex-github)
-(require 'my-codex-links)
-(require 'my-codex-doctor)
-(require 'my-codex-vterm)
-
 ;; Prefix keymap for Codex commands.
 (defvar-keymap my-codex-map
   :doc "Prefix keymap for Codex commands."
@@ -2050,5 +2043,12 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     (setq my-codex--auto-revert-enabled-by-mode nil)))
 
 (provide 'my-codex)
+
+(require 'my-codex-prompts)
+(require 'my-codex-git)
+(require 'my-codex-github)
+(require 'my-codex-links)
+(require 'my-codex-doctor)
+(require 'my-codex-vterm)
 
 ;;; my-codex.el ends here

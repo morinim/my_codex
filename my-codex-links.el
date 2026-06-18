@@ -12,6 +12,7 @@
 
 (require 'browse-url)
 (require 'subr-x)
+(require 'my-codex)
 
 (declare-function my-codex-project-root "my-codex" ())
 
