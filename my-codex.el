@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.19.0
+;; Version: 0.19.1
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -1270,6 +1270,8 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
          ("Activity" 8 t)])
   (setq tabulated-list-padding 1)
   (setq revert-buffer-function #'my-codex-top-refresh)
+  (setq-local mode-line-format
+              '("  *Agents Top*  [D:Dired  b:Build  R:Rename  d:Diff  k:Kill  RET:Visit  g:Refresh]"))
   (tabulated-list-init-header)
   (my-codex--sync-header-hscroll))
 
