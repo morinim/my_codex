@@ -625,18 +625,20 @@ empty output and any exact string in IGNORED-VALUES."
               (when (re-search-backward
                      (my-codex--terminal-marker-regexp begin-marker)
                      bound t)
-                (let ((beg (match-end 0)))
+                (let ((marker-beg (match-beginning 0))
+                      (beg (match-end 0)))
                   (when (re-search-forward
                          (my-codex--terminal-marker-regexp end-marker)
                          nil t)
-                    (let ((output
-                           (my-codex--normalize-marked-output
-                            (buffer-substring-no-properties
-                             beg
-                             (match-beginning 0)))))
-                      (unless (member output
-                                      (append '("") ignored-values))
-                        output))))))))))))
+                    (when (or (null bound) (>= marker-beg bound))
+                      (let ((output
+                             (my-codex--normalize-marked-output
+                              (buffer-substring-no-properties
+                               beg
+                               (match-beginning 0)))))
+                        (unless (member output
+                                        (append '("") ignored-values))
+                          output)))))))))))))
 
 (defun my-codex--wait-for-marked-output
     (buffer start-point begin-marker end-marker callback timeout-message
@@ -930,9 +932,10 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
             (my-codex--wait-for-commit-message
              buffer marker root request-signature)
             (message "Waiting for Codex commit message."))
-        (let* ((start-point (with-current-buffer buffer
-                              (copy-marker (point-max))))
-               (request-signature (my-codex-commit-message-from-diff)))
+        (let* ((request-signature (my-codex-commit-message-from-diff))
+               (start-point
+                (with-current-buffer buffer
+                  (copy-marker my-codex--commit-message-request-marker))))
           (my-codex--wait-for-commit-message
            buffer start-point root request-signature)
           (message "Asked Codex to draft a commit message; waiting to open editor."))))))

@@ -75,6 +75,36 @@
       (should-not
        (my-codex-latest-commit-message-after (current-buffer) start)))))
 
+(ert-deftest my-codex-latest-marked-output-after-ignores-overlapping-marker ()
+  (with-temp-buffer
+    (insert "BEGIN_COMMIT_MESSAGE\n"
+            "fix: stale message\n")
+    (let ((start (copy-marker (point))))
+      (insert "END_COMMIT_MESSAGE\n")
+      (should-not
+       (my-codex-latest-commit-message-after (current-buffer) start)))))
+
+(ert-deftest my-codex-wait-for-marked-output-clears-only-wait-marker ()
+  (with-temp-buffer
+    (let ((request-marker (copy-marker (point)))
+          received)
+      (insert "BEGIN_COMMIT_MESSAGE\n"
+              "fix: preserve request marker\n"
+              "END_COMMIT_MESSAGE\n")
+      (my-codex--wait-for-marked-output
+       (current-buffer)
+       (copy-marker request-marker)
+       "BEGIN_COMMIT_MESSAGE"
+       "END_COMMIT_MESSAGE"
+       (lambda (message)
+         (setq received message))
+       "Timed out."
+       "Ready."
+       0.1
+       1)
+      (should (equal received "fix: preserve request marker"))
+      (should (eq (marker-buffer request-marker) (current-buffer))))))
+
 (ert-deftest my-codex-latest-marked-output-after-uses-latest-block ()
   (with-temp-buffer
     (let ((start (copy-marker (point))))
