@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.19.1
+;; Version: 0.19.2
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -46,6 +46,7 @@
 (defvar vterm-mode-map)
 (defvar vterm-copy-mode-map)
 (defvar vterm-copy-mode)
+(defvar vterm-max-scrollback)
 
 (defgroup my-codex nil
   "Customisation options for the Codex development tool."
@@ -271,6 +272,14 @@ BEGIN_COMMIT_MESSAGE and END_COMMIT_MESSAGE markers if you want
 (defcustom my-codex-enable-vterm-integration t
   "When non-nil, enable vterm helpers with `my-codex-global-mode'."
   :type 'boolean
+  :group 'my-codex)
+
+(defcustom my-codex-vterm-min-scrollback 10000
+  "Minimum `vterm-max-scrollback' used in Codex vterm buffers.
+This protects marked-output extraction from losing markers when
+Codex emits verbose output.  When nil, do not adjust vterm scrollback."
+  :type '(choice (const :tag "Do not adjust" nil)
+                 natnum)
   :group 'my-codex)
 
 (defcustom my-codex-enable-session-links t
@@ -660,6 +669,38 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
      access-mode
      agent)))
 
+(defun my-codex--ensure-vterm-scrollback ()
+  "Raise `vterm-max-scrollback' in the current Codex buffer when needed."
+  (when (and my-codex-vterm-min-scrollback
+             (boundp 'vterm-max-scrollback)
+             (numberp vterm-max-scrollback)
+             (< vterm-max-scrollback my-codex-vterm-min-scrollback))
+    (setq-local vterm-max-scrollback my-codex-vterm-min-scrollback)))
+
+(defun my-codex--vterm-scrollback-floor (scrollback)
+  "Return SCROLLBACK raised to `my-codex-vterm-min-scrollback' when needed."
+  (if (and my-codex-vterm-min-scrollback
+           (numberp scrollback)
+           (< scrollback my-codex-vterm-min-scrollback))
+      my-codex-vterm-min-scrollback
+    scrollback))
+
+(defun my-codex--vterm-mode-with-scrollback-floor ()
+  "Enable `vterm-mode' while flooring the libvterm scrollback argument."
+  (require 'vterm)
+  (if (and my-codex-vterm-min-scrollback
+           (fboundp 'vterm--new))
+      (let ((vterm--new (symbol-function 'vterm--new)))
+        (cl-letf (((symbol-function 'vterm--new)
+                   (lambda (height width scrollback &rest args)
+                     (apply vterm--new
+                            height
+                            width
+                            (my-codex--vterm-scrollback-floor scrollback)
+                            args))))
+          (vterm-mode)))
+    (vterm-mode)))
+
 (cl-defmethod my-codex-backend-start
   ((backend my-codex-vterm-backend) project-root command
    &optional session-name agent access-mode)
@@ -672,7 +713,8 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
          (buffer (get-buffer-create buffer-name)))
     (with-current-buffer buffer
       (unless (derived-mode-p 'vterm-mode)
-        (vterm-mode))
+        (my-codex--vterm-mode-with-scrollback-floor))
+      (my-codex--ensure-vterm-scrollback)
       (setq-local show-trailing-whitespace nil)
       (when my-codex-enable-session-links
         (my-codex-session-links-mode 1))

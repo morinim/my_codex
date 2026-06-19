@@ -16,6 +16,7 @@
 (require 'my-codex)
 
 (defvar my-codex-doctor-terminal-timeout)
+(defvar my-codex-vterm-min-scrollback)
 (defvar my-codex-agent)
 (defvar my-codex-project-build-command)
 (defvar my-codex-read-only-command)
@@ -24,6 +25,7 @@
 (defvar my-codex-antigravity-read-only-command)
 (defvar my-codex-antigravity-workspace-command)
 (defvar my-codex-antigravity-resume-command)
+(defvar vterm-max-scrollback)
 
 (declare-function my-codex--agent-command "my-codex" (agent access-mode))
 (declare-function my-codex-project-root "my-codex" ())
@@ -122,6 +124,37 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
       (when (buffer-live-p buffer)
         (kill-buffer buffer)))))
 
+(defun my-codex--doctor-vterm-scrollback (vterm-loadable)
+  "Return a diagnostic row for Codex vterm scrollback settings.
+VTERM-LOADABLE is non-nil when `vterm' can be loaded."
+  (cond
+   ((null my-codex-vterm-min-scrollback)
+    (list "Codex vterm scrollback" 'warn
+          "Scrollback floor is disabled; marked output can be truncated"))
+   ((< my-codex-vterm-min-scrollback 10000)
+    (list "Codex vterm scrollback" 'warn
+          (format "Floor is %s lines; recommended minimum is 10000"
+                  my-codex-vterm-min-scrollback)))
+   ((and vterm-loadable (boundp 'vterm-max-scrollback)
+         (numberp vterm-max-scrollback)
+         (< vterm-max-scrollback my-codex-vterm-min-scrollback))
+    (list "Codex vterm scrollback" 'ok
+          (format "Codex buffers raise %s to %s lines"
+                  vterm-max-scrollback
+                  my-codex-vterm-min-scrollback)))
+   ((and vterm-loadable (boundp 'vterm-max-scrollback)
+         (numberp vterm-max-scrollback))
+    (list "Codex vterm scrollback" 'ok
+          (format "Effective floor is %s lines"
+                  (max vterm-max-scrollback
+                       my-codex-vterm-min-scrollback))))
+   (vterm-loadable
+    (list "Codex vterm scrollback" 'warn
+          "Cannot inspect vterm-max-scrollback"))
+   (t
+    (list "Codex vterm scrollback" 'warn
+          "Skipped; vterm cannot be loaded"))))
+
 (defun my-codex--doctor-rows ()
   "Return diagnostic rows for `my-codex-doctor'."
   (let* ((root (my-codex-project-root))
@@ -166,6 +199,7 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
              ((and vterm-loadable (fboundp 'vterm-mode))
               "vterm-mode is available; backend will be confirmed by startup check")
              (t "vterm-mode is unavailable")))
+      (my-codex--doctor-vterm-scrollback vterm-loadable)
       (list "Git executable"
             (if git 'ok 'fail)
             (or git "Not found in exec-path"))

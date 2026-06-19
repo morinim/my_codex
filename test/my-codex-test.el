@@ -708,6 +708,55 @@
               "if ($LASTEXITCODE -ne $null) { exit $LASTEXITCODE }\n"
               "if ($?) { exit 0 } else { exit 1 }")))))
 
+(ert-deftest my-codex-ensure-vterm-scrollback-raises-low-value-locally ()
+  (let ((was-bound (boundp 'vterm-max-scrollback))
+        (original-value (and (boundp 'vterm-max-scrollback)
+                             (symbol-value 'vterm-max-scrollback)))
+        (my-codex-vterm-min-scrollback 10000))
+    (unwind-protect
+        (progn
+          (set 'vterm-max-scrollback 100)
+          (with-temp-buffer
+            (my-codex--ensure-vterm-scrollback)
+            (should (equal vterm-max-scrollback 10000))
+            (should (local-variable-p 'vterm-max-scrollback))))
+      (if was-bound
+          (set 'vterm-max-scrollback original-value)
+        (makunbound 'vterm-max-scrollback)))))
+
+(ert-deftest my-codex-ensure-vterm-scrollback-preserves-higher-value ()
+  (let ((was-bound (boundp 'vterm-max-scrollback))
+        (original-value (and (boundp 'vterm-max-scrollback)
+                             (symbol-value 'vterm-max-scrollback)))
+        (my-codex-vterm-min-scrollback 10000))
+    (unwind-protect
+        (progn
+          (set 'vterm-max-scrollback 20000)
+          (with-temp-buffer
+            (my-codex--ensure-vterm-scrollback)
+            (should (equal vterm-max-scrollback 20000))
+            (should-not (local-variable-p 'vterm-max-scrollback))))
+      (if was-bound
+          (set 'vterm-max-scrollback original-value)
+        (makunbound 'vterm-max-scrollback)))))
+
+(ert-deftest my-codex-vterm-scrollback-floor-raises-low-value ()
+  (let ((my-codex-vterm-min-scrollback 10000))
+    (should (equal (my-codex--vterm-scrollback-floor 100) 10000))))
+
+(ert-deftest my-codex-vterm-mode-with-scrollback-floor-floors-vterm-new-arg ()
+  (let ((my-codex-vterm-min-scrollback 10000)
+        captured-scrollback)
+    (cl-letf (((symbol-function 'require) #'ignore)
+              ((symbol-function 'vterm-mode)
+               (lambda ()
+                 (vterm--new 24 80 100 nil nil nil nil nil nil)))
+              ((symbol-function 'vterm--new)
+               (lambda (_height _width scrollback &rest _args)
+                 (setq captured-scrollback scrollback))))
+      (my-codex--vterm-mode-with-scrollback-floor)
+      (should (equal captured-scrollback 10000)))))
+
 (ert-deftest my-codex-does-not-prebind-vterm-shell ()
   (let* ((script '(progn
                     (package-initialize)
@@ -1283,6 +1332,31 @@
 
 (ert-deftest my-codex-doctor-command-executable-token-returns-nil-for-blank ()
   (should-not (my-codex--doctor-command-executable-token "  ")))
+
+(ert-deftest my-codex-doctor-vterm-scrollback-warns-when-disabled ()
+  (let ((my-codex-vterm-min-scrollback nil))
+    (should
+     (equal
+      (my-codex--doctor-vterm-scrollback t)
+      '("Codex vterm scrollback" warn
+        "Scrollback floor is disabled; marked output can be truncated")))))
+
+(ert-deftest my-codex-doctor-vterm-scrollback-reports-local-raise ()
+  (let ((was-bound (boundp 'vterm-max-scrollback))
+        (original-value (and (boundp 'vterm-max-scrollback)
+                             (symbol-value 'vterm-max-scrollback)))
+        (my-codex-vterm-min-scrollback 10000))
+    (unwind-protect
+        (progn
+          (set 'vterm-max-scrollback 1000)
+          (should
+           (equal
+            (my-codex--doctor-vterm-scrollback t)
+            '("Codex vterm scrollback" ok
+              "Codex buffers raise 1000 to 10000 lines"))))
+      (if was-bound
+          (set 'vterm-max-scrollback original-value)
+        (makunbound 'vterm-max-scrollback)))))
 
 (ert-deftest my-codex-project-tree-lines-renders-compact-tree ()
   (let ((my-codex-project-overview-tree-max-entries 2))
