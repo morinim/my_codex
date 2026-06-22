@@ -31,11 +31,11 @@
 
 (defconst my-codex--file-reference-regexp
   (concat
-   "\\(?1:\\(?:[[:alnum:]_.@+-]+/\\)*"
+   "\\(?1:/?\\(?:[[:alnum:]_.@+-]+/\\)*"
    "\\(?:[[:alnum:]_.@+-]+\\.[[:alnum:]_.@+-]+"
    "\\|Makefile\\|Dockerfile\\|README\\|LICENSE\\)\\)"
    "\\(?:"
-   ":\\(?2:[0-9]+\\)\\(?::\\(?3:[0-9]+\\)\\)?"
+   ":\\(?2:[0-9]+\\)\\(?:\\(?::\\(?3:[0-9]+\\)\\)\\|-\\(?5:[0-9]+\\)\\)?"
    "\\|"
    ":L\\(?4:[0-9]+\\)\\(?:-L?\\(?5:[0-9]+\\)\\)?"
    "\\|"
@@ -46,6 +46,7 @@
 Supported forms include:
 
   src/foo.el:42
+  src/foo.el:42-60
   src/foo.el:42:7
   src/foo.el:L42-L60
   src/foo.el#L42-L60
@@ -55,7 +56,7 @@ Supported forms include:
   (let ((part "[[:alnum:]_.@+-]+\\(?:\n[ \t]+[[:alnum:]_.@+-]+\\)*")
         (wrap "\\(?:\n[ \t]+\\)?"))
     (concat
-     "\\(?1:\\(?:"
+     "\\(?1:/?\\(?:"
      part
      "/"
      wrap
@@ -64,7 +65,7 @@ Supported forms include:
      part
      "\\.[[:alnum:]_.@+-]+\\|Makefile\\|Dockerfile\\|README\\|LICENSE\\)\\)"
      "\\(?:"
-     ":\\(?2:[0-9]+\\)\\(?::\\(?3:[0-9]+\\)\\)?"
+     ":\\(?2:[0-9]+\\)\\(?:\\(?::\\(?3:[0-9]+\\)\\)\\|-\\(?5:[0-9]+\\)\\)?"
      "\\|"
      ":L\\(?4:[0-9]+\\)\\(?:-L?\\(?5:[0-9]+\\)\\)?"
      "\\|"
@@ -195,9 +196,22 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
             (when (my-codex--valid-file-reference-target-p resolved)
               resolved)))))))
 
+(defun my-codex--normalise-file-reference-target (target root)
+  "Return TARGET with an absolute in-project file made relative to ROOT."
+  (let ((file (plist-get target :file)))
+    (if (and file
+             (file-name-absolute-p file)
+             (file-readable-p file)
+             (file-in-directory-p (file-truename file) root))
+        (plist-put (copy-sequence target)
+                   :file
+                   (file-relative-name (file-truename file) root))
+      target)))
+
 (defun my-codex--valid-file-reference-target-p (target)
   "Return non-nil if TARGET refers to a readable in-project file."
   (let* ((root (file-truename (my-codex-project-root)))
+         (target (my-codex--normalise-file-reference-target target root))
          (file (plist-get target :file)))
     (and file
          (not (file-name-absolute-p file))
@@ -266,6 +280,10 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
                 (let ((target (my-codex--file-reference-target-at-match))
                       (match-beg (match-beginning 0))
                       (match-end (match-end 0)))
+                  (setq target
+                        (my-codex--normalise-file-reference-target
+                         target
+                         (file-truename (my-codex-project-root))))
                   (when-let ((resolved-target
                               (save-match-data
                                 (my-codex--resolve-file-reference-target

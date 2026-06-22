@@ -1066,6 +1066,45 @@
                     :end-line nil)))))))
       (delete-directory root t))))
 
+(ert-deftest my-codex-session-links-linkifies-wrapped-absolute-file-reference ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-links" t))))
+    (unwind-protect
+        (progn
+          (make-directory
+           (expand-file-name "src/examples/whichlang" root)
+           t)
+          (write-region
+           "" nil
+           (expand-file-name
+            "src/examples/whichlang/make_dataset.h"
+            root)
+           nil 'silent)
+          (with-temp-buffer
+            (insert "  - [P2] Fix labels -- "
+                    (expand-file-name "src/" root)
+                    "\n    examples/whichlang/make_dataset.h:31-34")
+            (cl-letf (((symbol-function 'my-codex-project-root)
+                       (lambda () root)))
+              (my-codex-session-links-mode 1)
+              (goto-char (point-min))
+              (search-forward "make_dataset.h")
+              (should
+               (eq (get-text-property
+                    (point)
+                    'my-codex-session-link-type)
+                   'file))
+              (let ((target (get-text-property
+                             (point)
+                             'my-codex-session-link-target)))
+                (should
+                 (equal
+                  target
+                  '(:file "src/examples/whichlang/make_dataset.h"
+                    :line 31
+                    :column nil
+                    :end-line 34)))))))
+      (delete-directory root t))))
+
 (ert-deftest my-codex-region-file-reference-formats-relative-lines ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t))))
     (unwind-protect
