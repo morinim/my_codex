@@ -119,6 +119,20 @@
         (my-codex-latest-commit-message-after (current-buffer) start)
         "fix: latest message")))))
 
+(ert-deftest my-codex-latest-commit-message-ignores-before-request-marker ()
+  (let ((buffer (generate-new-buffer "*my-codex-test-session*")))
+    (unwind-protect
+        (with-current-buffer buffer
+          (insert "BEGIN_COMMIT_MESSAGE\n"
+                  "fix: stale message\n"
+                  "END_COMMIT_MESSAGE\n")
+          (setq-local my-codex--commit-message-request-marker (copy-marker (point)))
+          (insert "request sent\n")
+          (cl-letf (((symbol-function 'my-codex-current-buffer-name)
+                     (lambda () (buffer-name buffer))))
+            (should-not (my-codex-latest-commit-message))))
+      (kill-buffer buffer))))
+
 (ert-deftest my-codex-latest-marked-output-after-ignores-placeholders ()
   (with-temp-buffer
     (let ((start (copy-marker (point))))
