@@ -911,6 +911,40 @@
                       (eq (plist-get (nth 2 suffix) :command) 'ignore)))
                suffixes))))
 
+(ert-deftest my-codex-prompt-preset-transient-suffixes-show-default-presets ()
+  (let* ((my-codex-prompt-presets
+          '(("Refactor" . "Refactor prompt")
+            ("Document" . "Document prompt")))
+         (suffixes (my-codex--prompt-preset-transient-suffixes nil))
+         (first-properties (nth 2 (car suffixes)))
+         (second-properties (nth 2 (cadr suffixes))))
+    (should (equal (plist-get first-properties :key) "1"))
+    (should (equal (plist-get first-properties :description) "Refactor"))
+    (should (eq (plist-get first-properties :command)
+                'my-codex--ask-with-transient-preset-0))
+    (should (equal (plist-get second-properties :key) "2"))
+    (should (equal (plist-get second-properties :description) "Document"))
+    (should (eq (plist-get second-properties :command)
+                'my-codex--ask-with-transient-preset-1))
+    (should (equal my-codex--prompt-preset-transient-presets
+                   my-codex-prompt-presets))))
+
+(ert-deftest my-codex-prompt-preset-transient-installs-live-suffixes ()
+  (let ((my-codex-prompt-presets '(("Refactor" . "Refactor prompt"))))
+    (transient-setup 'my-codex-ask-preset-transient)
+    (unwind-protect
+        (let ((preset-suffix
+               (seq-find
+                (lambda (suffix)
+                  (and (slot-exists-p suffix 'command)
+                       (eq (oref suffix command)
+                           'my-codex--ask-with-transient-preset-0)))
+                transient--suffixes)))
+          (should preset-suffix)
+          (should (equal (oref preset-suffix key) "1"))
+          (should (equal (oref preset-suffix description) "Refactor")))
+      (transient-quit-all))))
+
 (ert-deftest my-codex-display-buffer-action-alist-returns-action-alist ()
   (let ((my-codex-display-buffer-action
          '((display-buffer-in-side-window)

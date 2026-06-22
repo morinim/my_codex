@@ -720,24 +720,44 @@ When a region is active, include exact file and line context for it."
     "a" "b" "c" "d" "e" "f" "g" "h" "j" "k" "l" "n" "u" "v" "x" "y" "z")
   "Keys used for dynamically generated prompt preset transient suffixes.")
 
+(defvar my-codex--prompt-preset-transient-presets nil
+  "Prompt presets currently displayed by `my-codex-ask-preset-transient'.")
+
+(defun my-codex--prompt-preset-transient-command (index)
+  "Return the transient preset command symbol for INDEX."
+  (intern (format "my-codex--ask-with-transient-preset-%d" index)))
+
+(defun my-codex--ask-with-transient-preset-index (index)
+  "Send the prompt preset at INDEX from `my-codex-ask-preset-transient'."
+  (let ((preset (nth index my-codex--prompt-preset-transient-presets)))
+    (unless preset
+      (user-error "No Codex prompt preset for this key"))
+    (my-codex--ask-with-prompt-preset preset)))
+
+(dotimes (index (length my-codex--preset-transient-keys))
+  (let ((index index))
+    (defalias (my-codex--prompt-preset-transient-command index)
+      (lambda ()
+        (interactive)
+        (my-codex--ask-with-transient-preset-index index)))))
+
 (defun my-codex--prompt-preset-transient-suffixes (_children)
   "Return transient suffixes for `my-codex-prompt-presets'."
   (let* ((visible-presets (seq-take my-codex-prompt-presets
                                     (length my-codex--preset-transient-keys)))
          (hidden-count (- (length my-codex-prompt-presets)
                           (length visible-presets))))
+    (setq my-codex--prompt-preset-transient-presets visible-presets)
     (transient-parse-suffixes
      'my-codex-ask-preset-transient
      `[,@(if visible-presets
              (cl-mapcar
-              (lambda (key preset)
-                (let ((preset preset))
-                  (list key (car preset)
-                        (lambda ()
-                          (interactive)
-                          (my-codex--ask-with-prompt-preset preset)))))
+              (lambda (key preset index)
+                (list key (car preset)
+                      (my-codex--prompt-preset-transient-command index)))
               my-codex--preset-transient-keys
-              visible-presets)
+              visible-presets
+              (number-sequence 0 (1- (length visible-presets))))
            nil)
        ,@(when (> hidden-count 0)
            (list (format "%d more preset%s available via C"
@@ -749,9 +769,9 @@ When a region is active, include exact file and line context for it."
 ;;;###autoload
 (transient-define-prefix my-codex-ask-preset-transient ()
   "Ask Codex using a prompt preset."
-  (interactive)
   [:class transient-column
-   :setup-children my-codex--prompt-preset-transient-suffixes])
+   :setup-children my-codex--prompt-preset-transient-suffixes
+   ""])
 
 (provide 'my-codex-prompts)
 
