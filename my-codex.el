@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.19.2
+;; Version: 0.20.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -106,6 +106,15 @@ Commands such as `my-codex-read-only', `my-codex-workspace', and
 `my-codex-resume' use this profile.  Named sessions can choose a
 different profile interactively."
   :type 'symbol
+  :group 'my-codex)
+
+(defcustom my-codex-language nil
+  "Language in which the agent should answer and generate output.
+When nil, the default language (typically English) is used.
+When set to a string (e.g. \"Italian\", \"French\", \"Spanish\"), the agent
+is instructed at startup to answer and generate output in that language."
+  :type '(choice (const :tag "Default (English)" nil)
+                 string)
   :group 'my-codex)
 
 (defcustom my-codex-agent-profiles
@@ -724,7 +733,13 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
         (set-process-query-on-exit-flag proc nil)
         (goto-char (point-max))
         (vterm-send-string (my-codex--shell-command-and-exit command))
-        (vterm-send-return)))
+        (vterm-send-return)
+        (when (and my-codex-language (not (string-empty-p my-codex-language)))
+          (vterm-send-string
+           (format "Please answer and generate all output (including commit messages, summaries, reviews, refactorings, etc.) in %s."
+                   my-codex-language)
+           t)
+          (vterm-send-return))))
     (if session-name
         (my-codex--mark-named-session
          buffer session-name project-root access-mode agent)

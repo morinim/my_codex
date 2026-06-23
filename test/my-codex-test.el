@@ -7,6 +7,8 @@
 (require 'ert)
 (require 'my-codex)
 
+(defvar my-codex-language)
+
 (ert-deftest my-codex-clean-commit-message-body-lines-fills-paragraphs ()
   (let ((my-codex-commit-message-fill-column 34))
     (should
@@ -1601,6 +1603,27 @@
     (should
      (string-prefix-p "*Antigravity GitHub issue draft:"
                       (my-codex--github-issue-draft-buffer-name root)))))
+
+(ert-deftest my-codex-backend-start-sends-language-instruction ()
+  (let (sent-strings
+        (backend (my-codex--make-vterm-backend "mock-backend-buffer")))
+    (unwind-protect
+        (cl-letf (((symbol-function 'derived-mode-p) (lambda (&rest _) t))
+                  ((symbol-function 'my-codex--ensure-vterm-scrollback) #'ignore)
+                  ((symbol-function 'get-buffer-process) (lambda (&rest _) "mock-proc"))
+                  ((symbol-function 'process-live-p) (lambda (&rest _) t))
+                  ((symbol-function 'set-process-query-on-exit-flag) #'ignore)
+                  ((symbol-function 'vterm-send-string)
+                   (lambda (str &optional _paste) (push str sent-strings)))
+                  ((symbol-function 'vterm-send-return) (lambda () (push 'return sent-strings)))
+                  ((symbol-function 'my-codex--mark-default-session) #'ignore)
+                  ((symbol-function 'my-codex--shell-command-and-exit) (lambda (cmd) cmd)))
+          (let ((my-codex-language "French"))
+            (my-codex-backend-start backend "/tmp" "agy")
+            (should (member "agy" sent-strings))
+            (should (member "Please answer and generate all output (including commit messages, summaries, reviews, refactorings, etc.) in French." sent-strings))))
+      (when-let (buf (get-buffer "mock-backend-buffer"))
+        (kill-buffer buf)))))
 
 (provide 'my-codex-test)
 

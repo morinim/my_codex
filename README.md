@@ -59,8 +59,8 @@ Press `F8` to open the agent command menu.
 ### Session Management
 - `F8 o` / `F8 w` : start/show the default read-only or workspace-write session.
 - `F8 S o` / `F8 S w` : select an agent, then start its default read-only or write session.
-- `F8 S n` : start or show a named session (allows side-by-side Codex & Antigravity sessions).
-- `F8 S l` / `F8 S q` / `F8 S t` : list open sessions, hide the selected session window, or view the sessions dashboard.
+- `F8 S n` : start or show a named session with a selected agent and access mode.
+- `F8 S l` / `F8 S q` / `F8 S r` / `F8 S t` : list open sessions, hide the selected session window, resume a previous session, or view the sessions dashboard.
 - `F8 r` / `F8 q` : resume a previous session, or hide the active agent window.
 
 ### Prompts & Refactoring
@@ -80,7 +80,7 @@ Press `F8` to open the agent command menu.
 
 ### Diagnostics, Build & Instructions
 - `F8 !` : run `my-codex-doctor` diagnostics.
-- `F8 i` : open project instruction files (e.g., `AGENTS.md`, `CODEX.md`).
+- `F8 i` : open project instruction files (e.g., `AGENTS.md`, `CODEX.md`, `.codex/instructions.md`).
 - `F7` : run the project build command.
 
 ## Customisation
@@ -91,6 +91,9 @@ Configure options via `M-x customize-group RET my-codex RET`.
 ;; Set the default agent profile
 (setq my-codex-agent 'antigravity)
 
+;; Ask agents to answer and generate output in a preferred language
+(setq my-codex-language "Italian")
+
 ;; Customize agent launch commands
 (setq my-codex-antigravity-workspace-command "agy --sandbox")
 (setq my-codex-antigravity-resume-command "agy resume")
@@ -99,7 +102,8 @@ Configure options via `M-x customize-group RET my-codex RET`.
 (setq my-codex-right-width 80)
 (setq my-codex-project-build-command "./setup_build")
 (setq my-codex-project-instruction-files
-      '("AGENTS.md" "CODEX.md" "ANTIGRAVITY.md"))
+      '("AGENTS.md" "CODEX.md" "ANTIGRAVITY.md"
+        ".codex/instructions.md" ".antigravity/instructions.md"))
 
 ;; Prompt & warning thresholds
 (setq my-codex-enable-prompt-preview t)
