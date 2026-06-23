@@ -10,6 +10,8 @@
 (defvar flycheck-current-errors)
 (defvar flycheck-mode)
 (defvar my-codex-language)
+(defvar vterm-copy-mode-hook)
+(defvar vterm-mode-hook)
 
 (defmacro my-codex-test--with-mock-flycheck (diagnostics &rest body)
   "Run BODY with mocked Flycheck DIAGNOSTICS."
@@ -834,6 +836,40 @@
                  (setq captured-scrollback scrollback))))
       (my-codex--vterm-mode-with-scrollback-floor)
       (should (equal captured-scrollback 10000)))))
+
+(ert-deftest my-codex-vterm-integration-does-not-mutate-vterm-keymaps ()
+  (let* ((vterm-mode-map (make-sparse-keymap))
+         (vterm-copy-mode-map (make-sparse-keymap))
+         (vterm-mode-hook nil)
+         (vterm-copy-mode-hook nil)
+         (after-change-major-mode-hook nil)
+         (my-codex--vterm-copy-mode-lighter :unset))
+    (keymap-set vterm-mode-map "<f8>" #'ignore)
+    (keymap-set vterm-copy-mode-map "<f8>" #'ignore)
+    (my-codex--enable-vterm-integration)
+    (keymap-set vterm-mode-map "<f8>" #'next-line)
+    (keymap-set vterm-copy-mode-map "<f8>" #'previous-line)
+    (my-codex--disable-vterm-integration)
+    (should (eq (keymap-lookup vterm-mode-map "<f8>") #'next-line))
+    (should (eq (keymap-lookup vterm-copy-mode-map "<f8>") #'previous-line))))
+
+(ert-deftest my-codex-vterm-override-mode-provides-local-keys ()
+  (let ((copy-map (make-sparse-keymap))
+        (vterm-copy-mode t))
+    (keymap-set copy-map "<f8>" #'ignore)
+    (with-temp-buffer
+      (let ((major-mode 'vterm-mode)
+            (minor-mode-map-alist
+             (cons (cons 'vterm-copy-mode copy-map) minor-mode-map-alist)))
+        (unwind-protect
+            (progn
+              (my-codex--enable-vterm-buffer-integration)
+              (should (bound-and-true-p my-codex-vterm-override-mode))
+              (should (eq (key-binding (kbd "<f8>"))
+                          #'my-codex-transient-preserve-selection))
+              (should (eq (key-binding (kbd "S-<insert>"))
+                          #'vterm-yank)))
+          (my-codex--disable-vterm-buffer-integration))))))
 
 (ert-deftest my-codex-does-not-prebind-vterm-shell ()
   (let* ((script '(progn

@@ -13,13 +13,30 @@
 (require 'my-codex)
 
 (defvar my-codex--vterm-copy-mode-lighter)
-(defvar my-codex--vterm-integration-keymap-bindings)
 (defvar vterm-copy-mode)
-(defvar vterm-copy-mode-map)
-(defvar vterm-mode-map)
 
 (declare-function my-codex-transient-preserve-selection "my-codex" ())
 (declare-function vterm-yank "vterm" ())
+
+(defvar-keymap my-codex-vterm-override-mode-map
+  :doc "Local key overrides for my-codex vterm buffers."
+  "S-<insert>" #'vterm-yank
+  "<prior>" #'scroll-down-command
+  "<next>" #'scroll-up-command
+  "<f8>" #'my-codex-transient-preserve-selection)
+
+(defvar my-codex-vterm-override-mode-map-alist
+  `((my-codex-vterm-override-mode . ,my-codex-vterm-override-mode-map))
+  "Emulation map alist for `my-codex-vterm-override-mode'.")
+
+(unless (memq 'my-codex-vterm-override-mode-map-alist
+              emulation-mode-map-alists)
+  (add-to-list 'emulation-mode-map-alists
+               'my-codex-vterm-override-mode-map-alist))
+
+(define-minor-mode my-codex-vterm-override-mode
+  "Local key overrides for my-codex vterm buffers."
+  :lighter nil)
 
 (defvar-local my-codex--vterm-copy-mode-saved-header-line-format :unset
   "Previous `header-line-format' before showing the vterm copy mode hint.")
@@ -67,39 +84,24 @@
       (setcdr entry my-codex--vterm-copy-mode-lighter)
       (setq my-codex--vterm-copy-mode-lighter :unset))))
 
-(defun my-codex--save-and-set-vterm-key (map key command)
-  "Save MAP's KEY binding and bind KEY to COMMAND."
-  (push (list map key (keymap-lookup map key))
-        my-codex--vterm-integration-keymap-bindings)
-  (keymap-set map key command))
+(defun my-codex--enable-vterm-buffer-integration ()
+  "Enable my-codex helpers in the current vterm buffer."
+  (my-codex-vterm-override-mode 1)
+  (my-codex--disable-vterm-editing-minor-modes))
 
-(defun my-codex--restore-vterm-keymap-bindings ()
-  "Restore vterm key bindings changed by my-codex."
-  (dolist (binding my-codex--vterm-integration-keymap-bindings)
-    (pcase-let ((`(,map ,key ,previous) binding))
-      (if previous
-          (keymap-set map key previous)
-        (keymap-unset map key))))
-  (setq my-codex--vterm-integration-keymap-bindings nil))
+(defun my-codex--disable-vterm-buffer-integration ()
+  "Disable my-codex helpers in the current vterm buffer."
+  (my-codex-vterm-override-mode -1))
 
 (defun my-codex--enable-vterm-integration ()
   "Enable my-codex helpers for vterm."
   (my-codex--shorten-vterm-copy-mode-lighter)
-  (unless my-codex--vterm-integration-keymap-bindings
-    (when (boundp 'vterm-mode-map)
-      (my-codex--save-and-set-vterm-key
-       vterm-mode-map "S-<insert>" #'vterm-yank)
-      (my-codex--save-and-set-vterm-key
-       vterm-mode-map "<prior>" #'scroll-down-command)
-      (my-codex--save-and-set-vterm-key
-       vterm-mode-map "<next>" #'scroll-up-command)
-      (my-codex--save-and-set-vterm-key
-       vterm-mode-map "<f8>" #'my-codex-transient-preserve-selection))
-    (when (boundp 'vterm-copy-mode-map)
-      (my-codex--save-and-set-vterm-key
-       vterm-copy-mode-map "<f8>" #'my-codex-transient-preserve-selection)))
   (add-hook 'vterm-mode-hook
-            #'my-codex--disable-vterm-editing-minor-modes)
+            #'my-codex--enable-vterm-buffer-integration)
+  (dolist (buffer (buffer-list))
+    (with-current-buffer buffer
+      (when (eq major-mode 'vterm-mode)
+        (my-codex--enable-vterm-buffer-integration))))
   (add-hook 'after-change-major-mode-hook
             #'my-codex--disable-vterm-editing-minor-modes
             100)
@@ -109,13 +111,17 @@
 (defun my-codex--disable-vterm-integration ()
   "Disable my-codex helpers for vterm."
   (remove-hook 'vterm-mode-hook
-               #'my-codex--disable-vterm-editing-minor-modes)
+               #'my-codex--enable-vterm-buffer-integration)
   (remove-hook 'after-change-major-mode-hook
                #'my-codex--disable-vterm-editing-minor-modes)
   (remove-hook 'vterm-copy-mode-hook
                #'my-codex--vterm-copy-mode-header-line)
+  (dolist (buffer (buffer-list))
+    (with-current-buffer buffer
+      (when (bound-and-true-p my-codex-vterm-override-mode)
+        (my-codex--disable-vterm-buffer-integration))))
   (my-codex--restore-vterm-copy-mode-lighter)
-  (my-codex--restore-vterm-keymap-bindings))
+  (force-mode-line-update t))
 
 ;;;###autoload
 (define-minor-mode my-codex-vterm-integration-mode

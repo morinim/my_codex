@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.90.1
+;; Version: 0.90.2
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -43,8 +43,6 @@
 (autoload 'vterm-copy-mode "vterm" nil t)
 (declare-function markdown-mode "markdown-mode")
 (declare-function projectile-toggle-between-implementation-and-test "projectile")
-(defvar vterm-mode-map)
-(defvar vterm-copy-mode-map)
 (defvar vterm-copy-mode)
 (defvar vterm-max-scrollback)
 
@@ -509,9 +507,6 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 
 (defvar my-codex--captured-selection nil
   "Text captured before opening a transient from an active region.")
-
-(defvar my-codex--vterm-integration-keymap-bindings nil
-  "Previous vterm key bindings replaced by `my-codex-vterm-integration-mode'.")
 
 (defvar my-codex--vterm-copy-mode-lighter :unset
   "Previous `vterm-copy-mode' lighter before my-codex changed it.")
