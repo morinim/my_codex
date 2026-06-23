@@ -32,6 +32,11 @@ It keeps your code on the left and the active agent CLI on the right, providing 
 - **Interactive UI**: insert agent output back into your code, and open clickable file references and URLs directly from the terminal.
 - **Diagnostics**: verify Emacs, agent binaries, vterm, and Git configuration using the `my-codex-doctor` health check.
 
+The package treats token cost as part of the workflow: it limits generated
+project context, warns before oversized prompts, references large regions by
+file and line range, and checks for Codex CLI settings that can bypass token
+usage optimisation.
+
 ## Requirements
 
 - Emacs 29.1 or newer.
