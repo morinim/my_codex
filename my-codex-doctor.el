@@ -31,6 +31,18 @@
 (declare-function my-codex-project-root "my-codex" ())
 (declare-function vterm-mode "vterm" ())
 
+(defface my-codex-doctor-info-face
+  '((t :inherit font-lock-doc-face))
+  "Face used for INFO labels in `my-codex-doctor'.")
+
+(defface my-codex-doctor-warn-face
+  '((t :inherit warning))
+  "Face used for WARN labels in `my-codex-doctor'.")
+
+(defface my-codex-doctor-fail-face
+  '((t :inherit error))
+  "Face used for FAIL labels in `my-codex-doctor'.")
+
 (defun my-codex--version>= (version minimum)
   "Return non-nil when VERSION is greater than or equal to MINIMUM."
   (not (version< version minimum)))
@@ -155,6 +167,95 @@ VTERM-LOADABLE is non-nil when `vterm' can be loaded."
     (list "Codex vterm scrollback" 'warn
           "Skipped; vterm cannot be loaded"))))
 
+(defun my-codex--doctor-toml-string-value (line key)
+  "Return KEY's TOML string value from LINE, or nil."
+  (when (string-match
+         (format "\\`[[:space:]]*%s[[:space:]]*=[[:space:]]*\\([\"']\\)\\([^\"']+\\)\\1"
+                 (regexp-quote key))
+         line)
+    (match-string 2 line)))
+
+(defun my-codex--doctor-toml-profile-table (line)
+  "Return the Codex profile name from a TOML table LINE, or nil."
+  (when (string-match
+         "\\`[[:space:]]*\\[profiles\\.\\(?:\"\\([^\"]+\\)\"\\|'\\([^']+\\)'\\|\\([[:alnum:]_.-]+\\)\\)\\][[:space:]]*\\(?:#.*\\)?\\'"
+         line)
+    (or (match-string 1 line)
+        (match-string 2 line)
+        (match-string 3 line))))
+
+(defun my-codex--doctor-codex-effective-service-tier ()
+  "Return the effective Codex CLI service_tier in the current buffer.
+The result is a cons of (TIER . SOURCE), or nil when unset."
+  (let (active-profile top-tier top-source profile-tiers current-profile
+                       (current-section 'top))
+    (goto-char (point-min))
+    (while (not (eobp))
+      (let ((line (buffer-substring-no-properties
+                   (line-beginning-position)
+                   (line-end-position))))
+        (cond
+         ((or (string-blank-p line)
+              (string-match-p "\\`[[:space:]]*#" line)))
+         ((string-match-p "\\`[[:space:]]*\\[" line)
+          (setq current-profile
+                (my-codex--doctor-toml-profile-table line))
+          (setq current-section (if current-profile 'profile 'other)))
+         ((eq current-section 'profile)
+          (when-let ((tier (my-codex--doctor-toml-string-value
+                            line "service_tier")))
+            (setf (alist-get current-profile profile-tiers nil nil #'equal)
+                  tier)))
+         ((eq current-section 'top)
+          (when-let ((profile (my-codex--doctor-toml-string-value
+                               line "profile")))
+            (setq active-profile profile))
+          (when-let ((tier (my-codex--doctor-toml-string-value
+                            line "service_tier")))
+            (setq top-tier tier)
+            (setq top-source "top level")))))
+      (forward-line 1))
+    (if-let* ((active-profile)
+              (tier (alist-get active-profile profile-tiers nil nil #'equal)))
+        (cons tier (format "profile %S" active-profile))
+      (when top-tier
+        (cons top-tier top-source)))))
+
+(defun my-codex--doctor-codex-config-file ()
+  "Return the Codex CLI config file path."
+  (expand-file-name
+   "config.toml"
+   (or (and-let* ((home (getenv "CODEX_HOME")))
+         (unless (string-empty-p home) home))
+       (expand-file-name ".codex" "~"))))
+
+(defun my-codex--doctor-codex-service-tier (&optional file)
+  "Return a diagnostic row for the Codex CLI service tier in FILE.
+When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
+  (let ((config-file (or file (my-codex--doctor-codex-config-file))))
+    (cond
+     ((not (file-exists-p config-file))
+      (list "Codex service_tier" 'ok
+            "Not configured; Codex default applies"))
+     ((not (file-readable-p config-file))
+      (list "Codex service_tier" 'warn
+            (format "Cannot read %s" config-file)))
+     (t
+      (with-temp-buffer
+        (insert-file-contents config-file)
+        (if-let ((tier-source
+                  (my-codex--doctor-codex-effective-service-tier)))
+            (let ((tier (car tier-source))
+                  (source (cdr tier-source)))
+              (if (string= tier "fast")
+                  (list "Codex service_tier" 'warn
+                        (format "fast in %s disables token usage optimisation; remove it or choose another tier"
+                                source))
+                (list "Codex service_tier" 'ok
+                      (format "Configured as %S in %s" tier source))))
+          (list "Codex service_tier" 'ok
+                "Not configured; Codex default applies")))))))
+
 (defun my-codex--doctor-rows ()
   "Return diagnostic rows for `my-codex-doctor'."
   (let* ((root (my-codex-project-root))
@@ -237,7 +338,8 @@ VTERM-LOADABLE is non-nil when `vterm' can be loaded."
               'warn)
             (if (file-exists-p (expand-file-name "AGENTS.md" root))
                 (expand-file-name "AGENTS.md" root)
-              (format "Not found in %s" root))))
+              (format "Not found in %s" root)))
+      (my-codex--doctor-codex-service-tier))
      (list
       (my-codex--doctor-command-status
        (format "agent %s read-only" my-codex-agent)
@@ -260,11 +362,16 @@ VTERM-LOADABLE is non-nil when `vterm' can be loaded."
 
 (defun my-codex--doctor-status-label (status)
   "Return display label for diagnostic STATUS."
-  (pcase status
-    ('ok "OK")
-    ('warn "WARN")
-    ('fail "FAIL")
-    (_ "INFO")))
+  (let ((label (pcase status
+                 ('ok "OK")
+                 ('warn "WARN")
+                 ('fail "FAIL")
+                 (_ "INFO"))))
+    (pcase status
+      ('warn (propertize label 'face 'my-codex-doctor-warn-face))
+      ('fail (propertize label 'face 'my-codex-doctor-fail-face))
+      ('ok label)
+      (_ (propertize label 'face 'my-codex-doctor-info-face)))))
 
 (defun my-codex--doctor-insert-row (row)
   "Insert diagnostic ROW in the current buffer."

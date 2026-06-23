@@ -1509,6 +1509,96 @@
           (set 'vterm-max-scrollback original-value)
         (makunbound 'vterm-max-scrollback)))))
 
+(ert-deftest my-codex-doctor-codex-service-tier-warns-for-fast ()
+  (let ((config (make-temp-file "my-codex-config-" nil ".toml")))
+    (unwind-protect
+        (progn
+          (with-temp-file config
+            (insert "service_tier = \"fast\"\n"))
+          (should
+           (equal
+            (my-codex--doctor-codex-service-tier config)
+            '("Codex service_tier" warn
+              "fast in top level disables token usage optimisation; remove it or choose another tier"))))
+      (delete-file config))))
+
+(ert-deftest my-codex-doctor-codex-service-tier-accepts-non-fast ()
+  (let ((config (make-temp-file "my-codex-config-" nil ".toml")))
+    (unwind-protect
+        (progn
+          (with-temp-file config
+            (insert "service_tier = \"auto\"\n"))
+          (should
+           (equal
+            (my-codex--doctor-codex-service-tier config)
+            '("Codex service_tier" ok
+              "Configured as \"auto\" in top level"))))
+      (delete-file config))))
+
+(ert-deftest my-codex-doctor-codex-service-tier-respects-codex-home ()
+  (let* ((codex-home (make-temp-file "my-codex-home-" t))
+         (config (expand-file-name "config.toml" codex-home))
+         (process-environment (cons (format "CODEX_HOME=%s" codex-home)
+                                    process-environment)))
+    (unwind-protect
+        (progn
+          (with-temp-file config
+            (insert "service_tier = \"fast\"\n"))
+          (should
+           (equal
+            (my-codex--doctor-codex-service-tier)
+            '("Codex service_tier" warn
+              "fast in top level disables token usage optimisation; remove it or choose another tier"))))
+      (delete-directory codex-home t))))
+
+(ert-deftest my-codex-doctor-codex-service-tier-ignores-inactive-profile ()
+  (let ((config (make-temp-file "my-codex-config-" nil ".toml")))
+    (unwind-protect
+        (progn
+          (with-temp-file config
+            (insert "profile = \"default\"\n"
+                    "\n"
+                    "[profiles.default]\n"
+                    "service_tier = \"auto\"\n"
+                    "\n"
+                    "[profiles.fast-profile]\n"
+                    "service_tier = \"fast\"\n"))
+          (should
+           (equal
+            (my-codex--doctor-codex-service-tier config)
+            '("Codex service_tier" ok
+              "Configured as \"auto\" in profile \"default\""))))
+      (delete-file config))))
+
+(ert-deftest my-codex-doctor-codex-service-tier-honours-active-profile ()
+  (let ((config (make-temp-file "my-codex-config-" nil ".toml")))
+    (unwind-protect
+        (progn
+          (with-temp-file config
+            (insert "profile = \"fast-profile\"\n"
+                    "service_tier = \"auto\"\n"
+                    "\n"
+                    "[profiles.default]\n"
+                    "service_tier = \"auto\"\n"
+                    "\n"
+                    "[profiles.fast-profile]\n"
+                    "service_tier = \"fast\"\n"))
+          (should
+           (equal
+            (my-codex--doctor-codex-service-tier config)
+            '("Codex service_tier" warn
+              "fast in profile \"fast-profile\" disables token usage optimisation; remove it or choose another tier"))))
+      (delete-file config))))
+
+(ert-deftest my-codex-doctor-codex-service-tier-accepts-missing-config ()
+  (let ((config (make-temp-file "my-codex-config-" nil ".toml")))
+    (delete-file config)
+    (should
+     (equal
+      (my-codex--doctor-codex-service-tier config)
+      '("Codex service_tier" ok
+        "Not configured; Codex default applies")))))
+
 (ert-deftest my-codex-project-tree-lines-renders-compact-tree ()
   (let ((my-codex-project-overview-tree-max-entries 2))
     (should
