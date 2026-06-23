@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.20.0
+;; Version: 0.90.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -215,6 +215,11 @@ When nil, use `compile-command'."
 Identify missing edge cases, unhandled exceptions, logical flaws and important behaviour that is not currently tested. Do not edit or write tests; list missing scenarios only."
   "Prompt used by `my-codex-analyse-test-coverage'."
   :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-flycheck-diagnostics-limit 100
+  "Maximum number of Flycheck diagnostics to include in one Codex prompt."
+  :type 'natnum
   :group 'my-codex)
 
 (defcustom my-codex-refactor-plan-prompt
@@ -1827,6 +1832,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
   "D"       #'my-codex-ediff-changed-file-against-head
   "c"       #'my-codex-git-commit-with-latest-message
   "e"       #'my-codex-explain-region-as-error
+  "E"       #'my-codex-explain-buffer-diagnostics
   "i"       #'my-codex-open-project-instructions
   "p"       #'my-codex-send-project-overview
   "X"       #'my-codex-export-session-to-markdown
@@ -1881,6 +1887,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     ("c" "Commit with Codex message" my-codex-git-commit-with-latest-message)]
    ["Context"
     ("e" "Explain error" my-codex-explain-region-as-error)
+    ("E" "Explain diagnostics" my-codex-explain-buffer-diagnostics)
     ("i" "Project instructions" my-codex-open-project-instructions)
     ("X" "Export session" my-codex-export-session-to-markdown)
     ("M" "Summarize session" my-codex-summarize-session-to-markdown)

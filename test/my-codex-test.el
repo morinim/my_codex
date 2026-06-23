@@ -7,7 +7,39 @@
 (require 'ert)
 (require 'my-codex)
 
+(defvar flycheck-current-errors)
+(defvar flycheck-mode)
 (defvar my-codex-language)
+
+(defmacro my-codex-test--with-mock-flycheck (diagnostics &rest body)
+  "Run BODY with mocked Flycheck DIAGNOSTICS."
+  (declare (indent 1))
+  `(let ((flycheck-mode t)
+         (flycheck-current-errors ,diagnostics))
+     (cl-letf (((symbol-function 'flycheck-error-<)
+                (lambda (left right)
+                  (let ((left-line (or (plist-get left :line) 1))
+                        (right-line (or (plist-get right :line) 1))
+                        (left-column (or (plist-get left :column) 1))
+                        (right-column (or (plist-get right :column) 1)))
+                    (if (/= left-line right-line)
+                        (< left-line right-line)
+                      (< left-column right-column)))))
+               ((symbol-function 'flycheck-error-checker)
+                (lambda (diagnostic) (plist-get diagnostic :checker)))
+               ((symbol-function 'flycheck-error-column)
+                (lambda (diagnostic) (plist-get diagnostic :column)))
+               ((symbol-function 'flycheck-error-filename)
+                (lambda (diagnostic) (plist-get diagnostic :filename)))
+               ((symbol-function 'flycheck-error-id)
+                (lambda (diagnostic) (plist-get diagnostic :id)))
+               ((symbol-function 'flycheck-error-level)
+                (lambda (diagnostic) (plist-get diagnostic :level)))
+               ((symbol-function 'flycheck-error-line)
+                (lambda (diagnostic) (plist-get diagnostic :line)))
+               ((symbol-function 'flycheck-error-message)
+                (lambda (diagnostic) (plist-get diagnostic :message))))
+       ,@body)))
 
 (ert-deftest my-codex-clean-commit-message-body-lines-fills-paragraphs ()
   (let ((my-codex-commit-message-fill-column 34))
@@ -1539,6 +1571,98 @@
       (should unsaved-pos)
       (should (< files-pos status-pos))
       (should (< status-pos unsaved-pos)))))
+
+(ert-deftest my-codex-flycheck-diagnostics-sorts-current-errors ()
+  (let ((diagnostics
+         '((:line 10 :column 1 :message "third")
+           (:line 2 :column 8 :message "second")
+           (:line 2 :column 3 :message "first"))))
+    (my-codex-test--with-mock-flycheck diagnostics
+      (should
+       (equal
+        (mapcar (lambda (diagnostic)
+                  (plist-get diagnostic :message))
+                (my-codex--flycheck-diagnostics))
+        '("first" "second" "third"))))))
+
+(ert-deftest my-codex-flycheck-diagnostics-errors-when-inactive ()
+  (let ((flycheck-mode nil)
+        (flycheck-current-errors nil))
+    (should-error
+     (my-codex--flycheck-diagnostics)
+     :type 'user-error)))
+
+(ert-deftest my-codex-flycheck-diagnostics-prompt-formats-diagnostics ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-flycheck" t))))
+    (unwind-protect
+        (with-temp-buffer
+          (let ((file (expand-file-name "src/example.el" root)))
+            (setq buffer-file-name file)
+            (my-codex-test--with-mock-flycheck
+                `((:filename ,file
+                   :line 7
+                   :column 11
+                   :level warning
+                   :checker emacs-lisp
+                   :id "free-vars"
+                   :message "reference to free variable `value'"))
+              (cl-letf (((symbol-function 'my-codex-project-root)
+                         (lambda () root)))
+                (let* ((my-codex-flycheck-diagnostics-limit 100)
+                       (prompt (my-codex--flycheck-diagnostics-prompt
+                                (my-codex--flycheck-diagnostics))))
+                  (should
+                   (string-match-p
+                    "Analyse these Flycheck diagnostics as a batch" prompt))
+                  (should (string-match-p "source: Flycheck" prompt))
+                  (should (string-match-p "diagnostic_count: 1" prompt))
+                  (should (string-match-p "truncated: false" prompt))
+                  (should (string-match-p "file: \"src/example\\.el\"" prompt))
+                  (should (string-match-p "line: 7" prompt))
+                  (should (string-match-p "column: 11" prompt))
+                  (should (string-match-p "severity: \"warning\"" prompt))
+                  (should (string-match-p "checker: \"emacs-lisp\"" prompt))
+                  (should (string-match-p "id: \"free-vars\"" prompt))
+                  (should
+                   (string-match-p
+                    "message: \"reference to free variable `value'\""
+                    prompt)))))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-flycheck-diagnostics-prompt-reports-truncation ()
+  (let ((my-codex-flycheck-diagnostics-limit 2)
+        (diagnostics
+         '((:line 1 :column 1 :level error :checker mock :message "first")
+           (:line 2 :column 1 :level error :checker mock :message "second")
+           (:line 3 :column 1 :level error :checker mock :message "third"))))
+    (my-codex-test--with-mock-flycheck diagnostics
+      (cl-letf (((symbol-function 'my-codex-project-root)
+                 (lambda () "/repo/")))
+        (let ((prompt (my-codex--flycheck-diagnostics-prompt diagnostics)))
+          (should (string-match-p "diagnostic_count: 3" prompt))
+          (should (string-match-p "included_count: 2" prompt))
+          (should (string-match-p "truncated: true" prompt))
+          (should (string-match-p "message: \"first\"" prompt))
+          (should (string-match-p "message: \"second\"" prompt))
+          (should-not (string-match-p "message: \"third\"" prompt)))))))
+
+(ert-deftest my-codex-explain-buffer-diagnostics-sends-flycheck-prompt ()
+  (let ((diagnostics
+         '((:line 1
+            :column 2
+            :level error
+            :checker mock-checker
+            :message "broken")))
+        sent)
+    (my-codex-test--with-mock-flycheck diagnostics
+      (cl-letf (((symbol-function 'my-codex-project-root)
+                 (lambda () "/repo/"))
+                ((symbol-function 'my-codex--preview-and-send-prompt)
+                 (lambda (prompt) (setq sent prompt))))
+        (my-codex-explain-buffer-diagnostics)
+        (should sent)
+        (should (string-match-p "source: Flycheck" sent))
+        (should (string-match-p "message: \"broken\"" sent))))))
 
 (ert-deftest my-codex-xref-items-section-formats-relative-excerpts ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-xref" t))))

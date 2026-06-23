@@ -21,6 +21,7 @@
 (defvar my-codex--captured-selection)
 (defvar my-codex--prompt-preview-origin-window)
 (defvar my-codex-enable-prompt-preview)
+(defvar my-codex-flycheck-diagnostics-limit)
 (defvar my-codex-large-prompt-error-chars)
 (defvar my-codex-large-prompt-warning-chars)
 (defvar my-codex-project-instruction-files)
@@ -33,6 +34,8 @@
 (defvar my-codex-symbol-xref-definition-limit)
 (defvar my-codex-symbol-xref-reference-limit)
 (defvar my-codex-test-coverage-prompt)
+(defvar flycheck-current-errors)
+(defvar flycheck-mode)
 
 (declare-function my-codex--project-files "my-codex-git" (root))
 (declare-function my-codex--active-agent "my-codex" (&optional root))
@@ -44,6 +47,14 @@
 (declare-function my-codex-buffer "my-codex" ())
 (declare-function my-codex-current-buffer-name "my-codex" ())
 (declare-function my-codex-project-root "my-codex" ())
+(declare-function flycheck-error-< "flycheck" (err1 err2))
+(declare-function flycheck-error-checker "flycheck" (err))
+(declare-function flycheck-error-column "flycheck" (err))
+(declare-function flycheck-error-filename "flycheck" (err))
+(declare-function flycheck-error-id "flycheck" (err))
+(declare-function flycheck-error-level "flycheck" (err))
+(declare-function flycheck-error-line "flycheck" (err))
+(declare-function flycheck-error-message "flycheck" (err))
 
 (defun my-codex--approx-token-count (text)
   "Return a rough token count estimate for TEXT."
@@ -492,6 +503,96 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
   (my-codex--preview-and-send-prompt
    (format "Explain this compiler/test error and suggest the most likely fix:\n\n%s"
            (buffer-substring-no-properties (region-beginning) (region-end)))))
+
+(defun my-codex--flycheck-available-p ()
+  "Return non-nil when Flycheck diagnostics are available in this buffer."
+  (and (bound-and-true-p flycheck-mode)
+       (boundp 'flycheck-current-errors)
+       (fboundp 'flycheck-error-<)
+       (fboundp 'flycheck-error-line)
+       (fboundp 'flycheck-error-message)))
+
+(defun my-codex--flycheck-diagnostics ()
+  "Return current Flycheck diagnostics sorted by location."
+  (unless (my-codex--flycheck-available-p)
+    (user-error "Flycheck is not active in this buffer"))
+  (let ((diagnostics (sort (copy-sequence flycheck-current-errors)
+                           #'flycheck-error-<)))
+    (unless diagnostics
+      (user-error "No Flycheck diagnostics in this buffer"))
+    diagnostics))
+
+(defun my-codex--flycheck-diagnostic-file (diagnostic root)
+  "Return DIAGNOSTIC file name relative to ROOT when possible."
+  (let ((file (or (flycheck-error-filename diagnostic)
+                  buffer-file-name)))
+    (cond
+     ((and file root (file-in-directory-p file root))
+      (file-relative-name file root))
+     (file file)
+     (t (buffer-name)))))
+
+(defun my-codex--flycheck-diagnostic-entry (diagnostic root)
+  "Return a YAML-ish entry for Flycheck DIAGNOSTIC relative to ROOT."
+  (let ((id (flycheck-error-id diagnostic)))
+    (string-join
+     (delq nil
+           (list
+            (format "  - file: %s"
+                    (my-codex--yaml-string
+                     (my-codex--flycheck-diagnostic-file diagnostic root)))
+            (format "    line: %s"
+                    (or (flycheck-error-line diagnostic) "unknown"))
+            (format "    column: %s"
+                    (or (flycheck-error-column diagnostic) "unknown"))
+            (format "    severity: %s"
+                    (my-codex--yaml-string
+                     (format "%s" (flycheck-error-level diagnostic))))
+            (format "    checker: %s"
+                    (my-codex--yaml-string
+                     (format "%s" (flycheck-error-checker diagnostic))))
+            (when id
+              (format "    id: %s" (my-codex--yaml-string (format "%s" id))))
+            (format "    message: %s"
+                    (my-codex--yaml-string
+                     (or (flycheck-error-message diagnostic) "")))))
+     "\n")))
+
+(defun my-codex--flycheck-diagnostics-prompt (diagnostics)
+  "Return a Codex prompt for Flycheck DIAGNOSTICS."
+  (let* ((root (my-codex-project-root))
+         (limit my-codex-flycheck-diagnostics-limit)
+         (total (length diagnostics))
+         (included (if limit (min limit total) total))
+         (truncated (> total included))
+         (selected (seq-take diagnostics included)))
+    (format
+     (concat "Analyse these Flycheck diagnostics as a batch.\n\n"
+             "Identify common root causes, cascade errors, missing imports/"
+             "includes/types/configuration, and the smallest likely fix that "
+             "would remove the largest number of diagnostics. Do not propose "
+             "one fix per diagnostic unless they are genuinely unrelated.\n\n"
+             "source: Flycheck\n"
+             "diagnostic_count: %d\n"
+             "included_count: %d\n"
+             "truncated: %s\n"
+             "diagnostics:\n%s")
+     total
+     included
+     (if truncated "true" "false")
+     (string-join
+      (mapcar (lambda (diagnostic)
+                (my-codex--flycheck-diagnostic-entry diagnostic root))
+              selected)
+      "\n"))))
+
+;;;###autoload
+(defun my-codex-explain-buffer-diagnostics ()
+  "Ask Codex to analyse current buffer Flycheck diagnostics as a batch."
+  (interactive)
+  (my-codex--preview-and-send-prompt
+   (my-codex--flycheck-diagnostics-prompt
+    (my-codex--flycheck-diagnostics))))
 
 (defun my-codex--region-file-reference (beg end)
   "Return a Codex file reference for the region between BEG and END."
