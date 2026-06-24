@@ -28,6 +28,7 @@
 (defvar my-codex-prompt-presets)
 (defvar my-codex-refactor-plan-prompt)
 (defvar my-codex-region-reference-threshold-chars)
+(defvar my-codex-region-send-policy)
 (defvar my-codex-symbol-context-lines)
 (defvar my-codex-symbol-include-xref-context)
 (defvar my-codex-symbol-xref-context-lines)
@@ -648,8 +649,12 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
        (verify-visited-file-modtime (current-buffer))
        (my-codex--project-relative-file buffer-file-name
                                         (my-codex-project-root))
-       my-codex-region-reference-threshold-chars
-       (> (- end beg) my-codex-region-reference-threshold-chars)))
+       (pcase my-codex-region-send-policy
+         ('prefer-reference t)
+         ('automatic
+          (and my-codex-region-reference-threshold-chars
+               (> (- end beg) my-codex-region-reference-threshold-chars)))
+         (_ nil))))
 
 (defun my-codex--region-review-reference-prompt (beg end)
   "Return a region review prompt that references BEG to END by file range."

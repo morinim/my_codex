@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.92.1
+;; Version: 0.93.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -328,10 +328,23 @@ When nil, do not enforce a hard prompt size limit."
                  natnum)
   :group 'my-codex)
 
+(defcustom my-codex-region-send-policy 'prefer-reference
+  "How selected regions are sent to Codex.
+When `prefer-reference', send a file reference whenever the selected
+region can be read safely from a saved project file, falling back to
+inline text otherwise.  When `automatic', use
+`my-codex-region-reference-threshold-chars'.  When `prefer-inline',
+send selected text inline."
+  :type '(choice (const :tag "Prefer file references" prefer-reference)
+                 (const :tag "Automatic by size" automatic)
+                 (const :tag "Prefer inline text" prefer-inline))
+  :group 'my-codex)
+
 (defcustom my-codex-region-reference-threshold-chars 5000
   "Region size in characters that sends a file reference instead of text.
-This only applies to file-visiting buffers.  When nil, always send
-selected region text from `my-codex-send-region'."
+This only applies when `my-codex-region-send-policy' is `automatic',
+and only to file-visiting buffers.  When nil, automatic mode always
+sends selected region text from `my-codex-send-region'."
   :type '(choice (const :tag "Always send selected text" nil)
                  natnum)
   :group 'my-codex)

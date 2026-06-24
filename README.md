@@ -33,9 +33,9 @@ It keeps your code on the left and the active agent CLI on the right, providing 
 - **Diagnostics**: verify Emacs, agent binaries, vterm, and Git configuration using the `my-codex-doctor` health check.
 
 The package treats token cost as part of the workflow: it limits generated
-project context, warns before oversized prompts, references large regions by
-file and line range, and checks for Codex CLI settings that can bypass token
-usage optimisation.
+project context, warns before oversized prompts, references saved project-file
+regions by file and line range, and checks for Codex CLI settings that can
+bypass token usage optimisation.
 
 ## Requirements
 
@@ -112,6 +112,7 @@ Configure options via `M-x customize-group RET my-codex RET`.
 
 ;; Prompt & warning thresholds
 (setq my-codex-enable-prompt-preview t)
+(setq my-codex-region-send-policy 'prefer-reference)
 (setq my-codex-large-prompt-warning-chars 12000)
 (setq my-codex-warn-about-unsaved-project-buffers t)
 ```
