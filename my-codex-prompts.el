@@ -569,6 +569,32 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
                      (or (flycheck-error-message diagnostic) "")))))
      "\n")))
 
+(defun my-codex--flycheck-diagnostic-at-point (diagnostics)
+  "Return the most relevant Flycheck diagnostic at point from DIAGNOSTICS."
+  (let* ((line (line-number-at-pos nil t))
+         (column (current-column))
+         (line-diagnostics
+          (seq-filter
+           (lambda (diagnostic)
+             (and (equal (flycheck-error-line diagnostic) line)
+                  (let ((file (flycheck-error-filename diagnostic)))
+                    (or (not file)
+                        (and buffer-file-name
+                             (string= (expand-file-name file)
+                                      (expand-file-name buffer-file-name)))))))
+           diagnostics)))
+    (unless line-diagnostics
+      (user-error "No Flycheck diagnostic at point"))
+    (car
+     (sort
+      line-diagnostics
+      (lambda (left right)
+        (let ((left-distance
+               (abs (- (or (flycheck-error-column left) 1) (1+ column))))
+              (right-distance
+               (abs (- (or (flycheck-error-column right) 1) (1+ column)))))
+          (< left-distance right-distance)))))))
+
 (defun my-codex--flycheck-diagnostics-by-file (diagnostics root)
   "Return DIAGNOSTICS grouped by file relative to ROOT."
   (let ((groups nil))
@@ -616,6 +642,28 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
       (mapcar #'my-codex--flycheck-diagnostic-file-entry
               (my-codex--flycheck-diagnostics-by-file selected root))
       "\n"))))
+
+(defun my-codex--flycheck-diagnostic-at-point-prompt (diagnostic)
+  "Return an agent prompt for a single Flycheck DIAGNOSTIC."
+  (let* ((root (my-codex-project-root))
+         (file (my-codex--flycheck-diagnostic-file diagnostic root)))
+    (format
+     (concat "Explain this Flycheck diagnostic and suggest the most likely "
+             "fix. Inspect the file directly if needed. Do not edit files.\n\n"
+             "source: Flycheck\n"
+             "file: %s\n"
+             "diagnostic:\n%s")
+     (my-codex--yaml-string file)
+     (my-codex--flycheck-diagnostic-entry diagnostic))))
+
+;;;###autoload
+(defun my-codex-explain-diagnostic-at-point ()
+  "Ask the agent to explain the Flycheck diagnostic at point."
+  (interactive)
+  (my-codex--preview-and-send-prompt
+   (my-codex--flycheck-diagnostic-at-point-prompt
+    (my-codex--flycheck-diagnostic-at-point
+     (my-codex--flycheck-diagnostics)))))
 
 ;;;###autoload
 (defun my-codex-explain-buffer-diagnostics ()

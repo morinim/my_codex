@@ -1725,6 +1725,89 @@ Do not modify files."))))
      (my-codex--flycheck-diagnostics)
      :type 'user-error)))
 
+(ert-deftest my-codex-flycheck-diagnostic-at-point-selects-nearest-column ()
+  (let ((diagnostics
+         '((:line 2 :column 4 :message "left")
+           (:line 2 :column 12 :message "right")
+           (:line 3 :column 1 :message "other"))))
+    (with-temp-buffer
+      (insert "one\n012345678901234\nthree\n")
+      (goto-char (point-min))
+      (forward-line 1)
+      (move-to-column 10)
+      (my-codex-test--with-mock-flycheck diagnostics
+        (should
+         (equal
+          (plist-get
+           (my-codex--flycheck-diagnostic-at-point
+            (my-codex--flycheck-diagnostics))
+           :message)
+          "right"))))))
+
+(ert-deftest my-codex-flycheck-diagnostic-at-point-uses-absolute-line-in-narrowed-buffer ()
+  (let ((diagnostics
+         '((:line 2 :column 1 :message "wrong-relative-line")
+           (:line 4 :column 1 :message "absolute-line"))))
+    (with-temp-buffer
+      (insert "one\ntwo\nthree\nfour\nfive\n")
+      (narrow-to-region (save-excursion
+                          (goto-char (point-min))
+                          (forward-line 2)
+                          (point))
+                        (point-max))
+      (goto-char (point-min))
+      (forward-line 1)
+      (my-codex-test--with-mock-flycheck diagnostics
+        (should
+         (equal
+          (plist-get
+           (my-codex--flycheck-diagnostic-at-point
+            (my-codex--flycheck-diagnostics))
+           :message)
+          "absolute-line"))))))
+
+(ert-deftest my-codex-flycheck-diagnostic-at-point-ignores-other-files ()
+  (let* ((root (file-name-as-directory (make-temp-file "my-codex-flycheck" t)))
+         (current-file (expand-file-name "src/current.el" root))
+         (other-file (expand-file-name "src/other.el" root))
+         (diagnostics
+          `((:filename ,other-file
+             :line 2
+             :column 10
+             :message "other-file")
+            (:filename ,current-file
+             :line 2
+             :column 1
+             :message "current-file"))))
+    (unwind-protect
+        (with-temp-buffer
+          (setq buffer-file-name current-file)
+          (insert "one\ntwo\n")
+          (goto-char (point-min))
+          (forward-line 1)
+          (move-to-column 9)
+          (my-codex-test--with-mock-flycheck diagnostics
+            (should
+             (equal
+              (plist-get
+               (my-codex--flycheck-diagnostic-at-point
+                (my-codex--flycheck-diagnostics))
+               :message)
+              "current-file"))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-flycheck-diagnostic-at-point-errors-without-current-line-diagnostic ()
+  (let ((diagnostics '((:line 3 :column 1 :message "other"))))
+    (with-temp-buffer
+      (insert "one\ntwo\nthree\n")
+      (goto-char (point-min))
+      (forward-line 1)
+      (my-codex-test--with-mock-flycheck diagnostics
+        (should-error
+         (my-codex--flycheck-diagnostic-at-point
+          (my-codex--flycheck-diagnostics))
+         :type 'user-error)))))
+
 (ert-deftest my-codex-flycheck-diagnostics-prompt-formats-diagnostics ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-flycheck" t))))
     (unwind-protect
@@ -1783,6 +1866,36 @@ Do not modify files."))))
                                 start (match-end 0)))
                         count))))))))
       (delete-directory root t))))
+
+(ert-deftest my-codex-explain-diagnostic-at-point-sends-single-flycheck-prompt ()
+  (let ((diagnostics
+         '((:line 1
+            :column 2
+            :level error
+            :checker mock-checker
+            :message "broken")
+           (:line 2
+            :column 1
+            :level warning
+            :checker mock-checker
+            :message "other")))
+        sent)
+    (with-temp-buffer
+      (insert "broken\nother\n")
+      (goto-char (point-min))
+      (my-codex-test--with-mock-flycheck diagnostics
+        (cl-letf (((symbol-function 'my-codex-project-root)
+                   (lambda () "/repo/"))
+                  ((symbol-function 'my-codex--preview-and-send-prompt)
+                   (lambda (prompt) (setq sent prompt))))
+          (my-codex-explain-diagnostic-at-point)
+          (should sent)
+          (should
+           (string-match-p
+            "Explain this Flycheck diagnostic" sent))
+          (should (string-match-p "source: Flycheck" sent))
+          (should (string-match-p "message: \"broken\"" sent))
+          (should-not (string-match-p "message: \"other\"" sent)))))))
 
 (ert-deftest my-codex-flycheck-diagnostics-prompt-reports-truncation ()
   (let ((my-codex-flycheck-diagnostics-limit 2)

@@ -73,7 +73,7 @@ Press `F8` to open the agent command menu.
 - `F8 s` (or `F8 Right`) / `F8 R` : send the selected region, or draft a low-risk refactoring plan for it.
 - `F8 Left` / `F8 TAB` : insert agent text into code, or toggle focus between code and agent.
 - `F8 f` / `F8 C` / `F8 p` : ask the agent to inspect the current file, analyze test coverage, or orient itself in the project.
-- `F8 x` / `F8 e` : explain the symbol at point, or explain a selected error.
+- `F8 x` / `F8 e` / `F8 E` : explain the symbol at point, selected error, or Flycheck diagnostics.
 
 ### Git & GitHub Workflow
 - `F8 g` / `F8 G` : review the current Git diff or the staged Git diff.

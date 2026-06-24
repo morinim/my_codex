@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.93.1
+;; Version: 0.94.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -18,7 +18,8 @@
 
 ;; my-codex.el runs OpenAI Codex CLI or Google Antigravity inside an Emacs
 ;; vterm buffer.  It provides a two-column layout, project-specific agent
-;; sessions, helpers for Git diffs, selected regions, and compiler errors.
+;; sessions, helpers for Git diffs, selected regions, diagnostics, build
+;; output, and compiler or test errors.
 
 ;;; Code:
 
@@ -1840,7 +1841,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
   "D"       #'my-codex-ediff-changed-file-against-head
   "c"       #'my-codex-git-commit-with-latest-message
   "e"       #'my-codex-explain-region-as-error
-  "E"       #'my-codex-explain-buffer-diagnostics
+  "E"       #'my-codex-diagnostics-transient
   "i"       #'my-codex-open-project-instructions
   "p"       #'my-codex-send-project-overview
   "X"       #'my-codex-export-session-to-markdown
@@ -1863,6 +1864,13 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     ("n" "New named" my-codex-new-session)
     ("r" "Resume" my-codex-resume)
     ("q" "Hide agent" my-codex-restore-session-layout)]])
+
+;;;###autoload
+(transient-define-prefix my-codex-diagnostics-transient ()
+  "Show diagnostic explanation commands."
+  [["Diagnostics"
+    ("p" "At point" my-codex-explain-diagnostic-at-point)
+    ("a" "All" my-codex-explain-buffer-diagnostics)]])
 
 ;;;###autoload
 (transient-define-prefix my-codex-transient ()
@@ -1895,7 +1903,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     ("c" "Commit with agent message" my-codex-git-commit-with-latest-message)]
    ["Context"
     ("e" "Explain error" my-codex-explain-region-as-error)
-    ("E" "Explain diagnostics" my-codex-explain-buffer-diagnostics)
+    ("E" "Diagnostics" my-codex-diagnostics-transient)
     ("i" "Project instructions" my-codex-open-project-instructions)
     ("X" "Export session" my-codex-export-session-to-markdown)
     ("M" "Summarize session" my-codex-summarize-session-to-markdown)
@@ -2060,6 +2068,9 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       :keys "F8 e"
       :active (use-region-p)
       :help "Ask the active agent to explain the selected compiler/test error"]
+     ["Explain diagnostics" my-codex-diagnostics-transient
+      :keys "F8 E"
+      :help "Open diagnostic explanation commands"]
      ["Open project instructions" my-codex-open-project-instructions
       :keys "F8 i"
       :help "Open AGENTS.md, CODEX.md, or .codex/instructions.md"]
