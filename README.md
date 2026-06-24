@@ -28,7 +28,7 @@ It keeps your code on the left and the active agent CLI on the right, providing 
 - **Side-by-Side Layout**: code on the left, interactive agent terminal on the right.
 - **Context-Aware Prompts**: send regions, files, Git diffs, compiler errors, or project structure overviews directly to the agent.
 - **Refactoring & Coverage**: draft low-risk refactoring plans for file ranges and analyze implementation files against tests for missing coverage.
-- **Integration Tools**: export session transcripts, summarize transcripts into Markdown notes, and draft commits or GitHub issues directly from Emacs.
+- **Integration Tools**: export session transcripts, summarize conversations into Markdown notes, and draft commits or GitHub issues directly from Emacs.
 - **Interactive UI**: insert agent output back into your code, and open clickable file references and URLs directly from the terminal.
 - **Diagnostics**: verify Emacs, agent binaries, vterm, and Git configuration using the `my-codex-doctor` health check.
 

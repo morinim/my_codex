@@ -24,8 +24,7 @@
 (declare-function my-codex--session-export-mode "my-codex" ())
 (declare-function my-codex--session-summary-prompt
                   "my-codex"
-                  (summary-prompt transcript begin-marker end-marker
-                                  &optional placeholder))
+                  (summary-prompt begin-marker end-marker &optional placeholder))
 (declare-function my-codex--unique-output-markers "my-codex" (name))
 (declare-function my-codex--wait-for-session-summary
                   "my-codex-git"
@@ -34,7 +33,6 @@
 (declare-function my-codex-buffer "my-codex" ())
 (declare-function my-codex-project-root "my-codex" ())
 (declare-function my-codex-send-prompt "my-codex-prompts" (prompt))
-(declare-function my-codex-session-transcript "my-codex" ())
 
 (defun my-codex--github-issue-output-buffer-name (root)
   "Return the GitHub issue process buffer name for ROOT."
@@ -305,24 +303,21 @@
 
 ;;;###autoload
 (defun my-codex-summarize-session-to-github-issue ()
-  "Ask Codex to draft a GitHub issue from the current session.
+  "Ask Codex to draft a GitHub issue from the current conversation.
 Open an editable issue draft before running `gh issue create'."
   (interactive)
   (let* ((root (my-codex-project-root))
          (buffer (my-codex-buffer))
-         (transcript (my-codex-session-transcript))
          (markers (my-codex--unique-output-markers "GITHUB_ISSUE_DRAFT"))
          (begin-marker (car markers))
          (end-marker (cdr markers)))
     (unless (executable-find "gh")
       (user-error "GitHub CLI `gh' not found in exec-path"))
-    (when (string-empty-p transcript)
-      (user-error "Codex session transcript is empty"))
     (let ((start-point (with-current-buffer buffer
                          (copy-marker (point-max))))
           (prompt (my-codex--session-summary-prompt
                    my-codex-github-issue-summary-prompt
-                   transcript begin-marker end-marker
+                   begin-marker end-marker
                    "<GitHub issue draft here>")))
       (with-current-buffer buffer
         (setq my-codex--session-summary-request-marker start-point))

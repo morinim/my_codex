@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.91.0
+;; Version: 0.92.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -362,7 +362,7 @@ selected region text from `my-codex-send-region'."
   :group 'my-codex)
 
 (defcustom my-codex-session-summary-prompt
-  "Summarise this Codex session transcript into useful project notes.
+  "Summarise our conversation so far into useful project notes.
 
 Focus on:
 - decisions made
@@ -377,7 +377,7 @@ Preserve concrete file names, command names, and technical details. Do not edit 
   :group 'my-codex)
 
 (defcustom my-codex-github-issue-summary-prompt
-  "Summarise this Codex session transcript as a GitHub issue draft.
+  "Summarise our conversation so far as a GitHub issue draft.
 
 Focus on:
 - concrete problem or feature context
@@ -1742,19 +1742,15 @@ shown between them as an example."
     (insert "\n" fence "\n")))
 
 (defun my-codex--session-summary-prompt
-    (summary-prompt transcript begin-marker end-marker &optional placeholder)
+    (summary-prompt begin-marker end-marker &optional placeholder)
   "Return a marked session summary prompt.
-SUMMARY-PROMPT describes the requested summary.  TRANSCRIPT is the
-cleaned Codex transcript.  BEGIN-MARKER and END-MARKER delimit the answer.
-PLACEHOLDER is shown inside the output markers."
-  (let ((fence (my-codex--markdown-code-fence transcript)))
-    (format "%s\n\n%s\n\nRaw transcript:\n\n%stext\n%s\n%s"
-            summary-prompt
-            (my-codex--marked-output-instructions
-             begin-marker end-marker (or placeholder "<Markdown notes here>"))
-            fence
-            transcript
-            fence)))
+SUMMARY-PROMPT describes the requested summary.  BEGIN-MARKER and
+END-MARKER delimit the answer.  PLACEHOLDER is shown inside the output
+markers."
+  (format "%s\n\n%s"
+          summary-prompt
+          (my-codex--marked-output-instructions
+           begin-marker end-marker (or placeholder "<Markdown notes here>"))))
 
 ;;;###autoload
 (defun my-codex-export-session-to-markdown ()
@@ -1779,22 +1775,19 @@ PLACEHOLDER is shown inside the output markers."
 
 ;;;###autoload
 (defun my-codex-summarize-session-to-markdown ()
-  "Ask Codex to summarize the current session transcript as Markdown notes.
+  "Ask Codex to summarize the current conversation as Markdown notes.
 Open the generated notes in an editable Markdown buffer when they are ready."
   (interactive)
   (let* ((root (my-codex-project-root))
          (buffer (my-codex-buffer))
-         (transcript (my-codex-session-transcript))
          (markers (my-codex--unique-output-markers "SESSION_SUMMARY"))
          (begin-marker (car markers))
          (end-marker (cdr markers)))
-    (when (string-empty-p transcript)
-      (user-error "Codex session transcript is empty"))
     (let ((start-point (with-current-buffer buffer
                          (copy-marker (point-max))))
           (prompt (my-codex--session-summary-prompt
                    my-codex-session-summary-prompt
-                   transcript begin-marker end-marker)))
+                   begin-marker end-marker)))
       (with-current-buffer buffer
         (setq my-codex--session-summary-request-marker start-point))
       (my-codex-send-prompt prompt)
@@ -2055,7 +2048,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       :help "Export the current Codex session transcript to a Markdown buffer"]
      ["Summarize session to Markdown" my-codex-summarize-session-to-markdown
       :keys "F8 M"
-      :help "Ask Codex to summarize the current session transcript as Markdown notes"]
+      :help "Ask Codex to summarize the current conversation as Markdown notes"]
      ["Run health check" my-codex-doctor
       :keys "F8 !"
       :help "Check Emacs, Codex, vterm, Git, gh, project, configuration, and terminal startup"])
