@@ -24,8 +24,6 @@
 (defvar my-codex-commit-message-prompt-template)
 (defvar my-codex-git-diff-review-prompt)
 (defvar my-codex-git-staged-diff-review-prompt)
-(defvar my-codex-project-overview-max-files)
-(defvar my-codex-project-overview-tree-max-entries)
 (defvar my-codex-session-summary-poll-attempts)
 (defvar my-codex-session-summary-poll-interval)
 
@@ -36,7 +34,6 @@
 (declare-function my-codex--session-summary-buffer-name "my-codex" (root))
 (declare-function my-codex-buffer "my-codex" ())
 (declare-function my-codex-current-buffer-name "my-codex" ())
-(declare-function my-codex-modified-project-buffers "my-codex" ())
 (declare-function my-codex-project-root "my-codex" ())
 
 (defun my-codex--commit-message-trailer-line-p (line)
@@ -149,123 +146,14 @@
                        (project-files project))))))
       (sort (or files nil) #'string<))))
 
-(defun my-codex--file-count-label (count)
-  "Return a human-readable file count label for COUNT."
-  (format "%d %s" count (if (= count 1) "file" "files")))
-
-(defun my-codex--project-tree-lines (files)
-  "Return a compact tree summary for project FILES."
-  (let ((max-entries my-codex-project-overview-tree-max-entries))
-    (cl-labels
-        ((split-file (file)
-           (split-string file "/" t))
-         (group-paths (paths)
-           (let ((groups nil))
-             (dolist (path paths)
-               (when-let ((name (car path)))
-                 (let ((cell (assoc name groups)))
-                   (if cell
-                       (setcdr cell (cons (cdr path) (cdr cell)))
-                     (push (cons name (list (cdr path))) groups)))))
-             (sort groups (lambda (a b) (string< (car a) (car b))))))
-         (render-paths (paths depth indent)
-           (let* ((groups (group-paths paths))
-                  (root-level (string-empty-p indent))
-                  (shown (if root-level
-                             groups
-                           (seq-take groups max-entries)))
-                  (hidden (if root-level
-                              0
-                            (- (length groups) (length shown))))
-                  (lines nil))
-             (dolist (group shown)
-               (let* ((name (car group))
-                      (tails (cdr group))
-                      (child-tails (seq-filter #'identity tails)))
-                 (if child-tails
-                     (progn
-                       (push (format "%s%s/ (%s)"
-                                     indent
-                                     name
-                                     (my-codex--file-count-label
-                                      (length child-tails)))
-                             lines)
-                       (if (> depth 1)
-                           (setq lines
-                                 (append (reverse (render-paths
-                                                   child-tails
-                                                   (1- depth)
-                                                   (concat indent "  ")))
-                                         lines))
-                         (push (format "%s  ..." indent) lines)))
-                   (push (format "%s%s" indent name) lines))))
-             (when (> hidden 0)
-               (push (format "%s... (%d more entries)" indent hidden) lines))
-             (reverse lines))))
-      (render-paths (mapcar #'split-file files) 2 ""))))
-
-(defun my-codex--project-files-yaml (files)
-  "Return project FILES as YAML for a project overview prompt."
-  (cond
-   ((not files)
-    "mode: empty\nentries: []")
-   ((> (length files) my-codex-project-overview-max-files)
-    (format "mode: compact_tree\ntotal: %d\nentries:\n%s"
-            (length files)
-            (my-codex--yaml-list (my-codex--project-tree-lines files) 2)))
-   (t
-    (format "mode: full\nentries:\n%s"
-            (my-codex--yaml-list files 2)))))
-
-(defun my-codex--git-status-text (root)
-  "Return compact Git status text for ROOT."
-  (let ((default-directory root))
-    (if (my-codex--git-repository-p)
-        (let ((lines (my-codex--process-output-lines "git" "status" "--short")))
-          (if lines
-              (string-join lines "\n")
-            "Clean working tree"))
-      "Not a Git repository.")))
-
-(defun my-codex--unsaved-project-buffer-text (root)
-  "Return text describing unsaved modified project buffers under ROOT."
-  (let ((buffers (my-codex-modified-project-buffers)))
-    (if buffers
-        (mapconcat
-         (lambda (buf)
-           (file-relative-name (buffer-file-name buf) root))
-         buffers
-         "\n")
-      "No unsaved modified project buffers.")))
-
 ;;;###autoload
 (defun my-codex-send-project-overview ()
-  "Send a compact summary of the current project structure to Codex."
+  "Ask Codex to inspect the current project for orientation."
   (interactive)
-  (let* ((root (my-codex-project-root))
-         (default-directory root)
-         (files (my-codex--project-files root))
-         (files-yaml (my-codex--project-files-yaml files)))
-    (my-codex--preview-and-send-prompt
-     (format "Here is the current state and structure of my project as YAML. Use this as orientation context for subsequent requests. Do not inspect files, generate code, or make changes solely because of this message.
-
-project:
-  root: %s
-project_files:
-%s
-git_status:
-%s
-unsaved_modified_project_buffers:
-%s
-"
-             (my-codex--yaml-string root)
-             (my-codex--yaml-literal-block files-yaml 2)
-             (my-codex--yaml-list
-              (split-string (my-codex--git-status-text root) "\n" t)
-              2)
-             (my-codex--yaml-list
-              (split-string (my-codex--unsaved-project-buffer-text root) "\n" t)
-              2)))))
+  (my-codex--preview-and-send-prompt
+   "Inspect the repository structure, Git status, and applicable instruction files.
+Build a concise working map for future requests in this thread.
+Do not modify files."))
 
 (defun my-codex--git-comment-char (root)
   "Return Git's commit comment character for ROOT."

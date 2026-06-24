@@ -1691,68 +1691,17 @@
       '("Codex service_tier" ok
         "Not configured; Codex default applies")))))
 
-(ert-deftest my-codex-project-tree-lines-renders-compact-tree ()
-  (let ((my-codex-project-overview-tree-max-entries 2))
-    (should
-     (equal
-      (my-codex--project-tree-lines
-       '("README.md"
-         "lisp/a.el"
-         "lisp/b.el"
-         "lisp/c.el"
-         "test/my-codex-test.el"))
-      '("README.md"
-        "lisp/ (3 files)"
-        "  a.el"
-        "  b.el"
-        "  ... (1 more entries)"
-        "test/ (1 file)"
-        "  my-codex-test.el")))))
-
-(ert-deftest my-codex-project-files-yaml-lists-files-at-default-threshold ()
-  (let ((files (cl-loop for n from 1 to my-codex-project-overview-max-files
-                        collect (format "file-%02d.el" n))))
-    (should (equal (my-codex--project-files-yaml files)
-                   (format "mode: full\nentries:\n%s"
-                           (mapconcat
-                            (lambda (file)
-                              (format "  - \"%s\"" file))
-                            files
-                            "\n"))))))
-
-(ert-deftest my-codex-project-files-yaml-uses-tree-above-default-threshold ()
-  (let* ((files (cl-loop for n from 1
-                         to (1+ my-codex-project-overview-max-files)
-                         collect (format "src/file-%02d.el" n)))
-         (text (my-codex--project-files-yaml files)))
-    (should (string-match-p "mode: compact_tree" text))
-    (should (string-match-p
-             (format "total: %d" (length files))
-             text))
-    (should-not (string-match-p "mode: full" text))))
-
-(ert-deftest my-codex-project-overview-puts-stable-files-before-status ()
+(ert-deftest my-codex-project-overview-sends-orientation-instructions ()
   (let (prompt)
-    (cl-letf (((symbol-function 'my-codex-project-root)
-               (lambda () "/repo/"))
-              ((symbol-function 'my-codex--project-files)
-               (lambda (_root) '("README.md" "src/main.el")))
-              ((symbol-function 'my-codex--git-status-text)
-               (lambda (_root) " M src/main.el"))
-              ((symbol-function 'my-codex--unsaved-project-buffer-text)
-               (lambda (_root) "src/main.el"))
-              ((symbol-function 'my-codex--preview-and-send-prompt)
+    (cl-letf (((symbol-function 'my-codex--preview-and-send-prompt)
                (lambda (text) (setq prompt text))))
       (my-codex-send-project-overview))
-    (let ((files-pos (string-match "project_files:" prompt))
-          (status-pos (string-match "git_status:" prompt))
-          (unsaved-pos
-           (string-match "unsaved_modified_project_buffers:" prompt)))
-      (should files-pos)
-      (should status-pos)
-      (should unsaved-pos)
-      (should (< files-pos status-pos))
-      (should (< status-pos unsaved-pos)))))
+    (should
+     (equal
+      prompt
+      "Inspect the repository structure, Git status, and applicable instruction files.
+Build a concise working map for future requests in this thread.
+Do not modify files."))))
 
 (ert-deftest my-codex-flycheck-diagnostics-sorts-current-errors ()
   (let ((diagnostics

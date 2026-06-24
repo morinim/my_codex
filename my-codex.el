@@ -299,16 +299,6 @@ Codex emits verbose output.  When nil, do not adjust vterm scrollback."
   :type 'boolean
   :group 'my-codex)
 
-(defcustom my-codex-project-overview-max-files 80
-  "Maximum project file count before project overviews use a tree summary."
-  :type 'natnum
-  :group 'my-codex)
-
-(defcustom my-codex-project-overview-tree-max-entries 12
-  "Maximum entries shown for each directory in project overview tree summaries."
-  :type 'natnum
-  :group 'my-codex)
-
 (defcustom my-codex-enable-prompt-preview nil
   "When non-nil, show an editable preview before sending prompts."
   :type 'boolean
