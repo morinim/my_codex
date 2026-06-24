@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.92.0
+;; Version: 0.92.1
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -328,7 +328,7 @@ When nil, do not enforce a hard prompt size limit."
                  natnum)
   :group 'my-codex)
 
-(defcustom my-codex-region-reference-threshold-chars 12000
+(defcustom my-codex-region-reference-threshold-chars 5000
   "Region size in characters that sends a file reference instead of text.
 This only applies to file-visiting buffers.  When nil, always send
 selected region text from `my-codex-send-region'."
