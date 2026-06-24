@@ -58,18 +58,14 @@
 (declare-function flycheck-error-message "flycheck" (err))
 
 (defun my-codex--approx-token-count (text)
-  "Return a rough token count estimate for TEXT."
-  (ceiling (/ (float (length text)) 4)))
-
-(defun my-codex--prompt-size-description-for-length (chars)
-  "Return a short human-readable size description for CHARS."
-  (format "%d chars, approx. %d tokens"
-          chars
-          (ceiling (/ (float chars) 4))))
+  "Return a conservative token count estimate for TEXT."
+  (ceiling (/ (float (string-bytes text)) 3.2)))
 
 (defun my-codex--prompt-size-description (prompt)
   "Return a short human-readable size description for PROMPT."
-  (my-codex--prompt-size-description-for-length (length prompt)))
+  (format "%d chars, approx. %d tokens"
+          (length prompt)
+          (my-codex--approx-token-count prompt)))
 
 (defun my-codex--prompt-preview-header (prompt)
   "Return the prompt preview header line for PROMPT."
@@ -82,8 +78,8 @@
   (setq-local header-line-format
               (format (concat "Size: %s. Edit if needed; "
                               "C-c C-c sends to Codex, C-c C-k cancels.")
-                      (my-codex--prompt-size-description-for-length
-                       (buffer-size)))))
+                      (my-codex--prompt-size-description
+                       (buffer-string)))))
 
 (defun my-codex--check-prompt-size (prompt)
   "Raise or ask for confirmation when PROMPT is unusually large."

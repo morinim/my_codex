@@ -191,8 +191,10 @@
 
 (ert-deftest my-codex-approx-token-count-rounds-up ()
   (should (= (my-codex--approx-token-count "") 0))
-  (should (= (my-codex--approx-token-count "abcd") 1))
-  (should (= (my-codex--approx-token-count "abcde") 2)))
+  (should (= (my-codex--approx-token-count "abc") 1))
+  (should (= (my-codex--approx-token-count "abcd") 2))
+  (should (= (my-codex--approx-token-count "abcde") 2))
+  (should (= (my-codex--approx-token-count "é") 1)))
 
 (ert-deftest my-codex-session-access-mode-recognizes-default-commands ()
   (should
