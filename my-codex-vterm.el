@@ -16,6 +16,7 @@
 (defvar vterm-copy-mode)
 
 (declare-function my-codex-transient-preserve-selection "my-codex" ())
+(declare-function my-codex--agent-label "my-codex" (agent))
 (declare-function vterm-yank "vterm" ())
 
 (defvar-keymap my-codex-vterm-override-mode-map
@@ -51,7 +52,10 @@
         (setq header-line-format
               '(:eval
                 (propertize
-                 " vterm-copy-mode: scroll/copy mode -- press C-c C-t to return to Codex input "
+                 (format " vterm-copy-mode: scroll/copy mode -- press C-c C-t to return to %s input "
+                         (if my-codex-session-agent
+                             (my-codex--agent-label my-codex-session-agent)
+                           "agent"))
                  'face 'warning))))
     (unless (eq my-codex--vterm-copy-mode-saved-header-line-format :unset)
       (setq header-line-format

@@ -40,6 +40,7 @@
 
 (declare-function my-codex--project-files "my-codex-git" (root))
 (declare-function my-codex--active-agent "my-codex" (&optional root))
+(declare-function my-codex--active-agent-label "my-codex" (&optional root))
 (declare-function my-codex--agent-label "my-codex" (agent))
 (declare-function my-codex--current-backend "my-codex" ())
 (declare-function my-codex--safe-root-name "my-codex" (root))
@@ -70,14 +71,14 @@
 (defun my-codex--prompt-preview-header (prompt)
   "Return the prompt preview header line for PROMPT."
   (format (concat "Size: %s. Edit if needed; "
-                  "C-c C-c sends to Codex, C-c C-k cancels.")
+                  "C-c C-c sends to agent, C-c C-k cancels.")
           (my-codex--prompt-size-description prompt)))
 
 (defun my-codex--update-prompt-preview-header (&rest _)
   "Update the current prompt preview header from buffer contents."
   (setq-local header-line-format
               (format (concat "Size: %s. Edit if needed; "
-                              "C-c C-c sends to Codex, C-c C-k cancels.")
+                              "C-c C-c sends to agent, C-c C-k cancels.")
                       (my-codex--prompt-size-description
                        (buffer-string)))))
 
@@ -92,12 +93,13 @@
     (when (and my-codex-large-prompt-warning-chars
                (> size my-codex-large-prompt-warning-chars)
                (not (y-or-n-p
-                     (format "Send large Codex prompt (%s)? "
+                     (format "Send large %s prompt (%s)? "
+                             (my-codex--active-agent-label)
                              (my-codex--prompt-size-description prompt)))))
-      (user-error "Codex prompt canceled"))))
+      (user-error "%s prompt cancelled" (my-codex--active-agent-label)))))
 
 (defun my-codex-send-prompt (prompt)
-  "Send PROMPT to the Codex backend buffer and show it."
+  "Send PROMPT to the agent backend buffer and show it."
   (my-codex--warn-about-unsaved-project-buffers)
   (my-codex--check-prompt-size prompt)
   (let ((buffer (my-codex-buffer))
@@ -142,7 +144,7 @@
     (pop-to-buffer buffer)))
 
 (defun my-codex--finish-prompt-preview ()
-  "Send the current prompt preview buffer contents to Codex."
+  "Send the current prompt preview buffer contents to the agent."
   (interactive)
   (let ((prompt (string-trim-right
                  (buffer-substring-no-properties (point-min) (point-max))))
@@ -156,16 +158,16 @@
       (kill-buffer buffer))))
 
 (defun my-codex--cancel-prompt-preview ()
-  "Cancel the current Codex prompt preview buffer."
+  "Cancel the current agent prompt preview buffer."
   (interactive)
   (let ((origin-window my-codex--prompt-preview-origin-window))
     (kill-buffer (current-buffer))
     (when (window-live-p origin-window)
       (select-window origin-window)))
-  (message "Codex prompt canceled."))
+  (message "Agent prompt cancelled."))
 
 (defun my-codex--preview-and-send-prompt (prompt)
-  "Preview PROMPT before sending it to Codex when enabled."
+  "Preview PROMPT before sending it to the agent when enabled."
   (if my-codex-enable-prompt-preview
       (let* ((root (my-codex-project-root))
              (origin-window (selected-window))
@@ -186,12 +188,13 @@
                      "C-c C-c" #'my-codex--finish-prompt-preview
                      "C-c C-k" #'my-codex--cancel-prompt-preview)))
           (use-local-map map))
-        (message "Codex prompt preview opened."))
+        (message "%s prompt preview opened."
+                 (my-codex--active-agent-label root)))
     (my-codex-send-prompt prompt)))
 
 ;;;###autoload
 (defun my-codex-send-region (beg end)
-  "Send the region between BEG and END to Codex with exact file context."
+  "Send the region between BEG and END to the agent with exact file context."
   (interactive "r")
   (unless (use-region-p)
     (user-error "No active region"))
@@ -200,7 +203,7 @@
 
 ;;;###autoload
 (defun my-codex-send-current-file ()
-  "Ask Codex to inspect the current file directly."
+  "Ask the agent to inspect the current file directly."
   (interactive)
   (unless buffer-file-name
     (user-error "Current buffer is not visiting a file"))
@@ -305,7 +308,7 @@ IMPLEMENTATION-RELATIVE and TEST-RELATIVE are project-relative file names."
 
 ;;;###autoload
 (defun my-codex-analyse-test-coverage ()
-  "Ask Codex to analyse coverage of the current file by its test file."
+  "Ask the agent to analyse coverage of the current file by its test file."
   (interactive)
   (unless buffer-file-name
     (user-error "Current buffer is not visiting a file"))
@@ -357,7 +360,7 @@ IMPLEMENTATION-RELATIVE and TEST-RELATIVE are project-relative file names."
   (condition-case err
       (apply function args)
     (error
-     (message "Codex xref lookup failed: %s" (error-message-string err))
+     (message "Agent xref lookup failed: %s" (error-message-string err))
      nil)))
 
 (defun my-codex--xref-location-label (marker root)
@@ -475,7 +478,7 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
 
 ;;;###autoload
 (defun my-codex-explain-symbol-at-point ()
-  "Ask Codex to explain the symbol at point with nearby file context."
+  "Ask the agent to explain the symbol at point with nearby file context."
   (interactive)
   (unless buffer-file-name
     (user-error "Current buffer is not visiting a file"))
@@ -506,7 +509,7 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
       "\n\n"))))
 
 (defun my-codex-explain-region-as-error ()
-  "Ask Codex to explain the selected compiler or test error."
+  "Ask the agent to explain the selected compiler or test error."
   (interactive)
   (unless (use-region-p)
     (user-error "No active region"))
@@ -588,7 +591,7 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
    "\n"))
 
 (defun my-codex--flycheck-diagnostics-prompt (diagnostics)
-  "Return a Codex prompt for Flycheck DIAGNOSTICS."
+  "Return an agent prompt for Flycheck DIAGNOSTICS."
   (let* ((root (my-codex-project-root))
          (limit my-codex-flycheck-diagnostics-limit)
          (total (length diagnostics))
@@ -616,14 +619,14 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
 
 ;;;###autoload
 (defun my-codex-explain-buffer-diagnostics ()
-  "Ask Codex to analyse current buffer Flycheck diagnostics as a batch."
+  "Ask the agent to analyse current buffer Flycheck diagnostics as a batch."
   (interactive)
   (my-codex--preview-and-send-prompt
    (my-codex--flycheck-diagnostics-prompt
     (my-codex--flycheck-diagnostics))))
 
 (defun my-codex--region-file-reference (beg end)
-  "Return a Codex file reference for the region between BEG and END."
+  "Return an agent file reference for the region between BEG and END."
   (unless buffer-file-name
     (user-error "Current buffer is not visiting a file"))
   (when (buffer-modified-p)
@@ -682,7 +685,7 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
 
 ;;;###autoload
 (defun my-codex-plan-refactor-region (beg end)
-  "Ask Codex for a safe refactoring plan for the active region.
+  "Ask the agent for a safe refactoring plan for the active region.
 Send only a file and line-range reference, not the selected text."
   (interactive "r")
   (unless (use-region-p)
@@ -694,7 +697,7 @@ Send only a file and line-range reference, not the selected text."
 
 ;;;###autoload
 (defun my-codex-open-project-instructions ()
-  "Open the project Codex/agent instruction file, if present."
+  "Open the project agent instruction file, if present."
   (interactive)
   (let* ((root (my-codex-project-root))
          (file (seq-find (lambda (name)
@@ -705,9 +708,10 @@ Send only a file and line-range reference, not the selected text."
       (user-error "No project instruction file found"))))
 
 (defun my-codex-visible-window ()
-  "Return the visible Codex window in the selected frame, or raise an error."
+  "Return the visible agent window in the selected frame, or raise an error."
   (or (get-buffer-window (my-codex-current-buffer-name))
-      (user-error "No visible Codex window in selected frame")))
+      (user-error "No visible %s window in selected frame"
+                  (my-codex--active-agent-label))))
 
 (defun my-codex--associated-edit-window (codex-window)
   "Return the edit window associated with CODEX-WINDOW, or nil."
@@ -720,7 +724,7 @@ Send only a file and line-range reference, not the selected text."
      (window-list (window-frame codex-window) 'no-minibuf))))
 
 (defun my-codex-code-window ()
-  "Return the most likely coding window associated with Codex."
+  "Return the most likely coding window associated with the agent."
   (let ((codex-window (my-codex-visible-window)))
     (let ((code-window (or (my-codex--associated-edit-window codex-window)
                            (next-window codex-window nil))))
@@ -735,7 +739,7 @@ Send only a file and line-range reference, not the selected text."
 
 ;;;###autoload
 (defun my-codex-toggle-focus ()
-  "Toggle focus between the Codex vterm and the coding window."
+  "Toggle focus between the agent vterm and the coding window."
   (interactive)
   (let ((codex-window (my-codex-visible-window)))
     (cond
@@ -743,7 +747,7 @@ Send only a file and line-range reference, not the selected text."
      (t (select-window codex-window)))))
 
 (defun my-codex-selected-text ()
-  "Return actively selected text from the visible Codex window."
+  "Return actively selected text from the visible agent window."
   (let ((codex-window (my-codex-visible-window)))
     (with-selected-window codex-window
       (cond
@@ -758,11 +762,11 @@ Send only a file and line-range reference, not the selected text."
         (prog1 my-codex--captured-selection
           (setq my-codex--captured-selection nil)))
        (t
-        (user-error "No active selection in the Codex buffer"))))))
+        (user-error "No active selection in the agent buffer"))))))
 
 ;;;###autoload
 (defun my-codex-insert-selection-into-code ()
-  "Insert selected Codex text into the coding window."
+  "Insert selected agent text into the coding window."
   (interactive)
   (let ((text (my-codex-selected-text))
         (code-window (my-codex-code-window)))
@@ -771,8 +775,9 @@ Send only a file and line-range reference, not the selected text."
 
 ;;;###autoload
 (defun my-codex-ask (prompt)
-  "Read PROMPT in the minibuffer and send it straight to Codex."
-  (interactive "sAsk Codex: ")
+  "Read PROMPT in the minibuffer and send it straight to the agent."
+  (interactive
+   (list (read-string (format "Ask %s: " (my-codex--active-agent-label)))))
   (when (string-blank-p prompt)
     (user-error "Prompt cannot be empty"))
   (my-codex--preview-and-send-prompt prompt))
@@ -791,9 +796,9 @@ Send only a file and line-range reference, not the selected text."
 (defun my-codex--read-prompt-preset ()
   "Read and return a prompt preset cons cell."
   (unless my-codex-prompt-presets
-    (user-error "No Codex prompt presets configured"))
+    (user-error "No agent prompt presets configured"))
   (let* ((names (mapcar #'car my-codex-prompt-presets))
-         (name (completing-read "Codex preset: " names nil t)))
+         (name (completing-read "Agent preset: " names nil t)))
     (assoc-string name my-codex-prompt-presets)))
 
 (defun my-codex--file-reference-completion-at-point (files)
@@ -844,7 +849,7 @@ after the at-sign with `completion-at-point'."
 
 ;;;###autoload
 (defun my-codex-ask-with-preset ()
-  "Read a prompt preset by name and send it to Codex.
+  "Read a prompt preset by name and send it to the agent.
 After selecting a preset, read extra instructions from the minibuffer.
 When a region is active, include exact file and line context for it."
   (interactive)
@@ -866,7 +871,7 @@ When a region is active, include exact file and line context for it."
   "Send the prompt preset at INDEX from `my-codex-ask-preset-transient'."
   (let ((preset (nth index my-codex--prompt-preset-transient-presets)))
     (unless preset
-      (user-error "No Codex prompt preset for this key"))
+      (user-error "No agent prompt preset for this key"))
     (my-codex--ask-with-prompt-preset preset)))
 
 (dotimes (index (length my-codex--preset-transient-keys))
@@ -903,7 +908,7 @@ When a region is active, include exact file and line context for it."
 
 ;;;###autoload
 (transient-define-prefix my-codex-ask-preset-transient ()
-  "Ask Codex using a prompt preset."
+  "Ask the agent using a prompt preset."
   [:class transient-column
    :setup-children my-codex--prompt-preset-transient-suffixes
    ""])

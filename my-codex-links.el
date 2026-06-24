@@ -21,7 +21,7 @@
     (define-key map [mouse-1] #'my-codex-open-session-link-at-event)
     (define-key map (kbd "RET") #'my-codex-open-session-link-at-point)
     map)
-  "Keymap used for clickable Codex session links.")
+  "Keymap used for clickable agent session links.")
 
 (defvar my-codex-session-links-mode)
 
@@ -77,7 +77,7 @@ Supported forms include:
   "Number of preceding lines used to resolve split file references.")
 
 (defun my-codex--add-session-link (beg end type target)
-  "Add a clickable Codex session link from BEG to END.
+  "Add a clickable agent session link from BEG to END.
 TYPE is one of `url' or `file'.  TARGET is link-specific data."
   (add-text-properties
    beg end
@@ -90,7 +90,7 @@ TYPE is one of `url' or `file'.  TARGET is link-specific data."
      font-lock-face link)))
 
 (defun my-codex-open-session-link-at-event (event)
-  "Open the Codex session link clicked by EVENT."
+  "Open the agent session link clicked by EVENT."
   (interactive "e")
   (let* ((end (event-end event))
          (window (posn-window end))
@@ -99,12 +99,12 @@ TYPE is one of `url' or `file'.  TARGET is link-specific data."
       (my-codex-open-session-link-at-position pos))))
 
 (defun my-codex-open-session-link-at-point ()
-  "Open the Codex session link at point."
+  "Open the agent session link at point."
   (interactive)
   (my-codex-open-session-link-at-position (point)))
 
 (defun my-codex-open-session-link-at-position (pos)
-  "Open the Codex session link at POS."
+  "Open the agent session link at POS."
   (let ((type (get-text-property pos 'my-codex-session-link-type))
         (target (get-text-property pos 'my-codex-session-link-target)))
     (pcase type
@@ -113,7 +113,7 @@ TYPE is one of `url' or `file'.  TARGET is link-specific data."
       ('file
        (my-codex-open-file-reference target))
       (_
-       (user-error "No Codex session link at point")))))
+       (user-error "No agent session link at point")))))
 
 (defun my-codex-open-file-reference (target)
   "Open file reference TARGET.
@@ -233,7 +233,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
        (line-end-position)))))
 
 (defun my-codex--clear-session-links (beg end)
-  "Remove Codex session link properties between BEG and END."
+  "Remove agent session link properties between BEG and END."
   (let ((pos beg)
         next)
     (while (< pos end)
@@ -252,7 +252,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
       (setq pos next))))
 
 (defun my-codex--linkify-session-region (beg end &optional _len)
-  "Add Codex session links in the region from BEG to END."
+  "Add agent session links in the region from BEG to END."
   (when my-codex-session-links-mode
     (pcase-let ((`(,rbeg . ,rend) (my-codex--line-bounds beg end)))
       (let ((inhibit-read-only t)
@@ -295,7 +295,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
                      resolved-target)))))))))))
 
 (define-minor-mode my-codex-session-links-mode
-  "Make URLs and in-repository file references clickable in Codex buffers."
+  "Make URLs and in-repository file references clickable in agent buffers."
   :lighter " Links"
   (if my-codex-session-links-mode
       (progn

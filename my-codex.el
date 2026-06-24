@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.93.0
+;; Version: 0.93.1
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -99,7 +99,7 @@
   :group 'my-codex)
 
 (defcustom my-codex-agent 'codex
-  "Agent profile used by default Codex commands.
+  "Agent profile used by default agent commands.
 Commands such as `my-codex-read-only', `my-codex-workspace', and
 `my-codex-resume' use this profile.  Named sessions can choose a
 different profile interactively."
@@ -216,7 +216,7 @@ Identify missing edge cases, unhandled exceptions, logical flaws and important b
   :group 'my-codex)
 
 (defcustom my-codex-flycheck-diagnostics-limit 100
-  "Maximum number of Flycheck diagnostics to include in one Codex prompt."
+  "Maximum number of Flycheck diagnostics to include in one agent prompt."
   :type 'natnum
   :group 'my-codex)
 
@@ -257,12 +257,12 @@ BEGIN_COMMIT_MESSAGE and END_COMMIT_MESSAGE markers if you want
   :group 'my-codex)
 
 (defcustom my-codex-commit-message-poll-interval 0.5
-  "Seconds between checks for a generated Codex commit message."
+  "Seconds between checks for a generated agent commit message."
   :type 'number
   :group 'my-codex)
 
 (defcustom my-codex-commit-message-poll-attempts 120
-  "Maximum number of checks for a generated Codex commit message."
+  "Maximum number of checks for a generated agent commit message."
   :type 'natnum
   :group 'my-codex)
 
@@ -287,15 +287,15 @@ BEGIN_COMMIT_MESSAGE and END_COMMIT_MESSAGE markers if you want
   :group 'my-codex)
 
 (defcustom my-codex-vterm-min-scrollback 10000
-  "Minimum `vterm-max-scrollback' used in Codex vterm buffers.
+  "Minimum `vterm-max-scrollback' used in agent vterm buffers.
 This protects marked-output extraction from losing markers when
-Codex emits verbose output.  When nil, do not adjust vterm scrollback."
+the agent emits verbose output.  When nil, do not adjust vterm scrollback."
   :type '(choice (const :tag "Do not adjust" nil)
                  natnum)
   :group 'my-codex)
 
 (defcustom my-codex-enable-session-links t
-  "When non-nil, make URLs and file references clickable in Codex buffers."
+  "When non-nil, make URLs and file references clickable in agent buffers."
   :type 'boolean
   :group 'my-codex)
 
@@ -319,7 +319,7 @@ When nil, do not enforce a hard prompt size limit."
   :group 'my-codex)
 
 (defcustom my-codex-region-send-policy 'prefer-reference
-  "How selected regions are sent to Codex.
+  "How selected regions are sent to the agent.
 When `prefer-reference', send a file reference whenever the selected
 region can be read safely from a saved project file, falling back to
 inline text otherwise.  When `automatic', use
@@ -403,12 +403,12 @@ Preserve concrete file names, command names, and technical details. Do not edit 
 
 (defcustom my-codex-session-summary-poll-interval
   my-codex-commit-message-poll-interval
-  "Seconds between checks for generated Codex session summaries."
+  "Seconds between checks for generated agent session summaries."
   :type 'number
   :group 'my-codex)
 
 (defcustom my-codex-session-summary-poll-attempts 600
-  "Maximum number of checks for a generated Codex session summary."
+  "Maximum number of checks for a generated agent session summary."
   :type 'natnum
   :group 'my-codex)
 
@@ -458,49 +458,49 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
   "Buffers whose fill-column indicator state is temporarily managed.")
 
 (defvar-local my-codex--commit-message-request-marker nil
-  "Marker for the start of the latest Codex commit message request.")
+  "Marker for the start of the latest agent commit message request.")
 
 (defvar-local my-codex--commit-message-request-signature nil
-  "Staged diff signature used for the latest Codex commit message request.")
+  "Staged diff signature used for the latest agent commit message request.")
 
 (defvar-local my-codex--commit-buffer-staged-signature nil
   "Staged diff signature for the current editable commit message.")
 
 (defvar-local my-codex--commit-buffer-codex-buffer nil
-  "Codex session buffer associated with the current editable commit message.")
+  "Agent session buffer associated with the current editable commit message.")
 
 (defvar-local my-codex--commit-message-wait-timer nil
-  "Active timer waiting for a Codex commit message.")
+  "Active timer waiting for an agent commit message.")
 
 (defvar-local my-codex--session-summary-request-marker nil
-  "Marker for the start of the latest Codex session summary request.")
+  "Marker for the start of the latest agent session summary request.")
 
 (defvar-local my-codex--session-summary-wait-timer nil
-  "Active timer waiting for a Codex session summary.")
+  "Active timer waiting for an agent session summary.")
 
 (defvar-local my-codex-session-id nil
-  "Identifier for the Codex session owned by the current buffer.")
+  "Identifier for the agent session owned by the current buffer.")
 
 (defvar-local my-codex-session-name nil
-  "Human-readable Codex session name for the current buffer.")
+  "Human-readable agent session name for the current buffer.")
 
 (defvar-local my-codex-session-project-root nil
-  "Project root associated with the current Codex session buffer.")
+  "Project root associated with the current agent session buffer.")
 
 (defvar-local my-codex-session-access-mode nil
-  "Access mode used for the current Codex session buffer.")
+  "Access mode used for the current agent session buffer.")
 
 (defvar-local my-codex-session-agent nil
-  "Agent profile used for the current Codex session buffer.")
+  "Agent profile used for the current agent session buffer.")
 
 (defvar-local my-codex-session-start-time nil
-  "Time when the Codex session started.")
+  "Time when the agent session started.")
 
 (defvar-local my-codex-session-last-activity nil
-  "Time of the last prompt sent to Codex.")
+  "Time of the last prompt sent to the agent.")
 
 (defvar-local my-codex-session-prompt-count 0
-  "Number of prompts sent during this Codex session.")
+  "Number of prompts sent during this agent session.")
 
 (defvar-local my-codex--github-issue-creation-in-progress nil
   "Non-nil while the current GitHub issue draft is being submitted.")
@@ -516,14 +516,14 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 
 (cl-defstruct (my-codex-vterm-backend
                (:constructor my-codex--make-vterm-backend (buffer-name)))
-  "Backend implementation that runs Codex in a vterm buffer."
+  "Backend implementation that runs an agent in a vterm buffer."
   buffer-name)
 
 (defvar my-codex--backend nil
-  "Current backend instance for the active project Codex session.")
+  "Current backend instance for the active project agent session.")
 
 (defvar my-codex--backends (make-hash-table :test #'equal)
-  "Backend instances keyed by Codex buffer name.")
+  "Backend instances keyed by agent buffer name.")
 
 (defvar my-codex--project-active-agents (make-hash-table :test #'equal)
   "Agent profile identifiers keyed by project root.")
@@ -537,7 +537,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
   "Send PROMPT through BACKEND.")
 
 (cl-defgeneric my-codex-backend-live-p (backend)
-  "Return non-nil when BACKEND has a live Codex process.")
+  "Return non-nil when BACKEND has a live agent process.")
 
 (defun my-codex--backend-buffer-name (backend)
   "Return BACKEND's buffer name."
@@ -557,7 +557,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
     backend))
 
 (defun my-codex--current-backend ()
-  "Return the backend for the current project default Codex session."
+  "Return the backend for the current project default agent session."
   (my-codex--backend-for-buffer-name (my-codex-current-buffer-name)))
 
 (defun my-codex--agent-profile (agent)
@@ -659,7 +659,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
 
 (defun my-codex--mark-default-session
     (buffer project-root access-mode &optional agent)
-  "Mark BUFFER as the default Codex session for PROJECT-ROOT."
+  "Mark BUFFER as the default agent session for PROJECT-ROOT."
   (let ((agent (or agent my-codex-agent)))
     (my-codex--mark-session
      buffer
@@ -834,7 +834,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
               (redisplay t))
           (error nil)))
       (when (< (frame-width) required-width)
-        (user-error "Frame is too narrow for Codex layout")))))
+        (user-error "Frame is too narrow for agent layout")))))
 
 (defun my-codex--resize-window-to-body-width (window width)
   "Resize WINDOW to WIDTH body columns when possible."
@@ -1019,6 +1019,10 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
                my-codex--project-active-agents)
       my-codex-agent))
 
+(defun my-codex--active-agent-label (&optional root)
+  "Return the display label for the active agent."
+  (my-codex--agent-label (my-codex--active-agent root)))
+
 (defun my-codex--set-active-agent (agent &optional root)
   "Record AGENT as the active agent for ROOT or the current project."
   (puthash (my-codex--project-key root)
@@ -1026,7 +1030,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
            my-codex--project-active-agents))
 
 (defun my-codex-current-buffer-name (&optional agent)
-  "Return the buffer name for the current Codex session."
+  "Return the buffer name for the current agent session."
   (let ((agent (or agent (my-codex--active-agent))))
     (if-let* ((project (project-current))
               (root (file-truename (project-root project)))
@@ -1045,7 +1049,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
                   (my-codex--agent-buffer-prefix agent) name hash))))))
 
 (defun my-codex--normalise-session-name (name)
-  "Return a normalised Codex session NAME, or raise an error."
+  "Return a normalised agent session NAME, or raise an error."
   (let ((normalised (string-trim name)))
     (when (string-empty-p normalised)
       (user-error "Session name cannot be empty"))
@@ -1070,8 +1074,8 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
         (concat (substring default-name 0 -1) ":" safe-name "*")
       (format "%s:%s" default-name safe-name))))
 
-(defconst my-codex-sessions-buffer-name "*Codex sessions*"
-  "Buffer name used to display open Codex sessions.")
+(defconst my-codex-sessions-buffer-name "*Agent sessions*"
+  "Buffer name used to display open agent sessions.")
 
 (defvar-local my-codex--header-string nil
   "Cached space-padded header string for horizontal scrolling.")
@@ -1153,8 +1157,8 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
   "<mouse-1>" #'my-codex-sessions-mouse-visit)
 
 (define-derived-mode my-codex-sessions-mode tabulated-list-mode
-  "Codex sessions"
-  "Major mode for selecting open Codex sessions."
+  "Agent sessions"
+  "Major mode for selecting open agent sessions."
   (setq tabulated-list-format
         [("Buffer" 32 t)
          ("Agent" 12 t)
@@ -1166,7 +1170,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
   (my-codex--sync-header-hscroll))
 
 (defun my-codex--visible-session-window (&optional source-window)
-  "Return the visible Codex session window for SOURCE-WINDOW."
+  "Return the visible agent session window for SOURCE-WINDOW."
   (let* ((source-window (or source-window (selected-window)))
          (term-buffer (window-parameter source-window
                                         'my-codex-term-buffer)))
@@ -1179,14 +1183,14 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
          (window-list nil 'no-minibuf)))))
 
 (defun my-codex--edit-windows-for-session-buffer (buffer)
-  "Return edit windows associated with Codex session BUFFER."
+  "Return edit windows associated with agent session BUFFER."
   (seq-filter
    (lambda (window)
      (eq (window-parameter window 'my-codex-term-buffer) buffer))
    (window-list nil 'no-minibuf)))
 
 (defun my-codex--switch-active-session-buffer (buffer)
-  "Switch the active Codex session window to BUFFER."
+  "Switch the active agent session window to BUFFER."
   (let* ((source-window (selected-window))
          (term-window (my-codex--visible-session-window source-window))
          (previous-buffer (and (window-live-p term-window)
@@ -1204,16 +1208,16 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
            (user-error "Failed to display %s" (buffer-name buffer)))))))
 
 (defun my-codex-sessions-visit ()
-  "Visit the Codex session at point."
+  "Visit the agent session at point."
   (interactive)
   (let* ((buffer-name (tabulated-list-get-id))
          (buffer (and buffer-name (get-buffer buffer-name))))
     (unless buffer
-      (user-error "No Codex session on this line"))
+      (user-error "No agent session on this line"))
     (my-codex--switch-active-session-buffer buffer)))
 
 (defun my-codex-sessions-mouse-visit (event)
-  "Visit the Codex session clicked in EVENT."
+  "Visit the agent session clicked in EVENT."
   (interactive "e")
   (let* ((end (event-end event))
          (window (posn-window end))
@@ -1224,7 +1228,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
       (my-codex-sessions-visit))))
 
 (defun my-codex--session-buffers ()
-  "Return open Codex session buffers."
+  "Return open agent session buffers."
   (seq-sort-by
    #'buffer-name #'string<
    (seq-filter
@@ -1237,11 +1241,11 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
 
 ;;;###autoload
 (defun my-codex-list-sessions ()
-  "List open Codex session buffers."
+  "List open agent session buffers."
   (interactive)
   (let ((buffers (my-codex--session-buffers)))
     (if (null buffers)
-        (message "No open Codex sessions.")
+        (message "No open agent sessions.")
       (with-current-buffer (get-buffer-create my-codex-sessions-buffer-name)
         (my-codex-sessions-mode)
         (setq tabulated-list-entries
@@ -1271,7 +1275,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
       (split-string (string-trim-right (buffer-string)) "\n" t))))
 
 (defun my-codex--all-session-buffers ()
-  "Return all Codex session buffers, including dead ones."
+  "Return all agent session buffers, including dead ones."
   (seq-sort-by
    #'buffer-name #'string<
    (seq-filter
@@ -1314,8 +1318,8 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
   "g"   #'revert-buffer)
 
 (define-derived-mode my-codex-top-mode tabulated-list-mode
-  "Codex Top"
-  "Major mode for monitoring Codex sessions."
+  "Agents Top"
+  "Major mode for monitoring agent sessions."
   (setq tabulated-list-format
         [("Project" 12 t)
          ("Session" 10 t)
@@ -1336,12 +1340,12 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
   (my-codex--sync-header-hscroll))
 
 (defun my-codex-top-refresh (&rest _)
-  "Refresh the Codex dashboard entries."
+  "Refresh the agent dashboard entries."
   (setq tabulated-list-entries (my-codex-top--make-entries))
   (tabulated-list-print t))
 
 (defun my-codex-top--make-entries ()
-  "Build tabulated list entries for all Codex sessions."
+  "Build tabulated list entries for all agent sessions."
   (mapcar
    (lambda (buffer)
      (let (project session state pid branch git prompts lines age last-act)
@@ -1376,12 +1380,12 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
    (my-codex--all-session-buffers)))
 
 (defun my-codex-top-kill-session ()
-  "Kill the Codex session process and buffer at point."
+  "Kill the agent session process and buffer at point."
   (interactive)
   (let* ((buffer-name (tabulated-list-get-id))
          (buffer (and buffer-name (get-buffer buffer-name))))
     (unless buffer
-      (user-error "No Codex session on this line"))
+      (user-error "No agent session on this line"))
     (when (yes-or-no-p (format "Kill session %s? " buffer-name))
       (with-current-buffer buffer
         (when-let ((proc (get-buffer-process buffer)))
@@ -1396,7 +1400,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
   (let* ((buffer-name (tabulated-list-get-id))
          (buffer (and buffer-name (get-buffer buffer-name))))
     (unless buffer
-      (user-error "No Codex session on this line"))
+      (user-error "No agent session on this line"))
     (let ((root (with-current-buffer buffer my-codex-session-project-root)))
       (if (and root (file-directory-p root))
           (let ((default-directory root))
@@ -1411,7 +1415,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
   (let* ((buffer-name (tabulated-list-get-id))
          (buffer (and buffer-name (get-buffer buffer-name))))
     (unless buffer
-      (user-error "No Codex session on this line"))
+      (user-error "No agent session on this line"))
     (let ((root (with-current-buffer buffer my-codex-session-project-root)))
       (if (and root (file-directory-p root))
           (dired root)
@@ -1423,7 +1427,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
   (let* ((buffer-name (tabulated-list-get-id))
          (buffer (and buffer-name (get-buffer buffer-name))))
     (unless buffer
-      (user-error "No Codex session on this line"))
+      (user-error "No agent session on this line"))
     (let ((root (with-current-buffer buffer my-codex-session-project-root)))
       (if (and root (file-directory-p root))
           (let ((default-directory root))
@@ -1438,7 +1442,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
   (let* ((buffer-name (tabulated-list-get-id))
          (buffer (and buffer-name (get-buffer buffer-name))))
     (unless buffer
-      (user-error "No Codex session on this line"))
+      (user-error "No agent session on this line"))
     (let* ((current-name (with-current-buffer buffer my-codex-session-name))
            (new-name (read-string (format "Rename session %s to: " (or current-name "default"))
                                   current-name)))
@@ -1456,9 +1460,9 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
 
 ;;;###autoload
 (defun my-codex-top ()
-  "Display a dashboard of all active and inactive Codex sessions."
+  "Display a dashboard of all active and inactive agent sessions."
   (interactive)
-  (with-current-buffer (get-buffer-create "*Codex Top*")
+  (with-current-buffer (get-buffer-create "*Agents Top*")
     (my-codex-top-mode)
     (my-codex-top-refresh)
     (pop-to-buffer (current-buffer))))
@@ -1481,7 +1485,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
   "Display a non-blocking warning if project buffers have unsaved changes."
   (when my-codex-warn-about-unsaved-project-buffers
     (when-let (buffers (my-codex-modified-project-buffers))
-      (message "Codex warning: unsaved buffer(s): %s"
+      (message "Agent warning: unsaved buffer(s): %s"
                (mapconcat #'buffer-name buffers ", ")))))
 
 (defun my-codex-two-column-layout-with-command
@@ -1539,41 +1543,46 @@ AGENT identifies the agent profile used for buffer names and metadata."
 
 ;;;###autoload
 (defun my-codex-restore-layout ()
-  "Hide visible windows showing the current Codex buffer."
+  "Hide visible windows showing the current agent buffer."
   (interactive)
-  (let* ((buffer-name (my-codex-current-buffer-name))
+  (let* ((label (my-codex--active-agent-label))
+         (buffer-name (my-codex-current-buffer-name))
          (windows (get-buffer-window-list buffer-name nil t)))
     (unless windows
-      (user-error "Codex window is not visible"))
+      (user-error "%s window is not visible" label))
     (dolist (window windows)
       (when (window-live-p window)
         (quit-window nil window)))
-    (message "Codex window hidden")))
+    (message "%s window hidden" label)))
 
 (defun my-codex--session-layout-buffer ()
-  "Return the Codex buffer associated with the selected session layout."
+  "Return the agent buffer associated with the selected session layout."
   (or (window-parameter (selected-window) 'my-codex-term-buffer)
       (when (bound-and-true-p my-codex-session-id)
         (current-buffer))
       (get-buffer (my-codex-current-buffer-name))
-      (user-error "Codex window is not visible")))
+      (user-error "Agent window is not visible")))
 
 ;;;###autoload
 (defun my-codex-restore-session-layout ()
-  "Hide visible windows showing the selected Codex session buffer."
+  "Hide visible windows showing the selected agent session buffer."
   (interactive)
   (let* ((buffer (my-codex--session-layout-buffer))
+         (label (with-current-buffer buffer
+                  (if my-codex-session-agent
+                      (my-codex--agent-label my-codex-session-agent)
+                    (my-codex--active-agent-label))))
          (windows (get-buffer-window-list buffer nil t)))
     (unless windows
-      (user-error "Codex window is not visible"))
+      (user-error "%s window is not visible" label))
     (dolist (window windows)
       (when (window-live-p window)
         (quit-window nil window)))
-    (message "Codex window hidden")))
+    (message "%s window hidden" label)))
 
 ;;;###autoload
 (defun my-codex-read-only ()
-  "Show Codex, starting it in read-only mode if needed."
+  "Show the configured agent, starting it in read-only mode if needed."
   (interactive)
   (my-codex-two-column-layout-with-command
    (my-codex--agent-command my-codex-agent 'read-only)
@@ -1581,7 +1590,7 @@ AGENT identifies the agent profile used for buffer names and metadata."
 
 ;;;###autoload
 (defun my-codex-workspace ()
-  "Show Codex, starting it with workspace write access if needed."
+  "Show the configured agent with workspace write access if needed."
   (interactive)
   (my-codex-two-column-layout-with-command
    (my-codex--agent-command my-codex-agent 'workspace-write)
@@ -1614,7 +1623,7 @@ AGENT identifies the agent profile used for buffer names and metadata."
 
 ;;;###autoload
 (defun my-codex-new-session (name agent &optional access-mode)
-  "Start or show a named Codex session NAME using AGENT and ACCESS-MODE.
+  "Start or show a named agent session NAME using AGENT and ACCESS-MODE.
 For compatibility, AGENT may also be a command string when ACCESS-MODE is nil."
   (interactive
    (list
@@ -1631,25 +1640,27 @@ For compatibility, AGENT may also be a command string when ACCESS-MODE is nil."
 
 ;;;###autoload
 (defun my-codex-resume ()
-  "Show Codex, resuming a previous session if needed and focusing the window."
+  "Show the configured agent, resuming a previous session if needed."
   (interactive)
   (my-codex-two-column-layout-with-command
    (my-codex--agent-command my-codex-agent 'resume)
    t nil my-codex-agent 'resume))
 
 (defun my-codex-buffer ()
-  "Return the current project's Codex backend buffer, or raise an error."
+  "Return the current project's agent backend buffer, or raise an error."
   (let* ((backend (my-codex--current-backend))
          (buffer-name (my-codex--backend-buffer-name backend))
          (buffer (get-buffer buffer-name)))
     (unless buffer
       (user-error "No %s buffer found" buffer-name))
     (unless (my-codex-backend-live-p backend)
-      (user-error "No running Codex process in %s" buffer-name))
+      (user-error "No running %s process in %s"
+                  (my-codex--active-agent-label)
+                  buffer-name))
     buffer))
 
 (defun my-codex--session-buffer ()
-  "Return the current project's Codex session buffer, or raise an error."
+  "Return the current project's agent session buffer, or raise an error."
   (let* ((buffer-name (my-codex-current-buffer-name))
          (buffer (get-buffer buffer-name)))
     (unless buffer
@@ -1658,11 +1669,15 @@ For compatibility, AGENT may also be a command string when ACCESS-MODE is nil."
 
 (defun my-codex--session-export-buffer-name (root)
   "Return the session export buffer name for ROOT."
-  (format "*Codex session export:%s*" (my-codex--safe-root-name root)))
+  (format "*%s session export:%s*"
+          (my-codex--active-agent-label root)
+          (my-codex--safe-root-name root)))
 
 (defun my-codex--session-summary-buffer-name (root)
   "Return the session summary buffer name for ROOT."
-  (format "*Codex session summary:%s*" (my-codex--safe-root-name root)))
+  (format "*%s session summary:%s*"
+          (my-codex--active-agent-label root)
+          (my-codex--safe-root-name root)))
 
 (defun my-codex--unique-output-markers (name)
   "Return unique begin and end output markers for NAME."
@@ -1697,7 +1712,7 @@ shown between them as an example."
     cleaned))
 
 (defun my-codex--clean-session-transcript (text)
-  "Return cleaned Codex session transcript TEXT."
+  "Return cleaned agent session transcript TEXT."
   (with-temp-buffer
     (insert (my-codex--strip-terminal-control-codes text))
     (goto-char (point-min))
@@ -1709,7 +1724,7 @@ shown between them as an example."
     (string-trim (buffer-string))))
 
 (defun my-codex-session-transcript ()
-  "Return the cleaned transcript from the current project's Codex buffer."
+  "Return the cleaned transcript from the current project's agent buffer."
   (let ((buffer (my-codex--session-buffer)))
     (with-current-buffer buffer
       (my-codex--clean-session-transcript
@@ -1734,7 +1749,7 @@ shown between them as an example."
 (defun my-codex--insert-session-export-markdown (transcript root source-buffer)
   "Insert Markdown for TRANSCRIPT from ROOT and SOURCE-BUFFER."
   (let ((fence (my-codex--markdown-code-fence transcript)))
-    (insert "# Codex Session\n\n")
+    (insert (format "# %s Session\n\n" (my-codex--active-agent-label root)))
     (insert (format "- Project root: `%s`\n" root))
     (insert (format "- Source buffer: `%s`\n" source-buffer))
     (insert (format "- Exported: `%s`\n\n"
@@ -1757,7 +1772,7 @@ markers."
 
 ;;;###autoload
 (defun my-codex-export-session-to-markdown ()
-  "Export the current project's Codex session transcript to Markdown."
+  "Export the current project's agent session transcript to Markdown."
   (interactive)
   (let* ((root (my-codex-project-root))
          (buffer (my-codex--session-buffer))
@@ -1765,7 +1780,7 @@ markers."
          (export-buffer
           (get-buffer-create (my-codex--session-export-buffer-name root))))
     (when (string-empty-p transcript)
-      (user-error "Codex session transcript is empty"))
+      (user-error "Agent session transcript is empty"))
     (with-current-buffer export-buffer
       (let ((inhibit-read-only t))
         (erase-buffer)
@@ -1774,11 +1789,12 @@ markers."
         (goto-char (point-min)))
       (my-codex--session-export-mode))
     (pop-to-buffer export-buffer)
-    (message "Codex session exported to Markdown.")))
+    (message "%s session exported to Markdown."
+             (my-codex--active-agent-label root))))
 
 ;;;###autoload
 (defun my-codex-summarize-session-to-markdown ()
-  "Ask Codex to summarize the current conversation as Markdown notes.
+  "Ask the agent to summarize the current conversation as Markdown notes.
 Open the generated notes in an editable Markdown buffer when they are ready."
   (interactive)
   (let* ((root (my-codex-project-root))
@@ -1796,11 +1812,12 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (my-codex-send-prompt prompt)
       (my-codex--wait-for-session-summary
        buffer start-point root begin-marker end-marker)
-      (message "Asked Codex to summarize the session; waiting to open editor."))))
+      (message "Asked %s to summarize the session; waiting to open editor."
+               (my-codex--active-agent-label root)))))
 
-;; Prefix keymap for Codex commands.
+;; Prefix keymap for agent commands.
 (defvar-keymap my-codex-map
-  :doc "Prefix keymap for Codex commands."
+  :doc "Prefix keymap for agent commands."
   "o"       #'my-codex-read-only
   "w"       #'my-codex-workspace
   "S"       #'my-codex-session-transient
@@ -1836,7 +1853,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
 
 ;;;###autoload
 (transient-define-prefix my-codex-session-transient ()
-  "Show Codex session commands."
+  "Show agent session commands."
   [["Default session"
     ("o" "Read-only" my-codex-default-read-only)
     ("w" "Workspace" my-codex-default-workspace)]
@@ -1845,17 +1862,17 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     ("t" "Top Dashboard" my-codex-top)
     ("n" "New named" my-codex-new-session)
     ("r" "Resume" my-codex-resume)
-    ("q" "Hide Codex" my-codex-restore-session-layout)]])
+    ("q" "Hide agent" my-codex-restore-session-layout)]])
 
 ;;;###autoload
 (transient-define-prefix my-codex-transient ()
-  "Show Codex commands."
+  "Show agent commands."
   [["Session"
     ("o" "Read-only" my-codex-read-only)
     ("w" "Workspace" my-codex-workspace)
     ("S" "Sessions" my-codex-session-transient)
     ("r" "Resume" my-codex-resume)
-    ("q" "Hide Codex" my-codex-restore-layout)
+    ("q" "Hide agent" my-codex-restore-layout)
     ("<tab>" "Toggle focus" my-codex-toggle-focus)]
    ["Send"
     ("a" "Ask" my-codex-ask)
@@ -1875,7 +1892,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     ("V" "View staged diff" my-codex-show-git-staged-diff)
     ("d" "Ediff current file" my-codex-ediff-current-file-against-head)
     ("D" "Ediff changed file" my-codex-ediff-changed-file-against-head)
-    ("c" "Commit with Codex message" my-codex-git-commit-with-latest-message)]
+    ("c" "Commit with agent message" my-codex-git-commit-with-latest-message)]
    ["Context"
     ("e" "Explain error" my-codex-explain-region-as-error)
     ("E" "Explain diagnostics" my-codex-explain-buffer-diagnostics)
@@ -1943,85 +1960,85 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     (setq my-codex--display-defaults-enabled-by-mode nil)))
 
 (easy-menu-define my-codex-menu my-codex-global-mode-map
-  "Menu for Codex commands."
-  '("Codex"
+  "Menu for agent commands."
+  '("Agent"
     ("Session"
      ["Show/start read-only" my-codex-read-only
       :keys "F8 o"
-      :help "Show Codex, starting it in read-only mode if needed"]
+      :help "Show the configured agent in read-only mode"]
      ["Show/start workspace-write" my-codex-workspace
       :keys "F8 w"
-      :help "Show Codex, starting it with workspace write access if needed"]
+      :help "Show the configured agent with workspace write access"]
      ["Session commands" my-codex-session-transient
       :keys "F8 S"
-      :help "Open default and future Codex session commands"]
+      :help "Open default and future agent session commands"]
      ["Resume session" my-codex-resume
       :keys "F8 r"
-      :help "Resume a previous Codex session"]
+      :help "Resume a previous agent session"]
      ["Show/start default read-only" my-codex-default-read-only
       :keys "F8 S o"
-      :help "Show the default Codex session in read-only mode"]
+      :help "Show the default agent session in read-only mode"]
      ["Show/start default workspace-write" my-codex-default-workspace
       :keys "F8 S w"
-      :help "Show the default Codex session with workspace write access"]
+      :help "Show the default agent session with workspace write access"]
      ["List open sessions" my-codex-list-sessions
       :keys "F8 S l"
-      :help "List open Codex session buffers"]
+      :help "List open agent session buffers"]
      ["Top dashboard" my-codex-top
       :keys "F8 S t"
-      :help "Display a dashboard of all Codex sessions"]
+      :help "Display a dashboard of all agent sessions"]
      ["New named session" my-codex-new-session
       :keys "F8 S n"
-      :help "Start or show a named Codex session"]
+      :help "Start or show a named agent session"]
      ["Hide selected session window" my-codex-restore-session-layout
       :keys "F8 S q"
-      :help "Hide the Codex window associated with the selected session"]
-     ["Hide Codex window" my-codex-restore-layout
+      :help "Hide the agent window associated with the selected session"]
+     ["Hide agent window" my-codex-restore-layout
       :keys "F8 q"
-      :help "Hide the visible Codex window"]
+      :help "Hide the visible agent window"]
      ["Toggle focus" my-codex-toggle-focus
       :keys "F8 TAB"
-      :help "Toggle focus between Codex and the previous window"])
+      :help "Toggle focus between the agent and the previous window"])
     ("Send"
-     ["Ask Codex..." my-codex-ask
+     ["Ask agent..." my-codex-ask
       :keys "F8 a"
-      :help "Prompt for a question and send it to Codex"]
+      :help "Prompt for a question and send it to the active agent"]
      ["Preset menu" my-codex-ask-preset-transient
       :keys "F8 A"
       :help "Open the prompt preset menu"]
      ["Send selected region" my-codex-send-region
       :keys "F8 s"
       :active (use-region-p)
-      :help "Send the selected region to Codex"]
+      :help "Send the selected region to the active agent"]
      ["Plan refactor for selected region" my-codex-plan-refactor-region
       :keys "F8 R"
       :active (and (use-region-p) buffer-file-name)
-      :help "Ask Codex for a low-risk refactoring plan without sending the code"]
+      :help "Ask the active agent for a low-risk refactoring plan"]
      ["Insert selection" my-codex-insert-selection-into-code
       :keys "F8 Left"
-      :help "Insert the captured Codex selection into the code buffer"]
+      :help "Insert the captured agent selection into the code buffer"]
      ["Inspect current file" my-codex-send-current-file
       :keys "F8 f"
       :active buffer-file-name
-      :help "Ask Codex to inspect the current file directly"]
+      :help "Ask the active agent to inspect the current file directly"]
      ["Analyse test coverage" my-codex-analyse-test-coverage
       :keys "F8 C"
       :active buffer-file-name
-      :help "Ask Codex to analyse missing test scenarios for the current file"]
+      :help "Ask the active agent to analyse missing test scenarios"]
      ["Explain symbol at point" my-codex-explain-symbol-at-point
       :keys "F8 x"
       :active buffer-file-name
-      :help "Ask Codex to explain the symbol at point"]
+      :help "Ask the active agent to explain the symbol at point"]
      ["Send project overview" my-codex-send-project-overview
       :keys "F8 p"
-      :help "Send Codex a compact summary of the current project structure"])
+      :help "Send the active agent a compact project overview"])
     ("Git"
      ["Review Git diff" my-codex-send-git-diff
       :keys "F8 g"
-      :help "Ask Codex to review the current Git diff"]
+      :help "Ask the active agent to review the current Git diff"]
      ["Review staged Git diff" my-codex-send-git-staged-diff
       :keys "F8 G"
-      :help "Ask Codex to review the staged Git diff"]
+      :help "Ask the active agent to review the staged Git diff"]
      ["View Git diff" my-codex-show-git-diff
       :keys "F8 v"
       :help "Show the current Git diff in a diff-mode buffer"]
@@ -2035,33 +2052,33 @@ Open the generated notes in an editable Markdown buffer when they are ready."
      ["Ediff changed file against HEAD" my-codex-ediff-changed-file-against-head
       :keys "F8 D"
       :help "Choose a tracked changed file and review it against HEAD"]
-     ["Edit commit with Codex message" my-codex-git-commit-with-latest-message
+     ["Edit commit with agent message" my-codex-git-commit-with-latest-message
       :keys "F8 c"
-      :help "Use the latest Codex commit message, or ask Codex for one, then edit before committing"])
+      :help "Use the latest agent commit message, or ask for one, then edit before committing"])
     ("Context"
      ["Explain selected error" my-codex-explain-region-as-error
       :keys "F8 e"
       :active (use-region-p)
-      :help "Ask Codex to explain the selected compiler/test error"]
+      :help "Ask the active agent to explain the selected compiler/test error"]
      ["Open project instructions" my-codex-open-project-instructions
       :keys "F8 i"
       :help "Open AGENTS.md, CODEX.md, or .codex/instructions.md"]
      ["Export session to Markdown" my-codex-export-session-to-markdown
       :keys "F8 X"
-      :help "Export the current Codex session transcript to a Markdown buffer"]
+      :help "Export the current agent session transcript to Markdown"]
      ["Summarize session to Markdown" my-codex-summarize-session-to-markdown
       :keys "F8 M"
-      :help "Ask Codex to summarize the current conversation as Markdown notes"]
+      :help "Ask the active agent to summarize the conversation as Markdown notes"]
      ["Run health check" my-codex-doctor
       :keys "F8 !"
-      :help "Check Emacs, Codex, vterm, Git, gh, project, configuration, and terminal startup"])
+      :help "Check Emacs, agent, vterm, Git, gh, project, configuration, and terminal startup"])
     ("GitHub"
      ["List issues" my-codex-list-open-tickets
       :keys "F8 t"
       :help "List open GitHub issues for the current repository in a buffer"]
      ["Draft issue" my-codex-summarize-session-to-github-issue
       :keys "F8 T"
-      :help "Ask Codex to draft a GitHub issue, then edit it before creating it with gh"])
+      :help "Ask the active agent to draft a GitHub issue, then edit it before creating it with gh"])
     "---"
     ["Compile project" my-codex-project-build
      :keys "F7"

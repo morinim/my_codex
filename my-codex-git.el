@@ -28,6 +28,7 @@
 (defvar my-codex-session-summary-poll-interval)
 
 (declare-function my-codex--preview-and-send-prompt "my-codex-prompts" (prompt))
+(declare-function my-codex--active-agent-label "my-codex" (&optional root))
 (declare-function my-codex--process-output-lines "my-codex" (program &rest args))
 (declare-function my-codex--safe-root-name "my-codex" (root))
 (declare-function my-codex--session-export-mode "my-codex" ())
@@ -148,7 +149,7 @@
 
 ;;;###autoload
 (defun my-codex-send-project-overview ()
-  "Ask Codex to inspect the current project for orientation."
+  "Ask the agent to inspect the current project for orientation."
   (interactive)
   (my-codex--preview-and-send-prompt
    "Inspect the repository structure, Git status, and applicable instruction files.
@@ -247,7 +248,7 @@ Do not modify files."))
       (secure-hash 'sha1 (current-buffer)))))
 
 (defun my-codex--send-git-prompt (prompt)
-  "Send PROMPT to Codex from the project root after checking Git."
+  "Send PROMPT to the agent from the project root after checking Git."
   (let ((default-directory (my-codex-project-root)))
     (my-codex--ensure-git-repository)
     (my-codex--preview-and-send-prompt prompt)))
@@ -300,13 +301,13 @@ When STAGED is non-nil, show the staged diff."
 
 ;;;###autoload
 (defun my-codex-send-git-diff ()
-  "Ask Codex to review the current Git diff."
+  "Ask the agent to review the current Git diff."
   (interactive)
   (my-codex--send-git-prompt (my-codex--git-diff-review-prompt)))
 
 ;;;###autoload
 (defun my-codex-send-git-staged-diff ()
-  "Ask Codex to review the staged Git diff."
+  "Ask the agent to review the staged Git diff."
   (interactive)
   (my-codex--send-git-prompt (my-codex--git-staged-diff-review-prompt)))
 
@@ -370,12 +371,12 @@ repository toplevel."
     (buffer-file-name buffer)))
 
 (defun my-codex--current-or-left-file-name ()
-  "Return the current file, using the left window from Codex vterm."
+  "Return the current file, using the left window from the agent vterm."
   (cond
    (buffer-file-name)
    ((my-codex--selected-codex-vterm-window-p)
     (or (my-codex--left-window-file-name)
-        (user-error "No file-visiting buffer to the left of Codex")))
+        (user-error "No file-visiting buffer to the left of agent")))
    (t
     (user-error "Current buffer is not visiting a file"))))
 
@@ -388,7 +389,7 @@ repository toplevel."
 ;;;###autoload
 (defun my-codex-ediff-current-file-against-head ()
   "Review the current file's uncommitted changes against HEAD using Ediff.
-When invoked from the Codex vterm, use the file in the window to its left."
+When invoked from the agent vterm, use the file in the window to its left."
   (interactive)
   (let ((file (my-codex--current-or-left-file-name))
         (root (my-codex-project-root)))
@@ -416,7 +417,7 @@ When invoked from the Codex vterm, use the file in the window to its left."
 
 ;;;###autoload
 (defun my-codex-commit-message-from-diff ()
-  "Ask Codex to draft a commit message from the staged Git diff."
+  "Ask the agent to draft a commit message from the staged Git diff."
   (interactive)
   (let* ((buffer (my-codex-buffer))
          (root (my-codex-project-root))
@@ -432,7 +433,8 @@ When invoked from the Codex vterm, use the file in the window to its left."
             (copy-marker (point-max))))
     (my-codex-send-prompt (my-codex--commit-message-prompt))
     (message
-     "Asked Codex to draft a commit message; use F8 c or M-x %s to edit and commit it."
+     "Asked %s to draft a commit message; use F8 c or M-x %s to edit and commit it."
+     (my-codex--active-agent-label root)
      "my-codex-git-commit-with-latest-message")
     signature))
 
@@ -571,7 +573,7 @@ the extracted text.  ATTEMPTS tracks polling cycles."
    '("..." "<commit message here>")))
 
 (defun my-codex-latest-commit-message ()
-  "Return latest requested commit message from current Codex buffer.
+  "Return latest requested commit message from current agent buffer.
 Return nil when no matching message is available."
   (when-let ((buffer (get-buffer (my-codex-current-buffer-name))))
     (with-current-buffer buffer
@@ -582,10 +584,12 @@ Return nil when no matching message is available."
 
 (defun my-codex--commit-message-buffer-name (root)
   "Return the commit message buffer name for ROOT."
-  (format "*Codex commit message:%s*" (my-codex--safe-root-name root)))
+  (format "*%s commit message:%s*"
+          (my-codex--active-agent-label root)
+          (my-codex--safe-root-name root)))
 
 (defun my-codex-edit-session-summary (summary root)
-  "Open an editable Markdown buffer with Codex session SUMMARY from ROOT."
+  "Open an editable Markdown buffer with agent session SUMMARY from ROOT."
   (let ((buffer (get-buffer-create (my-codex--session-summary-buffer-name root))))
     (pop-to-buffer buffer)
     (let ((inhibit-read-only t))
@@ -594,8 +598,9 @@ Return nil when no matching message is available."
       (goto-char (point-min)))
     (setq default-directory root)
     (my-codex--session-export-mode)
-    (setq-local header-line-format "Edit Codex session summary Markdown.")
-    (message "Codex session summary is ready for editing.")))
+    (setq-local header-line-format "Edit agent session summary Markdown.")
+    (message "%s session summary is ready for editing."
+             (my-codex--active-agent-label root))))
 
 (defun my-codex--finish-git-commit ()
   "Commit staged changes using the current buffer as the commit message."
@@ -616,7 +621,7 @@ Return nil when no matching message is available."
      message root (current-buffer) my-codex--commit-buffer-codex-buffer)))
 
 (defun my-codex--cancel-git-commit ()
-  "Cancel the current Codex commit message buffer."
+  "Cancel the current agent commit message buffer."
   (interactive)
   (quit-window 'kill)
   (message "Git commit canceled."))
@@ -630,7 +635,7 @@ Return nil when no matching message is available."
     (message root &optional staged-signature codex-buffer)
   "Open an editable Git commit buffer with MESSAGE from ROOT.
 STAGED-SIGNATURE is the staged diff signature MESSAGE was drafted for.
-CODEX-BUFFER is the Codex session buffer that requested MESSAGE."
+CODEX-BUFFER is the agent session buffer that requested MESSAGE."
   (let ((buffer (get-buffer-create (my-codex--commit-message-buffer-name root))))
     (pop-to-buffer buffer)
     (let ((inhibit-read-only t))
@@ -753,8 +758,8 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
    "END_COMMIT_MESSAGE"
    (lambda (msg)
      (my-codex-edit-git-commit-with-message msg root staged-signature buffer))
-   "Timed out waiting for Codex commit message."
-   "Codex commit message is ready for editing."
+   "Timed out waiting for agent commit message."
+   "Agent commit message is ready for editing."
    my-codex-commit-message-poll-interval
    my-codex-commit-message-poll-attempts
    '("..." "<commit message here>")
@@ -781,8 +786,8 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
    (or callback
        (lambda (summary)
          (my-codex-edit-session-summary summary root)))
-   "Timed out waiting for Codex session summary."
-   (or ready-message "Codex session summary is ready for editing.")
+   "Timed out waiting for agent session summary."
+   (or ready-message "Agent session summary is ready for editing.")
    my-codex-session-summary-poll-interval
    my-codex-session-summary-poll-attempts
    (append '("..." "<Markdown notes here>") ignored-values)
@@ -791,7 +796,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
 
 ;;;###autoload
 (defun my-codex-git-commit-with-latest-message ()
-  "Edit a commit with the latest Codex message, or ask Codex for one and wait."
+  "Edit a commit with the latest agent message, or ask the agent for one."
   (interactive)
   (let ((root (my-codex-project-root))
         current-signature)
@@ -816,17 +821,18 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
               (progn
                 (my-codex-edit-git-commit-with-message
                  message root request-signature buffer)
-                (message "Editing latest Codex commit message."))
+                (message "Editing latest agent commit message."))
             (my-codex--wait-for-commit-message
              buffer marker root request-signature)
-            (message "Waiting for Codex commit message."))
+            (message "Waiting for agent commit message."))
         (let* ((request-signature (my-codex-commit-message-from-diff))
                (start-point
                 (with-current-buffer buffer
                   (copy-marker my-codex--commit-message-request-marker))))
           (my-codex--wait-for-commit-message
            buffer start-point root request-signature)
-          (message "Asked Codex to draft a commit message; waiting to open editor."))))))
+          (message "Asked %s to draft a commit message; waiting to open editor."
+                   (my-codex--active-agent-label root)))))))
 
 (provide 'my-codex-git)
 

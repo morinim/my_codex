@@ -19,6 +19,7 @@
 (defvar my-codex-github-issue-summary-prompt)
 
 (declare-function my-codex--active-agent "my-codex" (&optional root))
+(declare-function my-codex--active-agent-label "my-codex" (&optional root))
 (declare-function my-codex--agent-label "my-codex" (agent))
 (declare-function my-codex--safe-root-name "my-codex" (root))
 (declare-function my-codex--session-export-mode "my-codex" ())
@@ -303,7 +304,7 @@
 
 ;;;###autoload
 (defun my-codex-summarize-session-to-github-issue ()
-  "Ask Codex to draft a GitHub issue from the current conversation.
+  "Ask the agent to draft a GitHub issue from the current conversation.
 Open an editable issue draft before running `gh issue create'."
   (interactive)
   (let* ((root (my-codex-project-root))
@@ -326,9 +327,10 @@ Open an editable issue draft before running `gh issue create'."
        buffer start-point root begin-marker end-marker
        (lambda (draft)
          (my-codex-edit-github-issue-draft draft root))
-       "Codex GitHub issue draft is ready for editing."
+       "Agent GitHub issue draft is ready for editing."
        '("<GitHub issue draft here>"))
-      (message "Asked Codex to draft a GitHub issue; waiting to open editor."))))
+      (message "Asked %s to draft a GitHub issue; waiting to open editor."
+               (my-codex--active-agent-label root)))))
 
 (provide 'my-codex-github)
 

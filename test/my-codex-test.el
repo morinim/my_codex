@@ -442,7 +442,7 @@
                         (t nil))))
                     ((symbol-function 'pop-to-buffer) #'ignore))
             (my-codex-top))
-          (with-current-buffer "*Codex Top*"
+          (with-current-buffer "*Agents Top*"
             (should (derived-mode-p 'my-codex-top-mode))
             (should (string-match-p "review" (buffer-string)))
             (should (string-match-p "\\*codex-top-render\\*" (buffer-string)))
@@ -453,7 +453,7 @@
       (delete-directory root t)
       (when (buffer-live-p session-buffer)
         (kill-buffer session-buffer))
-      (when-let ((buffer (get-buffer "*Codex Top*")))
+      (when-let ((buffer (get-buffer "*Agents Top*")))
         (kill-buffer buffer)))))
 
 (ert-deftest my-codex-sessions-visit-switches-session-window ()
@@ -1042,7 +1042,7 @@
    (equal
     (my-codex--prompt-preview-header "abcde")
     (concat "Size: 5 chars, approx. 2 tokens. Edit if needed; "
-            "C-c C-c sends to Codex, C-c C-k cancels."))))
+            "C-c C-c sends to agent, C-c C-k cancels."))))
 
 (ert-deftest my-codex-update-prompt-preview-header-tracks-edits ()
   (with-temp-buffer
@@ -1056,7 +1056,7 @@
      (equal
       header-line-format
       (concat "Size: 9 chars, approx. 3 tokens. Edit if needed; "
-              "C-c C-c sends to Codex, C-c C-k cancels.")))))
+              "C-c C-c sends to agent, C-c C-k cancels.")))))
 
 (ert-deftest my-codex-check-prompt-size-allows-small-prompts ()
   (let ((my-codex-large-prompt-warning-chars 10)
