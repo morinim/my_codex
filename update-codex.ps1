@@ -49,11 +49,17 @@ switch ($env:PROCESSOR_ARCHITECTURE) {
 
 try {
     $CodexCommand = Get-Command codex -ErrorAction Stop
+    $CodexPath = [System.IO.Path]::GetFullPath($CodexCommand.Source)
 } catch {
-    Fail "codex is not currently installed or not present in PATH."
+    $LocalCodexPath = Join-Path (Get-Location) "codex.exe"
+
+    if (-not (Test-Path -LiteralPath $LocalCodexPath -PathType Leaf)) {
+        Fail "codex is not currently installed, not present in PATH, and not present in the current directory."
+    }
+
+    $CodexPath = [System.IO.Path]::GetFullPath($LocalCodexPath)
 }
 
-$CodexPath = [System.IO.Path]::GetFullPath($CodexCommand.Source)
 $CodexDir = Split-Path -Parent $CodexPath
 $SandboxSetupPath = Join-Path $CodexDir "codex-windows-sandbox-setup.exe"
 
