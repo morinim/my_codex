@@ -532,31 +532,50 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
      (file file)
      (t (buffer-name)))))
 
-(defun my-codex--flycheck-diagnostic-entry (diagnostic root)
-  "Return a YAML-ish entry for Flycheck DIAGNOSTIC relative to ROOT."
+(defun my-codex--flycheck-diagnostic-entry (diagnostic)
+  "Return a YAML-ish entry for Flycheck DIAGNOSTIC."
   (let ((id (flycheck-error-id diagnostic)))
     (string-join
      (delq nil
            (list
-            (format "  - file: %s"
-                    (my-codex--yaml-string
-                     (my-codex--flycheck-diagnostic-file diagnostic root)))
-            (format "    line: %s"
+            (format "      - line: %s"
                     (or (flycheck-error-line diagnostic) "unknown"))
-            (format "    column: %s"
+            (format "        column: %s"
                     (or (flycheck-error-column diagnostic) "unknown"))
-            (format "    severity: %s"
+            (format "        severity: %s"
                     (my-codex--yaml-string
                      (format "%s" (flycheck-error-level diagnostic))))
-            (format "    checker: %s"
+            (format "        checker: %s"
                     (my-codex--yaml-string
                      (format "%s" (flycheck-error-checker diagnostic))))
             (when id
-              (format "    id: %s" (my-codex--yaml-string (format "%s" id))))
-            (format "    message: %s"
+              (format "        id: %s"
+                      (my-codex--yaml-string (format "%s" id))))
+            (format "        message: %s"
                     (my-codex--yaml-string
                      (or (flycheck-error-message diagnostic) "")))))
      "\n")))
+
+(defun my-codex--flycheck-diagnostics-by-file (diagnostics root)
+  "Return DIAGNOSTICS grouped by file relative to ROOT."
+  (let ((groups nil))
+    (dolist (diagnostic diagnostics)
+      (let* ((file (my-codex--flycheck-diagnostic-file diagnostic root))
+             (group (assoc file groups)))
+        (if group
+            (setcdr group (append (cdr group) (list diagnostic)))
+          (setq groups (append groups (list (list file diagnostic)))))))
+    groups))
+
+(defun my-codex--flycheck-diagnostic-file-entry (group)
+  "Return a YAML-ish entry for diagnostics in GROUP."
+  (string-join
+   (list
+    (format "  - file: %s" (my-codex--yaml-string (car group)))
+    "    diagnostics:"
+    (string-join (mapcar #'my-codex--flycheck-diagnostic-entry (cdr group))
+                 "\n"))
+   "\n"))
 
 (defun my-codex--flycheck-diagnostics-prompt (diagnostics)
   "Return a Codex prompt for Flycheck DIAGNOSTICS."
@@ -581,9 +600,8 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
      included
      (if truncated "true" "false")
      (string-join
-      (mapcar (lambda (diagnostic)
-                (my-codex--flycheck-diagnostic-entry diagnostic root))
-              selected)
+      (mapcar #'my-codex--flycheck-diagnostic-file-entry
+              (my-codex--flycheck-diagnostics-by-file selected root))
       "\n"))))
 
 ;;;###autoload

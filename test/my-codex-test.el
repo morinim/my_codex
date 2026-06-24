@@ -1731,7 +1731,13 @@
                    :level warning
                    :checker emacs-lisp
                    :id "free-vars"
-                   :message "reference to free variable `value'"))
+                   :message "reference to free variable `value'")
+                  (:filename ,file
+                   :line 8
+                   :column 3
+                   :level warning
+                   :checker emacs-lisp
+                   :message "unused lexical argument"))
               (cl-letf (((symbol-function 'my-codex-project-root)
                          (lambda () root)))
                 (let* ((my-codex-flycheck-diagnostics-limit 100)
@@ -1741,18 +1747,34 @@
                    (string-match-p
                     "Analyse these Flycheck diagnostics as a batch" prompt))
                   (should (string-match-p "source: Flycheck" prompt))
-                  (should (string-match-p "diagnostic_count: 1" prompt))
+                  (should (string-match-p "diagnostic_count: 2" prompt))
                   (should (string-match-p "truncated: false" prompt))
                   (should (string-match-p "file: \"src/example\\.el\"" prompt))
-                  (should (string-match-p "line: 7" prompt))
-                  (should (string-match-p "column: 11" prompt))
-                  (should (string-match-p "severity: \"warning\"" prompt))
-                  (should (string-match-p "checker: \"emacs-lisp\"" prompt))
-                  (should (string-match-p "id: \"free-vars\"" prompt))
+                  (should (string-match-p "diagnostics:" prompt))
+                  (should (string-match-p "- line: 7" prompt))
+                  (should (string-match-p "  column: 11" prompt))
+                  (should (string-match-p "  severity: \"warning\"" prompt))
+                  (should (string-match-p "  checker: \"emacs-lisp\"" prompt))
+                  (should (string-match-p "  id: \"free-vars\"" prompt))
                   (should
                    (string-match-p
                     "message: \"reference to free variable `value'\""
-                    prompt)))))))
+                    prompt))
+                  (should (string-match-p "- line: 8" prompt))
+                  (should
+                   (string-match-p
+                    "message: \"unused lexical argument\""
+                    prompt))
+                  (should
+                   (= 1
+                      (let ((start 0)
+                            (count 0))
+                        (while (string-match
+                                "file: \"src/example\\.el\""
+                                prompt start)
+                          (setq count (1+ count)
+                                start (match-end 0)))
+                        count))))))))
       (delete-directory root t))))
 
 (ert-deftest my-codex-flycheck-diagnostics-prompt-reports-truncation ()
