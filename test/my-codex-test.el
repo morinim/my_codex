@@ -1035,12 +1035,26 @@
     (should-not (my-codex--display-buffer-action-alist))
     (should-not (my-codex--right-side-action-p))))
 
-(ert-deftest my-codex-prompt-preview-header-shows-initial-size ()
+(ert-deftest my-codex-prompt-preview-header-shows-size ()
   (should
    (equal
     (my-codex--prompt-preview-header "abcde")
-    (concat "Initial size: 5 chars, approx. 2 tokens. Edit if needed; "
+    (concat "Size: 5 chars, approx. 2 tokens. Edit if needed; "
             "C-c C-c sends to Codex, C-c C-k cancels."))))
+
+(ert-deftest my-codex-update-prompt-preview-header-tracks-edits ()
+  (with-temp-buffer
+    (insert "abcde")
+    (my-codex--update-prompt-preview-header)
+    (add-hook 'after-change-functions
+              #'my-codex--update-prompt-preview-header nil t)
+    (goto-char (point-max))
+    (insert "fghi")
+    (should
+     (equal
+      header-line-format
+      (concat "Size: 9 chars, approx. 3 tokens. Edit if needed; "
+              "C-c C-c sends to Codex, C-c C-k cancels.")))))
 
 (ert-deftest my-codex-check-prompt-size-allows-small-prompts ()
   (let ((my-codex-large-prompt-warning-chars 10)

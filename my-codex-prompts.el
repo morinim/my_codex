@@ -60,17 +60,29 @@
   "Return a rough token count estimate for TEXT."
   (ceiling (/ (float (length text)) 4)))
 
+(defun my-codex--prompt-size-description-for-length (chars)
+  "Return a short human-readable size description for CHARS."
+  (format "%d chars, approx. %d tokens"
+          chars
+          (ceiling (/ (float chars) 4))))
+
 (defun my-codex--prompt-size-description (prompt)
   "Return a short human-readable size description for PROMPT."
-  (format "%d chars, approx. %d tokens"
-          (length prompt)
-          (my-codex--approx-token-count prompt)))
+  (my-codex--prompt-size-description-for-length (length prompt)))
 
 (defun my-codex--prompt-preview-header (prompt)
   "Return the prompt preview header line for PROMPT."
-  (format (concat "Initial size: %s. Edit if needed; "
+  (format (concat "Size: %s. Edit if needed; "
                   "C-c C-c sends to Codex, C-c C-k cancels.")
           (my-codex--prompt-size-description prompt)))
+
+(defun my-codex--update-prompt-preview-header (&rest _)
+  "Update the current prompt preview header from buffer contents."
+  (setq-local header-line-format
+              (format (concat "Size: %s. Edit if needed; "
+                              "C-c C-c sends to Codex, C-c C-k cancels.")
+                      (my-codex--prompt-size-description-for-length
+                       (buffer-size)))))
 
 (defun my-codex--check-prompt-size (prompt)
   "Raise or ask for confirmation when PROMPT is unusually large."
@@ -170,8 +182,9 @@
         (text-mode)
         (setq default-directory root)
         (setq-local my-codex--prompt-preview-origin-window origin-window)
-        (setq-local header-line-format
-                    (my-codex--prompt-preview-header prompt))
+        (my-codex--update-prompt-preview-header)
+        (add-hook 'after-change-functions
+                  #'my-codex--update-prompt-preview-header nil t)
         (let ((map (define-keymap :parent (current-local-map)
                      "C-c C-c" #'my-codex--finish-prompt-preview
                      "C-c C-k" #'my-codex--cancel-prompt-preview)))
