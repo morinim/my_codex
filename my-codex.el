@@ -349,7 +349,7 @@ sends selected region text from `my-codex-send-region'."
                  natnum)
   :group 'my-codex)
 
-(defcustom my-codex-symbol-context-lines 10
+(defcustom my-codex-symbol-context-lines 5
   "Number of surrounding lines to include when explaining a symbol."
   :type 'natnum
   :group 'my-codex)
@@ -359,17 +359,17 @@ sends selected region text from `my-codex-send-region'."
   :type 'boolean
   :group 'my-codex)
 
-(defcustom my-codex-symbol-xref-definition-limit 2
+(defcustom my-codex-symbol-xref-definition-limit 1
   "Maximum number of xref definitions to include for symbol explanations."
   :type 'natnum
   :group 'my-codex)
 
-(defcustom my-codex-symbol-xref-reference-limit 8
+(defcustom my-codex-symbol-xref-reference-limit 3
   "Maximum number of xref references to include for symbol explanations."
   :type 'natnum
   :group 'my-codex)
 
-(defcustom my-codex-symbol-xref-context-lines 4
+(defcustom my-codex-symbol-xref-context-lines 1
   "Number of surrounding lines to include for each xref location."
   :type 'natnum
   :group 'my-codex)
