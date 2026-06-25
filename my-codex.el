@@ -554,7 +554,7 @@ When PLAIN is non-nil, do not apply text properties."
                 my-codex-session-access-mode)))
     (setq-local header-line-format title)
     (setq-local mode-line-format
-                `(" " ,title "  " mode-line-position))))
+                `(" " ,title))))
 
 (defvar-local my-codex-session-agent nil
   "Agent profile used for the current agent session buffer.")

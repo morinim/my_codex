@@ -319,7 +319,8 @@
           (should (string-match-p "Codex · WORKSPACE WRITE · default"
                                   header-line-format))
           (should (string-match-p "Codex · WORKSPACE WRITE · default"
-                                  (nth 1 mode-line-format))))
+                                  (nth 1 mode-line-format)))
+          (should-not (memq 'mode-line-position mode-line-format)))
       (delete-directory root t))))
 
 (ert-deftest my-codex-mark-named-session-sets-buffer-local-metadata ()
@@ -497,7 +498,8 @@
             (should (string-match-p "Codex · WORKSPACE WRITE · after"
                                     header-line-format))
             (should (string-match-p "Codex · WORKSPACE WRITE · after"
-                                    (nth 1 mode-line-format)))))
+                                    (nth 1 mode-line-format)))
+            (should-not (memq 'mode-line-position mode-line-format))))
       (delete-directory root t)
       (when (buffer-live-p session-buffer)
         (kill-buffer session-buffer))
