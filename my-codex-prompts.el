@@ -62,6 +62,14 @@
 (declare-function flycheck-error-line "flycheck" (err))
 (declare-function flycheck-error-message "flycheck" (err))
 
+(defface my-codex-prompt-preview-reference-face
+  '((t :inherit font-lock-constant-face))
+  "Face used for references in prompt preview buffers.")
+
+(defface my-codex-prompt-preview-embedded-face
+  '((t :inherit font-lock-doc-face))
+  "Face used for embedded text in prompt preview buffers.")
+
 (defun my-codex--approx-token-count (text)
   "Return a conservative token count estimate for TEXT."
   (ceiling (/ (float (string-bytes text)) 3.2)))
@@ -135,6 +143,61 @@ session is available."
               (my-codex--prompt-preview-header
                (buffer-string)
                my-codex--prompt-preview-target-buffer)))
+
+(defun my-codex--prompt-preview-literal-block-matcher (limit)
+  "Match YAML literal block bodies before LIMIT in prompt previews."
+  (let (match)
+    (while (and (not match)
+                (re-search-forward "^[[:space:]]*[[:alnum:]_]+: |[[:space:]]*$"
+                                   limit t))
+      (let* ((indent (save-excursion
+                       (goto-char (match-beginning 0))
+                       (current-indentation)))
+             (start (progn
+                      (forward-line 1)
+                      (point)))
+             (end start))
+        (while (and (< (point) limit)
+                    (not (eobp))
+                    (or (looking-at-p "^[[:space:]]*$")
+                        (> (current-indentation) indent)))
+          (forward-line 1)
+          (setq end (point)))
+        (when (> end start)
+          (set-match-data (list start end))
+          (setq match t))))
+    match))
+
+(defun my-codex--prompt-preview-embedded-tail-matcher (limit)
+  "Match common embedded prompt payload tails before LIMIT."
+  (when (re-search-forward
+         (regexp-opt
+          '("Review this code and report findings:"
+            "Explain this compiler/test error and suggest the most likely fix:"))
+         limit t)
+    (let ((start (progn
+                   (forward-line 1)
+                   (if (looking-at-p "^[[:space:]]*$")
+                       (progn
+                         (forward-line 1)
+                         (point))
+                     (point))))
+          (end limit))
+      (when (> end start)
+        (set-match-data (list start end))
+        t))))
+
+(defun my-codex--setup-prompt-preview-font-lock ()
+  "Highlight references and embedded text in the current prompt preview."
+  (setq-local font-lock-defaults
+              '(((my-codex--prompt-preview-literal-block-matcher
+                  . 'my-codex-prompt-preview-embedded-face)
+                 (my-codex--prompt-preview-embedded-tail-matcher
+                  . 'my-codex-prompt-preview-embedded-face)
+                 ("^@[[:graph:]]+ lines [0-9]+-[0-9]+$"
+                  . 'my-codex-prompt-preview-reference-face)
+                 ("^[[:space:]]*\\(?:- +\\)?location: \"?\\([^\"\n]+\\)\"?[[:space:]]*$"
+                  1 'my-codex-prompt-preview-reference-face)))))
 
 (defun my-codex--check-prompt-size (prompt)
   "Raise or ask for confirmation when PROMPT is unusually large."
@@ -239,6 +302,8 @@ session is available."
             (insert prompt)
             (goto-char (point-min)))
           (text-mode)
+          (my-codex--setup-prompt-preview-font-lock)
+          (font-lock-ensure)
           (setq default-directory root)
           (setq-local my-codex--prompt-preview-origin-window origin-window)
           (setq-local my-codex--prompt-preview-target-buffer target-buffer)

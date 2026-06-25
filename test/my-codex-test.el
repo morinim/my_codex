@@ -1086,6 +1086,56 @@
         (kill-buffer target))
       (delete-directory root t))))
 
+(ert-deftest my-codex-prompt-preview-highlights-references ()
+  (with-temp-buffer
+    (insert "Selected region:\n\n@my-codex-prompts.el lines 1-5\n")
+    (text-mode)
+    (my-codex--setup-prompt-preview-font-lock)
+    (font-lock-ensure)
+    (goto-char (point-min))
+    (search-forward "@my-codex-prompts.el")
+    (should
+     (eq (get-text-property (match-beginning 0) 'face)
+         'my-codex-prompt-preview-reference-face))))
+
+(ert-deftest my-codex-prompt-preview-highlights-xref-locations ()
+  (with-temp-buffer
+    (insert "reference_context:\n  - location: \"my-codex.el:12\"\n")
+    (text-mode)
+    (my-codex--setup-prompt-preview-font-lock)
+    (font-lock-ensure)
+    (goto-char (point-min))
+    (search-forward "my-codex.el")
+    (should
+     (eq (get-text-property (match-beginning 0) 'face)
+         'my-codex-prompt-preview-reference-face))))
+
+(ert-deftest my-codex-prompt-preview-highlights-embedded-literal-blocks ()
+  (with-temp-buffer
+    (insert "symbol_context:\n  excerpt: |\n    (message \"hello\")\nnext: value\n")
+    (text-mode)
+    (my-codex--setup-prompt-preview-font-lock)
+    (font-lock-ensure)
+    (goto-char (point-min))
+    (search-forward "(message")
+    (should
+     (eq (get-text-property (match-beginning 0) 'face)
+         'my-codex-prompt-preview-embedded-face))
+    (search-forward "next")
+    (should-not (get-text-property (match-beginning 0) 'face))))
+
+(ert-deftest my-codex-prompt-preview-highlights-embedded-review-text ()
+  (with-temp-buffer
+    (insert "Context\n\nReview this code and report findings:\n\n(defun x () 1)\n")
+    (text-mode)
+    (my-codex--setup-prompt-preview-font-lock)
+    (font-lock-ensure)
+    (goto-char (point-min))
+    (search-forward "(defun")
+    (should
+     (eq (get-text-property (match-beginning 0) 'face)
+         'my-codex-prompt-preview-embedded-face))))
+
 (ert-deftest my-codex-ask-prompt-label-shows-target-session ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-ask" t)))
         (target (get-buffer-create "*my-codex-ask-target*")))
