@@ -142,7 +142,25 @@ ID is a symbol used for configuration and session metadata.  PREFIX is
 used in buffer names, so different agents can have sessions with the
 same project and session name without colliding.  COMMAND may be either
 a string or a symbol whose value is a string."
-  :type 'sexp
+  :type '(repeat
+          (list :tag "Agent profile"
+                (symbol :tag "Identifier")
+                (const :format "" :value :label)
+                (string :tag "Display label")
+                (const :format "" :value :buffer-prefix)
+                (string :tag "Buffer prefix")
+                (const :format "" :value :read-only-command)
+                (choice :tag "Read-only command"
+                        (string :tag "Command")
+                        (symbol :tag "Variable"))
+                (const :format "" :value :workspace-command)
+                (choice :tag "Workspace command"
+                        (string :tag "Command")
+                        (symbol :tag "Variable"))
+                (const :format "" :value :resume-command)
+                (choice :tag "Resume command"
+                        (string :tag "Command")
+                        (symbol :tag "Variable"))))
   :group 'my-codex)
 
 (defcustom my-codex-left-width 81
