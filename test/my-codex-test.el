@@ -318,10 +318,48 @@
           (should (eq my-codex-session-agent 'codex))
           (should (string-match-p "Codex · WORKSPACE WRITE · default"
                                   header-line-format))
-          (should (string-match-p "Codex · WORKSPACE WRITE · default"
-                                  (nth 1 mode-line-format)))
+          (let ((footer (my-codex--session-footer)))
+            (should (string-match-p
+                     (regexp-quote (directory-file-name
+                                    (abbreviate-file-name root)))
+                     footer))
+            (should (string-match-p "idle" footer))
+            (should (string-match-p "last -" footer))
+            (should-not (string-match-p "\\(^\\| · \\)default\\( · \\|$\\)" footer))
+            (should-not (string-match-p "WORKSPACE WRITE" footer)))
           (should-not (memq 'mode-line-position mode-line-format)))
       (delete-directory root t))))
+
+(ert-deftest my-codex-session-footer-shows-last-output-time ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-session" t))))
+    (unwind-protect
+        (with-temp-buffer
+          (my-codex--mark-default-session
+           (current-buffer) root 'read-only)
+          (setq-local my-codex-session-last-output-time
+                      (encode-time 0 42 15 25 6 2026))
+          (should (string-match-p "last 15:42"
+                                  (my-codex--session-footer))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-track-process-output-time-preserves-filter ()
+  (let* ((buffer (generate-new-buffer "*my-codex-output-time*"))
+         (process (make-pipe-process :name "my-codex-output-time"
+                                     :buffer buffer))
+         seen)
+    (unwind-protect
+        (with-current-buffer buffer
+          (set-process-filter process
+                              (lambda (_proc output)
+                                (setq seen output)))
+          (my-codex--track-process-output-time process)
+          (funcall (process-filter process) process "hello")
+          (should (equal seen "hello"))
+          (should my-codex-session-last-output-time))
+      (when (process-live-p process)
+        (delete-process process))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
 
 (ert-deftest my-codex-mark-named-session-sets-buffer-local-metadata ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-session" t))))
@@ -497,8 +535,14 @@
             (should (equal my-codex-session-name "after"))
             (should (string-match-p "Codex · WORKSPACE WRITE · after"
                                     header-line-format))
-            (should (string-match-p "Codex · WORKSPACE WRITE · after"
-                                    (nth 1 mode-line-format)))
+            (let ((footer (my-codex--session-footer)))
+              (should (string-match-p
+                       (regexp-quote (directory-file-name
+                                      (abbreviate-file-name root)))
+                       footer))
+              (should-not (string-match-p "WORKSPACE WRITE" footer))
+              (should-not (string-match-p "\\(^\\| · \\)after\\( · \\|$\\)" footer))
+              (should (string-match-p "idle" footer)))
             (should-not (memq 'mode-line-position mode-line-format))))
       (delete-directory root t)
       (when (buffer-live-p session-buffer)
@@ -2208,6 +2252,7 @@ Do not modify files."))))
                   ((symbol-function 'get-buffer-process) (lambda (&rest _) "mock-proc"))
                   ((symbol-function 'process-live-p) (lambda (&rest _) t))
                   ((symbol-function 'set-process-query-on-exit-flag) #'ignore)
+                  ((symbol-function 'my-codex--track-process-output-time) #'ignore)
                   ((symbol-function 'vterm-send-string)
                    (lambda (str &optional _paste) (push str sent-strings)))
                   ((symbol-function 'vterm-send-return) (lambda () (push 'return sent-strings)))

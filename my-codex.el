@@ -546,6 +546,61 @@ When PLAIN is non-nil, do not apply text properties."
           (my-codex--access-mode-label access-mode plain)
           (or session "default")))
 
+(defun my-codex--terminal-type-label ()
+  "Return a short label for the current terminal buffer type."
+  (cond
+   ((derived-mode-p 'vterm-mode) "vterm")
+   ((derived-mode-p 'term-mode) "ansi-term")
+   ((derived-mode-p 'shell-mode) "shell")
+   (t (format-mode-line mode-name))))
+
+(defun my-codex--short-directory-name (directory)
+  "Return DIRECTORY abbreviated for compact display."
+  (if (and directory (not (string-empty-p directory)))
+      (directory-file-name (abbreviate-file-name directory))
+    "-"))
+
+(defun my-codex--process-status-label (&optional process)
+  "Return a compact state label for PROCESS."
+  (if process
+      (pcase (process-status process)
+        ('run "running")
+        ('stop "stopped")
+        ('exit (format "exited %s" (process-exit-status process)))
+        ('signal (format "signalled %s" (process-exit-status process)))
+        (status (symbol-name status)))
+    "idle"))
+
+(defun my-codex--last-status-label (&optional process)
+  "Return the last command status label for PROCESS."
+  (if process
+      (pcase (process-status process)
+        ('exit (number-to-string (process-exit-status process)))
+        ('signal (pcase (process-exit-status process)
+                   (2 "SIGINT")
+                   (15 "SIGTERM")
+                   (9 "SIGKILL")
+                   (status (format "signal %s" status))))
+        (_ "-"))
+    "-"))
+
+(defun my-codex--last-output-label ()
+  "Return the latest output time for the current session."
+  (if my-codex-session-last-output-time
+      (format-time-string "%H:%M" my-codex-session-last-output-time)
+    "-"))
+
+(defun my-codex--session-footer ()
+  "Return the dynamic footer text for the current agent session."
+  (let ((process (get-buffer-process (current-buffer))))
+    (format " %s · %s · %s · %s · last %s"
+            (my-codex--terminal-type-label)
+            (my-codex--short-directory-name
+             (or my-codex-session-project-root default-directory))
+            (my-codex--process-status-label process)
+            (my-codex--last-status-label process)
+            (my-codex--last-output-label))))
+
 (defun my-codex--refresh-session-title ()
   "Refresh the current buffer's agent session title surfaces."
   (let ((title (my-codex--session-title
@@ -554,7 +609,7 @@ When PLAIN is non-nil, do not apply text properties."
                 my-codex-session-access-mode)))
     (setq-local header-line-format title)
     (setq-local mode-line-format
-                `(" " ,title))))
+                '((:eval (my-codex--session-footer))))))
 
 (defvar-local my-codex-session-agent nil
   "Agent profile used for the current agent session buffer.")
@@ -564,6 +619,9 @@ When PLAIN is non-nil, do not apply text properties."
 
 (defvar-local my-codex-session-last-activity nil
   "Time of the last prompt sent to the agent.")
+
+(defvar-local my-codex-session-last-output-time nil
+  "Time of the last output received from the agent process.")
 
 (defvar-local my-codex-session-prompt-count 0
   "Number of prompts sent during this agent session.")
@@ -721,6 +779,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
     (setq-local my-codex-session-agent agent)
     (setq-local my-codex-session-start-time (current-time))
     (setq-local my-codex-session-last-activity (current-time))
+    (setq-local my-codex-session-last-output-time nil)
     (setq-local my-codex-session-prompt-count 0)
     (my-codex--refresh-session-title)))
 
@@ -780,6 +839,22 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
           (vterm-mode)))
     (vterm-mode)))
 
+(defun my-codex--track-process-output-time (process)
+  "Record output timestamps for PROCESS without replacing its behaviour."
+  (unless (process-get process 'my-codex-output-time-filter)
+    (let ((original-filter (process-filter process)))
+      (process-put process 'my-codex-output-time-filter t)
+      (set-process-filter
+       process
+       (lambda (proc output)
+         (when (and output (not (string-empty-p output)))
+           (when-let (buffer (process-buffer proc))
+             (with-current-buffer buffer
+               (setq-local my-codex-session-last-output-time (current-time))
+               (force-mode-line-update))))
+         (when original-filter
+           (funcall original-filter proc output)))))))
+
 (cl-defmethod my-codex-backend-start
   ((backend my-codex-vterm-backend) project-root command
    &optional session-name agent access-mode)
@@ -801,6 +876,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
         (unless (process-live-p proc)
           (user-error "Failed to start vterm process in %s" buffer-name))
         (set-process-query-on-exit-flag proc nil)
+        (my-codex--track-process-output-time proc)
         (goto-char (point-max))
         (vterm-send-string (my-codex--shell-command-and-exit command))
         (vterm-send-return)
