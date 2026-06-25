@@ -116,7 +116,7 @@ session is available."
             (format "%s / %s / %s"
                     (my-codex--agent-label agent)
                     session
-                    access)))
+                    (my-codex--access-mode-label access t))))
       (format "%s / default" (my-codex--active-agent-label)))))
 
 (defun my-codex--ask-prompt-label ()
@@ -127,7 +127,8 @@ session is available."
                 (my-codex--agent-label
                  (or my-codex-session-agent (my-codex--active-agent)))
                 (or my-codex-session-name "default")
-                (or my-codex-session-access-mode 'unknown)))
+                (my-codex--access-mode-label
+                 (or my-codex-session-access-mode 'unknown) t)))
     (my-codex--active-agent-label)))
 
 (defun my-codex--prompt-preview-header (prompt &optional target-buffer)

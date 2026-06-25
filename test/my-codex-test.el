@@ -210,6 +210,12 @@
    (eq (my-codex--session-access-mode "codex --custom")
        'custom)))
 
+(ert-deftest my-codex-access-mode-labels-highlight-risk ()
+  (should (equal (my-codex--access-mode-label 'workspace-write t)
+                 "WORKSPACE WRITE"))
+  (should (equal (my-codex--access-mode-label 'read-only t)
+                 "read-only [lock]")))
+
 (ert-deftest my-codex-agent-command-resolves-symbol-backed-commands ()
   (let ((my-codex-read-only-command "codex-ro")
         (my-codex-workspace-command "codex-ww")
@@ -309,7 +315,11 @@
            (equal my-codex-session-project-root
                   (file-name-as-directory (file-truename root))))
           (should (eq my-codex-session-access-mode 'workspace-write))
-          (should (eq my-codex-session-agent 'codex)))
+          (should (eq my-codex-session-agent 'codex))
+          (should (string-match-p "Codex · WORKSPACE WRITE · default"
+                                  header-line-format))
+          (should (string-match-p "Codex · WORKSPACE WRITE · default"
+                                  (nth 1 mode-line-format))))
       (delete-directory root t))))
 
 (ert-deftest my-codex-mark-named-session-sets-buffer-local-metadata ()
@@ -411,7 +421,7 @@
                                     (buffer-string)))
             (should (string-match-p "codex" (buffer-string)))
             (should (string-match-p "plan" (buffer-string)))
-            (should (string-match-p "read-only" (buffer-string)))))
+            (should (string-match-p "read-only \\[lock\\]" (buffer-string)))))
       (delete-directory root t)
       (when (buffer-live-p session-buffer)
         (kill-buffer session-buffer))
@@ -446,10 +456,48 @@
             (should (derived-mode-p 'my-codex-top-mode))
             (should (string-match-p "review" (buffer-string)))
             (should (string-match-p "\\*codex-top-render\\*" (buffer-string)))
+            (should (string-match-p "WORKSPACE WRITE" (buffer-string)))
             (should (string-match-p "feature-x" (buffer-string)))
             (should (string-match-p "dirty" (buffer-string)))
             (should (string-match-p "9999" (buffer-string)))
             (should (string-match-p "live" (buffer-string)))))
+      (delete-directory root t)
+      (when (buffer-live-p session-buffer)
+        (kill-buffer session-buffer))
+      (when-let ((buffer (get-buffer "*Agents Top*")))
+        (kill-buffer buffer)))))
+
+(ert-deftest my-codex-top-rename-session-refreshes-session-title ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-top" t)))
+        (session-buffer (get-buffer-create "*codex-top-rename*")))
+    (unwind-protect
+        (progn
+          (my-codex--mark-named-session
+           session-buffer "before" root 'workspace-write)
+          (cl-letf (((symbol-function 'get-buffer-process)
+                     (lambda (buffer)
+                       (eq buffer session-buffer)))
+                    ((symbol-function 'process-live-p)
+                     (lambda (process) process))
+                    ((symbol-function 'process-id)
+                     (lambda (_) 9999))
+                    ((symbol-function 'my-codex--process-output-lines)
+                     (lambda (&rest _) nil))
+                    ((symbol-function 'pop-to-buffer) #'ignore)
+                    ((symbol-function 'read-string)
+                     (lambda (&rest _) "after")))
+            (my-codex-top)
+            (with-current-buffer "*Agents Top*"
+              (goto-char (point-min))
+              (search-forward "*codex-top-rename*")
+              (beginning-of-line)
+              (my-codex-top-rename-session)))
+          (with-current-buffer session-buffer
+            (should (equal my-codex-session-name "after"))
+            (should (string-match-p "Codex · WORKSPACE WRITE · after"
+                                    header-line-format))
+            (should (string-match-p "Codex · WORKSPACE WRITE · after"
+                                    (nth 1 mode-line-format)))))
       (delete-directory root t)
       (when (buffer-live-p session-buffer)
         (kill-buffer session-buffer))
@@ -1055,7 +1103,7 @@
           (should
            (equal
             (my-codex--prompt-preview-header "abcde" buffer)
-            (concat "Target: Antigravity / plan / workspace-write. "
+            (concat "Target: Antigravity / plan / WORKSPACE WRITE. "
                     "Size: 5 chars, approx. 2 tokens. Edit if needed; "
                     "C-c C-c sends to agent, C-c C-k cancels."))))
       (when (buffer-live-p buffer)
@@ -1079,7 +1127,7 @@
             (should
              (equal
               header-line-format
-              (concat "Target: Codex / default / read-only. "
+              (concat "Target: Codex / default / read-only [lock]. "
                       "Size: 9 chars, approx. 3 tokens. Edit if needed; "
                       "C-c C-c sends to agent, C-c C-k cancels.")))))
       (when (buffer-live-p target)
@@ -1146,7 +1194,7 @@
           (set-window-parameter (selected-window) 'my-codex-term-buffer target)
           (should
            (equal (my-codex--ask-prompt-label)
-                  "Antigravity [review/workspace-write]")))
+                  "Antigravity [review/WORKSPACE WRITE]")))
       (set-window-parameter (selected-window) 'my-codex-term-buffer nil)
       (when (buffer-live-p target)
         (kill-buffer target))

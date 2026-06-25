@@ -509,6 +509,53 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 (defvar-local my-codex-session-access-mode nil
   "Access mode used for the current agent session buffer.")
 
+(defface my-codex-workspace-write-face
+  '((t :inherit warning :weight bold))
+  "Face used to mark workspace-write agent sessions."
+  :group 'my-codex)
+
+(defface my-codex-read-only-face
+  '((t :inherit shadow))
+  "Face used to mark read-only agent sessions."
+  :group 'my-codex)
+
+(defun my-codex--access-mode-label (access-mode &optional plain)
+  "Return a visual label for ACCESS-MODE.
+When PLAIN is non-nil, do not apply text properties."
+  (let* ((label
+          (pcase access-mode
+            ('workspace-write "WORKSPACE WRITE")
+            ('read-only "read-only [lock]")
+            ('resume "resume")
+            ('custom "custom")
+            ('unknown "unknown")
+            (_ (if access-mode (symbol-name access-mode) "unknown"))))
+         (face
+          (pcase access-mode
+            ('workspace-write 'my-codex-workspace-write-face)
+            ('read-only 'my-codex-read-only-face)
+            (_ nil))))
+    (if (or plain (null face))
+        label
+      (propertize label 'face face))))
+
+(defun my-codex--session-title (&optional agent session access-mode plain)
+  "Return the display title for an agent session."
+  (format "%s · %s · %s"
+          (my-codex--agent-label (or agent my-codex-agent))
+          (my-codex--access-mode-label access-mode plain)
+          (or session "default")))
+
+(defun my-codex--refresh-session-title ()
+  "Refresh the current buffer's agent session title surfaces."
+  (let ((title (my-codex--session-title
+                my-codex-session-agent
+                my-codex-session-name
+                my-codex-session-access-mode)))
+    (setq-local header-line-format title)
+    (setq-local mode-line-format
+                `(" " ,title "  " mode-line-position))))
+
 (defvar-local my-codex-session-agent nil
   "Agent profile used for the current agent session buffer.")
 
@@ -674,7 +721,8 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
     (setq-local my-codex-session-agent agent)
     (setq-local my-codex-session-start-time (current-time))
     (setq-local my-codex-session-last-activity (current-time))
-    (setq-local my-codex-session-prompt-count 0)))
+    (setq-local my-codex-session-prompt-count 0)
+    (my-codex--refresh-session-title)))
 
 (defun my-codex--mark-default-session
     (buffer project-root access-mode &optional agent)
@@ -1281,7 +1329,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
                           (buffer-name buffer)
                           (if agent (symbol-name agent) "")
                           (or name "")
-                          (if access (symbol-name access) "")
+                          (my-codex--access-mode-label access)
                           (or root "")))))
                buffers))
         (tabulated-list-print t)
@@ -1343,6 +1391,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
         [("Project" 12 t)
          ("Session" 10 t)
          ("Buffer" 28 t)
+         ("Access" 16 t)
          ("State" 6 t)
          ("PID" 8 t)
          ("Branch" 12 t)
@@ -1367,12 +1416,13 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
   "Build tabulated list entries for all agent sessions."
   (mapcar
    (lambda (buffer)
-     (let (project session state pid branch git prompts lines age last-act)
+     (let (project session access state pid branch git prompts lines age last-act)
        (with-current-buffer buffer
          (let ((root my-codex-session-project-root)
                (now (current-time)))
            (setq project (if root (file-name-nondirectory (directory-file-name root)) "")
                  session (or my-codex-session-name "")
+                 access (my-codex--access-mode-label my-codex-session-access-mode)
                  state (if-let ((proc (get-buffer-process buffer)))
                            (if (process-live-p proc)
                                (propertize "live" 'face 'my-codex-top-live-face)
@@ -1395,7 +1445,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
              (setq branch "—"
                    git "—"))))
        (list (buffer-name buffer)
-             (vector project session (buffer-name buffer) state pid branch git prompts lines age last-act))))
+             (vector project session (buffer-name buffer) access state pid branch git prompts lines age last-act))))
    (my-codex--all-session-buffers)))
 
 (defun my-codex-top-kill-session ()
@@ -1474,6 +1524,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
                (new-buf-name (my-codex-session-buffer-name new-name agent)))
           (setq-local my-codex-session-name new-name)
           (setq-local my-codex-session-id new-id)
+          (my-codex--refresh-session-title)
           (rename-buffer new-buf-name t)))
       (revert-buffer))))
 
