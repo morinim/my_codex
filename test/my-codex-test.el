@@ -732,7 +732,7 @@
                              (car started)))))
       (delete-directory root t))))
 
-(ert-deftest my-codex-restore-session-layout-hides-associated-session ()
+(ert-deftest my-codex-hide-session-window-hides-associated-session ()
   (let ((default-buffer (get-buffer-create "*codex-default-test*"))
         (session-buffer (get-buffer-create "*codex-session-test*"))
         term-window
@@ -749,7 +749,7 @@
                     ((symbol-function 'quit-window)
                      (lambda (&optional _kill window)
                        (setq hidden (window-buffer window)))))
-            (my-codex-restore-session-layout)
+            (my-codex-hide-session-window)
             (should (eq hidden session-buffer))))
       (set-window-parameter
        (selected-window) 'my-codex-term-buffer nil)
@@ -2194,7 +2194,7 @@ Do not modify files."))))
                       (my-codex--github-issue-output-buffer-name root)))
     (should
      (string-prefix-p "*Antigravity open issues:"
-                      (my-codex--github-ticket-list-buffer-name root)))
+                      (my-codex--github-issue-list-buffer-name root)))
     (should
      (string-prefix-p "*Antigravity GitHub issue draft:"
                       (my-codex--github-issue-draft-buffer-name root)))))

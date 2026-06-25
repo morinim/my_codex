@@ -41,7 +41,7 @@
          (label (my-codex--agent-label agent)))
     (format "*%s GitHub issue:%s*" label (my-codex--safe-root-name root))))
 
-(defun my-codex--github-ticket-list-buffer-name (root)
+(defun my-codex--github-issue-list-buffer-name (root)
   "Return the open issue list buffer name for ROOT."
   (let* ((agent (my-codex--active-agent root))
          (label (my-codex--agent-label agent)))
@@ -53,7 +53,7 @@
          (label (my-codex--agent-label agent)))
     (format "*%s GitHub issue draft:%s*" label (my-codex--safe-root-name root))))
 
-(defun my-codex--github-ticket-list-sentinel (proc _event)
+(defun my-codex--github-issue-list-sentinel (proc _event)
   "Handle completion of open issue list process PROC."
   (when (memq (process-status proc) '(exit signal))
     (let ((status (process-exit-status proc))
@@ -79,14 +79,14 @@
                  (if (zerop status) "updated" "failed"))))))
 
 ;;;###autoload
-(defun my-codex-list-open-tickets ()
+(defun my-codex-list-open-issues ()
   "List open GitHub issues for the current repository in a buffer."
   (interactive)
   (unless (executable-find "gh")
     (user-error "GitHub CLI `gh' not found in exec-path"))
   (let* ((root (my-codex-project-root))
          (buffer
-          (get-buffer-create (my-codex--github-ticket-list-buffer-name root))))
+          (get-buffer-create (my-codex--github-issue-list-buffer-name root))))
     (with-current-buffer buffer
       (read-only-mode -1)
       (let ((inhibit-read-only t))
@@ -97,14 +97,14 @@
     (let ((process
            (let ((default-directory root))
              (make-process
-              :name "my-codex-open-tickets"
+              :name "my-codex-open-issues"
               :buffer buffer
               :command (list "gh" "issue" "list"
                              "--state" "open"
                              "--limit" "100")
               :connection-type 'pipe
               :noquery t
-              :sentinel #'my-codex--github-ticket-list-sentinel))))
+              :sentinel #'my-codex--github-issue-list-sentinel))))
       (process-put process 'my-codex-content-start
                    (with-current-buffer buffer (point-max)))
       (message "Listing open issues with gh...")

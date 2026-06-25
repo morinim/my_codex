@@ -1612,7 +1612,7 @@ AGENT identifies the agent profile used for buffer names and metadata."
             (select-window edit-window)))))))
 
 ;;;###autoload
-(defun my-codex-restore-layout ()
+(defun my-codex-hide-window ()
   "Hide visible windows showing the current agent buffer."
   (interactive)
   (let* ((label (my-codex--active-agent-label))
@@ -1634,7 +1634,7 @@ AGENT identifies the agent profile used for buffer names and metadata."
       (user-error "Agent window is not visible")))
 
 ;;;###autoload
-(defun my-codex-restore-session-layout ()
+(defun my-codex-hide-session-window ()
   "Hide visible windows showing the selected agent session buffer."
   (interactive)
   (let* ((buffer (my-codex--session-layout-buffer))
@@ -1892,7 +1892,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
   "w"       #'my-codex-workspace
   "S"       #'my-codex-session-transient
   "r"       #'my-codex-resume
-  "q"       #'my-codex-restore-layout
+  "q"       #'my-codex-hide-window
   "a"       #'my-codex-ask
   "A"       #'my-codex-ask-preset-transient
   "s"       #'my-codex-send-region
@@ -1915,7 +1915,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
   "p"       #'my-codex-send-project-overview
   "X"       #'my-codex-export-session-to-markdown
   "M"       #'my-codex-summarize-session-to-markdown
-  "t"       #'my-codex-list-open-tickets
+  "t"       #'my-codex-list-open-issues
   "T"       #'my-codex-summarize-session-to-github-issue
   "!"       #'my-codex-doctor
   "TAB"     #'my-codex-toggle-focus
@@ -1929,10 +1929,10 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     ("w" "Workspace" my-codex-default-workspace)]
    ["Session"
     ("l" "List" my-codex-list-sessions)
-    ("t" "Top Dashboard" my-codex-top)
+    ("t" "Session dashboard" my-codex-top)
     ("n" "New named" my-codex-new-session)
     ("r" "Resume" my-codex-resume)
-    ("q" "Hide agent" my-codex-restore-session-layout)]])
+    ("q" "Hide agent" my-codex-hide-session-window)]])
 
 ;;;###autoload
 (transient-define-prefix my-codex-diagnostics-transient ()
@@ -1949,7 +1949,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     ("w" "Workspace" my-codex-workspace)
     ("S" "Sessions" my-codex-session-transient)
     ("r" "Resume" my-codex-resume)
-    ("q" "Hide agent" my-codex-restore-layout)
+    ("q" "Hide agent" my-codex-hide-window)
     ("<tab>" "Toggle focus" my-codex-toggle-focus)]
    ["Send"
     ("a" "Ask" my-codex-ask)
@@ -1978,7 +1978,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     ("M" "Summarize session" my-codex-summarize-session-to-markdown)
     ("!" "Doctor" my-codex-doctor)]
    ["GitHub"
-    ("t" "List issues" my-codex-list-open-tickets)
+    ("t" "List issues" my-codex-list-open-issues)
     ("T" "Draft issue" my-codex-summarize-session-to-github-issue)]])
 
 ;;;###autoload
@@ -2061,16 +2061,16 @@ Open the generated notes in an editable Markdown buffer when they are ready."
      ["List open sessions" my-codex-list-sessions
       :keys "F8 S l"
       :help "List open agent session buffers"]
-     ["Top dashboard" my-codex-top
+     ["Session dashboard" my-codex-top
       :keys "F8 S t"
       :help "Display a dashboard of all agent sessions"]
      ["New named session" my-codex-new-session
       :keys "F8 S n"
       :help "Start or show a named agent session"]
-     ["Hide selected session window" my-codex-restore-session-layout
+     ["Hide selected session window" my-codex-hide-session-window
       :keys "F8 S q"
       :help "Hide the agent window associated with the selected session"]
-     ["Hide agent window" my-codex-restore-layout
+     ["Hide agent window" my-codex-hide-window
       :keys "F8 q"
       :help "Hide the visible agent window"]
      ["Toggle focus" my-codex-toggle-focus
@@ -2153,7 +2153,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       :keys "F8 !"
       :help "Check Emacs, agent, vterm, Git, gh, project, configuration, and terminal startup"])
     ("GitHub"
-     ["List issues" my-codex-list-open-tickets
+     ["List issues" my-codex-list-open-issues
       :keys "F8 t"
       :help "List open GitHub issues for the current repository in a buffer"]
      ["Draft issue" my-codex-summarize-session-to-github-issue

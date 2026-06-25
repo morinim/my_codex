@@ -65,7 +65,7 @@ Press `F8` to open the agent command menu.
 - `F8 o` / `F8 w` : start/show the default read-only or workspace-write session.
 - `F8 S o` / `F8 S w` : select an agent, then start its default read-only or write session.
 - `F8 S n` : start or show a named session with a selected agent and access mode.
-- `F8 S l` / `F8 S q` / `F8 S r` / `F8 S t` : list open sessions, hide the selected session window, resume a previous session, or view the sessions dashboard.
+- `F8 S l` / `F8 S q` / `F8 S r` / `F8 S t` : list open sessions, hide the selected session window, resume a previous session, or view the session dashboard.
 - `F8 r` / `F8 q` : resume a previous session, or hide the active agent window.
 
 ### Prompts & Refactoring
