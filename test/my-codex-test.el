@@ -1041,22 +1041,125 @@
   (should
    (equal
     (my-codex--prompt-preview-header "abcde")
-    (concat "Size: 5 chars, approx. 2 tokens. Edit if needed; "
+    (concat "Target: Codex / default. "
+            "Size: 5 chars, approx. 2 tokens. Edit if needed; "
             "C-c C-c sends to agent, C-c C-k cancels."))))
 
+(ert-deftest my-codex-prompt-preview-header-shows-target-session ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-preview" t)))
+        (buffer (get-buffer-create "*my-codex-preview-target*")))
+    (unwind-protect
+        (progn
+          (my-codex--mark-named-session
+           buffer "plan" root 'workspace-write 'antigravity)
+          (should
+           (equal
+            (my-codex--prompt-preview-header "abcde" buffer)
+            (concat "Target: Antigravity / plan / workspace-write. "
+                    "Size: 5 chars, approx. 2 tokens. Edit if needed; "
+                    "C-c C-c sends to agent, C-c C-k cancels."))))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer))
+      (delete-directory root t))))
+
 (ert-deftest my-codex-update-prompt-preview-header-tracks-edits ()
-  (with-temp-buffer
-    (insert "abcde")
-    (my-codex--update-prompt-preview-header)
-    (add-hook 'after-change-functions
-              #'my-codex--update-prompt-preview-header nil t)
-    (goto-char (point-max))
-    (insert "fghi")
-    (should
-     (equal
-      header-line-format
-      (concat "Size: 9 chars, approx. 3 tokens. Edit if needed; "
-              "C-c C-c sends to agent, C-c C-k cancels.")))))
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-preview" t)))
+        (target (get-buffer-create "*my-codex-preview-target*")))
+    (unwind-protect
+        (progn
+          (my-codex--mark-default-session target root 'read-only)
+          (with-temp-buffer
+            (setq-local my-codex--prompt-preview-target-buffer target)
+            (insert "abcde")
+            (my-codex--update-prompt-preview-header)
+            (add-hook 'after-change-functions
+                      #'my-codex--update-prompt-preview-header nil t)
+            (goto-char (point-max))
+            (insert "fghi")
+            (should
+             (equal
+              header-line-format
+              (concat "Target: Codex / default / read-only. "
+                      "Size: 9 chars, approx. 3 tokens. Edit if needed; "
+                      "C-c C-c sends to agent, C-c C-k cancels.")))))
+      (when (buffer-live-p target)
+        (kill-buffer target))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-ask-prompt-label-shows-target-session ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-ask" t)))
+        (target (get-buffer-create "*my-codex-ask-target*")))
+    (unwind-protect
+        (let ((default-directory root))
+          (my-codex--mark-named-session
+           target "review" root 'workspace-write 'antigravity)
+          (set-window-parameter (selected-window) 'my-codex-term-buffer target)
+          (should
+           (equal (my-codex--ask-prompt-label)
+                  "Antigravity [review/workspace-write]")))
+      (set-window-parameter (selected-window) 'my-codex-term-buffer nil)
+      (when (buffer-live-p target)
+        (kill-buffer target))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-ask-prompt-label-falls-back-without-session ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-ask" t))))
+    (unwind-protect
+        (let ((default-directory root))
+          (set-window-parameter (selected-window) 'my-codex-term-buffer nil)
+          (cl-letf (((symbol-function 'my-codex-buffer)
+                     (lambda () (user-error "No buffer"))))
+            (should (equal (my-codex--ask-prompt-label) "Codex"))))
+      (set-window-parameter (selected-window) 'my-codex-term-buffer nil)
+      (delete-directory root t))))
+
+(ert-deftest my-codex-preview-and-send-prompt-preserves-target-without-preview ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-send" t)))
+        (target (get-buffer-create "*my-codex-no-preview-target*"))
+        (my-codex-enable-prompt-preview nil)
+        sent)
+    (unwind-protect
+        (let ((default-directory root))
+          (my-codex--mark-named-session
+           target "review" root 'workspace-write 'antigravity)
+          (set-window-parameter (selected-window) 'my-codex-term-buffer target)
+          (cl-letf (((symbol-function 'my-codex-send-prompt)
+                     (lambda (prompt &optional target-buffer)
+                       (setq sent (list prompt target-buffer)))))
+            (my-codex--preview-and-send-prompt "hello")
+            (should (equal sent (list "hello" target)))))
+      (set-window-parameter (selected-window) 'my-codex-term-buffer nil)
+      (when (buffer-live-p target)
+        (kill-buffer target))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-send-prompt-uses-explicit-target-session ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-send" t)))
+        (target (get-buffer-create "*my-codex-send-target*"))
+        sent)
+    (unwind-protect
+        (progn
+          (my-codex--mark-named-session
+           target "review" root 'workspace-write 'antigravity)
+          (cl-letf (((symbol-function 'my-codex--warn-about-unsaved-project-buffers)
+                     #'ignore)
+                    ((symbol-function 'get-buffer-process)
+                     (lambda (buffer) (eq buffer target)))
+                    ((symbol-function 'process-live-p)
+                     (lambda (process) process))
+                    ((symbol-function 'pop-to-buffer)
+                     #'ignore)
+                    ((symbol-function 'my-codex-backend-send)
+                     (lambda (backend prompt)
+                       (setq sent
+                             (list (my-codex--backend-buffer-name backend)
+                                   prompt)))))
+            (my-codex-send-prompt "hello" target)
+            (should
+             (equal sent '("*my-codex-send-target*" "hello")))))
+      (when (buffer-live-p target)
+        (kill-buffer target))
+      (delete-directory root t))))
 
 (ert-deftest my-codex-check-prompt-size-allows-small-prompts ()
   (let ((my-codex-large-prompt-warning-chars 10)

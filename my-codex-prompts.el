@@ -20,6 +20,8 @@
 
 (defvar my-codex--captured-selection)
 (defvar my-codex--prompt-preview-origin-window)
+(defvar-local my-codex--prompt-preview-target-buffer nil
+  "Agent session buffer targeted by the current prompt preview.")
 (defvar my-codex-enable-prompt-preview)
 (defvar my-codex-flycheck-diagnostics-limit)
 (defvar my-codex-large-prompt-error-chars)
@@ -42,6 +44,8 @@
 (declare-function my-codex--active-agent "my-codex" (&optional root))
 (declare-function my-codex--active-agent-label "my-codex" (&optional root))
 (declare-function my-codex--agent-label "my-codex" (agent))
+(declare-function my-codex--backend-for-buffer-name "my-codex" (buffer-name))
+(declare-function my-codex-backend-live-p "my-codex" (backend))
 (declare-function my-codex--current-backend "my-codex" ())
 (declare-function my-codex--safe-root-name "my-codex" (root))
 (declare-function my-codex--warn-about-unsaved-project-buffers "my-codex" ())
@@ -68,19 +72,69 @@
           (length prompt)
           (my-codex--approx-token-count prompt)))
 
-(defun my-codex--prompt-preview-header (prompt)
+(defun my-codex--session-buffer-for-window (window root)
+  "Return WINDOW's project session buffer for ROOT, if any."
+  (let ((buffer (or (and (window-live-p window)
+                         (window-parameter window 'my-codex-term-buffer))
+                    (and (window-live-p window)
+                         (window-buffer window)))))
+    (when (and (buffer-live-p buffer)
+               (with-current-buffer buffer
+                 (and (bound-and-true-p my-codex-session-id)
+                      (equal my-codex-session-project-root
+                             (file-name-as-directory
+                              (file-truename root))))))
+      buffer)))
+
+(defun my-codex--prompt-target-buffer (&optional window noerror)
+  "Return the agent session buffer targeted from WINDOW.
+When NOERROR is non-nil, return nil instead of raising if no default
+session is available."
+  (let ((root (my-codex-project-root)))
+    (or (my-codex--session-buffer-for-window (or window (selected-window))
+                                             root)
+        (if noerror
+            (ignore-errors (my-codex-buffer))
+          (my-codex-buffer)))))
+
+(defun my-codex--prompt-target-description (&optional buffer)
+  "Return a concise prompt target description for BUFFER."
+  (let ((buffer (or buffer my-codex--prompt-preview-target-buffer)))
+    (if (buffer-live-p buffer)
+        (with-current-buffer buffer
+          (let* ((agent (or my-codex-session-agent (my-codex--active-agent)))
+                 (session (or my-codex-session-name "default"))
+                 (access (or my-codex-session-access-mode 'unknown)))
+            (format "%s / %s / %s"
+                    (my-codex--agent-label agent)
+                    session
+                    access)))
+      (format "%s / default" (my-codex--active-agent-label)))))
+
+(defun my-codex--ask-prompt-label ()
+  "Return the minibuffer label for `my-codex-ask'."
+  (if-let (buffer (my-codex--prompt-target-buffer (selected-window) t))
+      (with-current-buffer buffer
+        (format "%s [%s/%s]"
+                (my-codex--agent-label
+                 (or my-codex-session-agent (my-codex--active-agent)))
+                (or my-codex-session-name "default")
+                (or my-codex-session-access-mode 'unknown)))
+    (my-codex--active-agent-label)))
+
+(defun my-codex--prompt-preview-header (prompt &optional target-buffer)
   "Return the prompt preview header line for PROMPT."
-  (format (concat "Size: %s. Edit if needed; "
+  (format (concat "Target: %s. Size: %s. Edit if needed; "
                   "C-c C-c sends to agent, C-c C-k cancels.")
+          (my-codex--prompt-target-description target-buffer)
           (my-codex--prompt-size-description prompt)))
 
 (defun my-codex--update-prompt-preview-header (&rest _)
   "Update the current prompt preview header from buffer contents."
   (setq-local header-line-format
-              (format (concat "Size: %s. Edit if needed; "
-                              "C-c C-c sends to agent, C-c C-k cancels.")
-                      (my-codex--prompt-size-description
-                       (buffer-string)))))
+              (my-codex--prompt-preview-header
+               (buffer-string)
+               my-codex--prompt-preview-target-buffer)))
 
 (defun my-codex--check-prompt-size (prompt)
   "Raise or ask for confirmation when PROMPT is unusually large."
@@ -98,12 +152,17 @@
                              (my-codex--prompt-size-description prompt)))))
       (user-error "%s prompt cancelled" (my-codex--active-agent-label)))))
 
-(defun my-codex-send-prompt (prompt)
+(defun my-codex-send-prompt (prompt &optional target-buffer)
   "Send PROMPT to the agent backend buffer and show it."
   (my-codex--warn-about-unsaved-project-buffers)
   (my-codex--check-prompt-size prompt)
-  (let ((buffer (my-codex-buffer))
-        (backend (my-codex--current-backend)))
+  (let* ((buffer (or target-buffer (my-codex-buffer)))
+         (backend (if target-buffer
+                      (my-codex--backend-for-buffer-name (buffer-name buffer))
+                    (my-codex--current-backend))))
+    (unless (and (buffer-live-p buffer)
+                 (my-codex-backend-live-p backend))
+      (user-error "No running agent process in %s" (buffer-name buffer)))
     (if-let (window (get-buffer-window buffer t))
         (select-window window)
       (pop-to-buffer buffer))
@@ -153,7 +212,7 @@
     (when (string-blank-p prompt)
       (user-error "Prompt is empty"))
     (let ((default-directory root))
-      (my-codex-send-prompt prompt))
+      (my-codex-send-prompt prompt my-codex--prompt-preview-target-buffer))
     (when (buffer-live-p buffer)
       (kill-buffer buffer))))
 
@@ -168,29 +227,31 @@
 
 (defun my-codex--preview-and-send-prompt (prompt)
   "Preview PROMPT before sending it to the agent when enabled."
-  (if my-codex-enable-prompt-preview
-      (let* ((root (my-codex-project-root))
-             (origin-window (selected-window))
-             (buffer (get-buffer-create
-                      (my-codex--prompt-preview-buffer-name root))))
-        (my-codex--display-prompt-preview-buffer buffer origin-window)
-        (let ((inhibit-read-only t))
-          (erase-buffer)
-          (insert prompt)
-          (goto-char (point-min)))
-        (text-mode)
-        (setq default-directory root)
-        (setq-local my-codex--prompt-preview-origin-window origin-window)
-        (my-codex--update-prompt-preview-header)
-        (add-hook 'after-change-functions
-                  #'my-codex--update-prompt-preview-header nil t)
-        (let ((map (define-keymap :parent (current-local-map)
-                     "C-c C-c" #'my-codex--finish-prompt-preview
-                     "C-c C-k" #'my-codex--cancel-prompt-preview)))
-          (use-local-map map))
-        (message "%s prompt preview opened."
-                 (my-codex--active-agent-label root)))
-    (my-codex-send-prompt prompt)))
+  (let* ((root (my-codex-project-root))
+         (origin-window (selected-window))
+         (target-buffer (my-codex--prompt-target-buffer origin-window)))
+    (if my-codex-enable-prompt-preview
+        (let ((buffer (get-buffer-create
+                       (my-codex--prompt-preview-buffer-name root))))
+          (my-codex--display-prompt-preview-buffer buffer origin-window)
+          (let ((inhibit-read-only t))
+            (erase-buffer)
+            (insert prompt)
+            (goto-char (point-min)))
+          (text-mode)
+          (setq default-directory root)
+          (setq-local my-codex--prompt-preview-origin-window origin-window)
+          (setq-local my-codex--prompt-preview-target-buffer target-buffer)
+          (my-codex--update-prompt-preview-header)
+          (add-hook 'after-change-functions
+                    #'my-codex--update-prompt-preview-header nil t)
+          (let ((map (define-keymap :parent (current-local-map)
+                       "C-c C-c" #'my-codex--finish-prompt-preview
+                       "C-c C-k" #'my-codex--cancel-prompt-preview)))
+            (use-local-map map))
+          (message "%s prompt preview opened."
+                   (my-codex--active-agent-label root)))
+      (my-codex-send-prompt prompt target-buffer))))
 
 ;;;###autoload
 (defun my-codex-send-region (beg end)
@@ -825,7 +886,7 @@ Send only a file and line-range reference, not the selected text."
 (defun my-codex-ask (prompt)
   "Read PROMPT in the minibuffer and send it straight to the agent."
   (interactive
-   (list (read-string (format "Ask %s: " (my-codex--active-agent-label)))))
+   (list (read-string (format "Ask %s: " (my-codex--ask-prompt-label)))))
   (when (string-blank-p prompt)
     (user-error "Prompt cannot be empty"))
   (my-codex--preview-and-send-prompt prompt))
