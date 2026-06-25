@@ -11,28 +11,30 @@
 ;;; Code:
 
 (require 'subr-x)
-(require 'my-codex)
+(require 'my-codex-core)
+(require 'my-codex-prompts)
+(require 'my-codex-git)
 
 (defvar my-codex--github-issue-creation-in-progress)
 (defvar my-codex--github-issue-repository)
 (defvar my-codex--session-summary-request-marker)
 (defvar my-codex-github-issue-summary-prompt)
 
-(declare-function my-codex--active-agent "my-codex" (&optional root))
-(declare-function my-codex--active-agent-label "my-codex" (&optional root))
-(declare-function my-codex--agent-label "my-codex" (agent))
-(declare-function my-codex--safe-root-name "my-codex" (root))
-(declare-function my-codex--session-export-mode "my-codex" ())
+(declare-function my-codex--active-agent "my-codex-core" (&optional root))
+(declare-function my-codex--active-agent-label "my-codex-core" (&optional root))
+(declare-function my-codex--agent-label "my-codex-core" (agent))
+(declare-function my-codex--safe-root-name "my-codex-core" (root))
+(declare-function my-codex--session-export-mode "my-codex-core" ())
 (declare-function my-codex--session-summary-prompt
-                  "my-codex"
+                  "my-codex-core"
                   (summary-prompt begin-marker end-marker &optional placeholder))
-(declare-function my-codex--unique-output-markers "my-codex" (name))
+(declare-function my-codex--unique-output-markers "my-codex-core" (name))
 (declare-function my-codex--wait-for-session-summary
                   "my-codex-git"
                   (buffer start-point root begin-marker end-marker
                           &optional callback ready-message ignored-values))
-(declare-function my-codex-buffer "my-codex" ())
-(declare-function my-codex-project-root "my-codex" ())
+(declare-function my-codex-buffer "my-codex-core" ())
+(declare-function my-codex-project-root "my-codex-core" ())
 (declare-function my-codex-send-prompt "my-codex-prompts" (prompt))
 
 (defun my-codex--github-issue-output-buffer-name (root)

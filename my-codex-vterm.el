@@ -10,13 +10,14 @@
 
 ;;; Code:
 
-(require 'my-codex)
+(require 'my-codex-core)
 
-(defvar my-codex--vterm-copy-mode-lighter)
+(defvar my-codex--vterm-copy-mode-lighter :unset
+  "Previous `vterm-copy-mode' lighter before my-codex changed it.")
 (defvar vterm-copy-mode)
 
-(declare-function my-codex-transient-preserve-selection "my-codex" ())
-(declare-function my-codex--agent-label "my-codex" (agent))
+(autoload 'my-codex-transient-preserve-selection "my-codex" nil t)
+(declare-function my-codex--agent-label "my-codex-core" (agent))
 (declare-function vterm-yank "vterm" ())
 
 (defvar-keymap my-codex-vterm-override-mode-map

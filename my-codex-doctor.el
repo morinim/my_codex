@@ -13,7 +13,7 @@
 (require 'project)
 (require 'seq)
 (require 'subr-x)
-(require 'my-codex)
+(require 'my-codex-core)
 
 (defvar my-codex-doctor-terminal-timeout)
 (defvar my-codex-vterm-min-scrollback)
@@ -27,8 +27,8 @@
 (defvar my-codex-antigravity-resume-command)
 (defvar vterm-max-scrollback)
 
-(declare-function my-codex--agent-command "my-codex" (agent access-mode))
-(declare-function my-codex-project-root "my-codex" ())
+(declare-function my-codex--agent-command "my-codex-core" (agent access-mode))
+(declare-function my-codex-project-root "my-codex-core" ())
 (declare-function vterm-mode "vterm" ())
 
 (defface my-codex-doctor-info-face

@@ -969,6 +969,7 @@
 
 (ert-deftest my-codex-does-not-prebind-vterm-shell ()
   (let* ((script '(progn
+                    (setq load-prefer-newer t)
                     (package-initialize)
                     (require 'my-codex)
                     (require 'vterm)
@@ -984,8 +985,9 @@
               (buffer-string)))))
     (should (equal output shell-file-name))))
 
-(ert-deftest my-codex-git-autoload-command-loads-main-package ()
+(ert-deftest my-codex-git-command-does-not-load-main-package ()
   (let* ((script '(progn
+                    (setq load-prefer-newer t)
                     (require 'my-codex-git)
                     (condition-case err
                         (my-codex-send-git-diff)
@@ -1002,8 +1004,102 @@
               (unless (zerop exit-code)
                 (error "Nested Emacs failed: %s" (buffer-string)))
               (buffer-string)))))
-    (should (string-match-p "feature-loaded" output))
+    (should (string-match-p "feature-missing" output))
+    (should-not (string-match-p "void-function" output))
     (should-not (string-match-p "void-variable" output))))
+
+(ert-deftest my-codex-git-command-sends-prompt-without-main-package ()
+  (unless (executable-find "git")
+    (ert-skip "Git executable not found"))
+  (let ((load-path-root default-directory)
+        (root (file-name-as-directory (make-temp-file "my-codex-git" t))))
+    (unwind-protect
+        (let* ((script
+                `(progn
+                   (setq load-prefer-newer t)
+                   (setq default-directory ,root)
+                   (require 'cl-lib)
+                   (require 'my-codex-git)
+                   (let ((buffer (get-buffer-create (my-codex-current-buffer-name))))
+                     (my-codex--mark-default-session
+                      buffer default-directory 'workspace-write 'codex)
+                     (cl-letf (((symbol-function 'get-buffer-process)
+                                (lambda (candidate)
+                                  (eq candidate buffer)))
+                               ((symbol-function 'process-live-p)
+                                (lambda (process) process))
+                               ((symbol-function 'pop-to-buffer)
+                                #'ignore)
+                               ((symbol-function 'vterm-send-string)
+                                (lambda (prompt &optional paste)
+                                  (when (and (stringp prompt) paste)
+                                    (princ "sent\n"))))
+                               ((symbol-function 'vterm-send-return)
+                                #'ignore))
+                       (my-codex-send-git-diff)))
+                   (princ (if (featurep 'my-codex)
+                              "feature-loaded"
+                            "feature-missing"))))
+               (output
+                (with-temp-buffer
+                  (let ((exit-code
+                         (let ((default-directory root))
+                           (call-process "git" nil nil nil "init")
+                           (call-process invocation-name nil t nil
+                                         "--batch" "-Q" "-L" load-path-root
+                                         "--eval" (prin1-to-string script)))))
+                    (unless (zerop exit-code)
+                      (error "Nested Emacs failed: %s" (buffer-string)))
+                    (buffer-string)))))
+          (should (string-match-p "sent" output))
+          (should (string-match-p "feature-missing" output))
+          (should-not (string-match-p "void-function" output)))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-preset-command-loads-git-helpers-without-main-package ()
+  (let ((load-path-root default-directory)
+        (root (file-name-as-directory (make-temp-file "my-codex-preset" t))))
+    (unwind-protect
+        (let* ((script
+                `(progn
+                   (setq load-prefer-newer t)
+                   (setq default-directory ,root)
+                   (require 'cl-lib)
+                   (require 'my-codex-prompts)
+                   (setq my-codex-prompt-presets
+                         '(("Refactor" . "Refactor prompt")))
+                   (cl-letf (((symbol-function 'completing-read)
+                              (lambda (&rest _args) "Refactor"))
+                             ((symbol-function 'read-string)
+                              (lambda (&rest _args) ""))
+                             ((symbol-function 'my-codex-project-root)
+                              (lambda () default-directory))
+                             ((symbol-function 'my-codex--preview-and-send-prompt)
+                              (lambda (prompt) (princ prompt)))
+                             ((symbol-function 'use-region-p)
+                              (lambda () nil)))
+                     (my-codex-ask-with-preset))
+                   (princ (if (featurep 'my-codex-git)
+                              "git-loaded"
+                            "git-missing"))
+                   (princ (if (featurep 'my-codex)
+                              " feature-loaded"
+                            " feature-missing"))))
+               (output
+                (with-temp-buffer
+                  (let ((exit-code
+                         (let ((default-directory root))
+                           (call-process invocation-name nil t nil
+                                         "--batch" "-Q" "-L" load-path-root
+                                         "--eval" (prin1-to-string script)))))
+                    (unless (zerop exit-code)
+                      (error "Nested Emacs failed: %s" (buffer-string)))
+                    (buffer-string)))))
+          (should (string-match-p "Refactor prompt" output))
+          (should (string-match-p "git-loaded" output))
+          (should (string-match-p "feature-missing" output))
+          (should-not (string-match-p "void-function" output)))
+      (delete-directory root t))))
 
 (defun my-codex-test--init-git-repository ()
   "Initialize a Git repository in `default-directory'."

@@ -12,9 +12,9 @@
 
 (require 'browse-url)
 (require 'subr-x)
-(require 'my-codex)
+(require 'my-codex-core)
 
-(declare-function my-codex-project-root "my-codex" ())
+(declare-function my-codex-project-root "my-codex-core" ())
 
 (defvar my-codex-session-link-map
   (let ((map (make-sparse-keymap)))

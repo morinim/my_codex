@@ -1,0 +1,1040 @@
+;;; my-codex-core.el --- Core definitions for my-codex -*- lexical-binding: t; -*-
+
+;; Copyright (C) 2026 Manlio Morini
+
+;; Author: Manlio Morini
+;; Keywords: tools, convenience
+;; URL: https://github.com/morinim/my_codex
+
+;; This file is not part of GNU Emacs.
+
+;; This Source Code Form is subject to the terms of the Mozilla Public
+;; License, v. 2.0. If a copy of the MPL was not distributed with this
+;; file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+;;; Commentary:
+
+;; Shared configuration, session state, backend protocol, and project/session
+;; lookup helpers for my-codex modules.
+
+;;; Code:
+
+(require 'ansi-color)
+(require 'cl-lib)
+(require 'project)
+(require 'subr-x)
+
+(declare-function markdown-mode "markdown-mode")
+(defvar vterm-max-scrollback)
+
+(defgroup my-codex nil
+  "Customisation options for the Codex development tool."
+  :group 'convenience
+  :prefix "my-codex-")
+
+(defconst my-codex-default-buffer-name "*codex*"
+  "Default name of the vterm buffer used for Codex.")
+
+(defcustom my-codex-buffer-name my-codex-default-buffer-name
+  "Name of the vterm buffer used for Codex."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-read-only-command
+  "codex --sandbox read-only --ask-for-approval on-request"
+  "Command used to start Codex in read-only mode."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-workspace-command
+  "codex --sandbox workspace-write --ask-for-approval on-request"
+  "Command used to start Codex with workspace write access."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-resume-command
+  "codex resume"
+  "Command used to resume a previous Codex session."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-antigravity-read-only-command
+  (concat "agy --sandbox -i \"System policy: "
+          "This is a read-only session. "
+          "Do not write/edit files or execute commands "
+          "that alter the codebase.\"")
+  "Command used to start Antigravity in read-only mode."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-antigravity-workspace-command
+  "agy"
+  "Command used to start Antigravity with workspace write access."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-antigravity-resume-command
+  "agy resume"
+  "Command used to resume a previous Antigravity session."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-agent 'codex
+  "Agent profile used by default agent commands.
+Commands such as `my-codex-read-only', `my-codex-workspace', and
+`my-codex-resume' use this profile.  Named sessions can choose a
+different profile interactively."
+  :type 'symbol
+  :group 'my-codex)
+
+(defcustom my-codex-language nil
+  "Language in which the agent should answer and generate output.
+When nil, the default language (typically English) is used.
+When set to a string (e.g. \"Italian\", \"French\", \"Spanish\"), the agent
+is instructed at startup to answer and generate output in that language."
+  :type '(choice (const :tag "Default (English)" nil)
+                 string)
+  :group 'my-codex)
+
+(defcustom my-codex-agent-profiles
+  '((codex
+     :label "Codex"
+     :buffer-prefix "codex"
+     :read-only-command my-codex-read-only-command
+     :workspace-command my-codex-workspace-command
+     :resume-command my-codex-resume-command)
+    (antigravity
+     :label "Antigravity"
+     :buffer-prefix "agy"
+     :read-only-command my-codex-antigravity-read-only-command
+     :workspace-command my-codex-antigravity-workspace-command
+     :resume-command my-codex-antigravity-resume-command))
+  "Agent profiles available to my-codex.
+Each entry has the form:
+
+  (ID :label LABEL
+      :buffer-prefix PREFIX
+      :read-only-command COMMAND
+      :workspace-command COMMAND
+      :resume-command COMMAND)
+
+ID is a symbol used for configuration and session metadata.  PREFIX is
+used in buffer names, so different agents can have sessions with the
+same project and session name without colliding.  COMMAND may be either
+a string or a symbol whose value is a string."
+  :type '(repeat
+          (list :tag "Agent profile"
+                (symbol :tag "Identifier")
+                (const :format "" :value :label)
+                (string :tag "Display label")
+                (const :format "" :value :buffer-prefix)
+                (string :tag "Buffer prefix")
+                (const :format "" :value :read-only-command)
+                (choice :tag "Read-only command"
+                        (string :tag "Command")
+                        (symbol :tag "Variable"))
+                (const :format "" :value :workspace-command)
+                (choice :tag "Workspace command"
+                        (string :tag "Command")
+                        (symbol :tag "Variable"))
+                (const :format "" :value :resume-command)
+                (choice :tag "Resume command"
+                        (string :tag "Command")
+                        (symbol :tag "Variable"))))
+  :group 'my-codex)
+
+(defcustom my-codex-left-width 81
+  "Width of the editing window text area in the Codex right-side layout."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-min-right-width 80
+  "Minimum width of the Codex vterm window."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-right-width 80
+  "Target width of the Codex vterm window."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-enforce-right-side-layout nil
+  "When non-nil, resize the frame and edit window for right-side Codex.
+Leave this nil when another package or window manager controls window sizes."
+  :type 'boolean
+  :group 'my-codex)
+
+(defcustom my-codex-display-buffer-action
+  '((display-buffer-in-side-window)
+    (side . right)
+    (slot . 0)
+    (window-width . my-codex--right-window-width))
+  "Display action used for Codex buffers.
+
+The value is passed to `display-buffer'.  Customise this when you prefer a
+different placement, such as a bottom side window or a dedicated frame."
+  :type 'sexp
+  :group 'my-codex)
+
+(defcustom my-codex-project-instruction-files
+  '("AGENTS.md" "CODEX.md" "ANTIGRAVITY.md" ".codex/instructions.md" ".antigravity/instructions.md")
+  "Candidate project instruction files for Codex/Antigravity."
+  :type '(repeat string)
+  :group 'my-codex)
+
+(defcustom my-codex-project-build-command nil
+  "Command used to build the current project.
+When nil, use `compile-command'."
+  :type '(choice (const :tag "Use compile-command" nil)
+                 string)
+  :group 'my-codex)
+
+(defcustom my-codex-commit-message-fill-column 76
+  "Maximum line width for generated commit messages."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-git-diff-review-prompt
+  "Review the current Git diff using `git diff -- .`. Focus on correctness, regressions, edge cases, naming and maintainability. Do not edit unless asked\n"
+  "Prompt used by `my-codex-send-git-diff'."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-git-staged-diff-review-prompt
+  "Review the staged Git diff using `git diff --cached -- .`. Focus on correctness, regressions, edge cases and commit readiness. Do not edit unless asked\n"
+  "Prompt used by `my-codex-send-git-staged-diff'."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-test-coverage-prompt
+  "Analyse test coverage for this implementation and its test file.
+
+Identify missing edge cases, unhandled exceptions, logical flaws and important behaviour that is not currently tested. Do not edit or write tests; list missing scenarios only."
+  "Prompt used by `my-codex-analyse-test-coverage'."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-flycheck-diagnostics-limit 100
+  "Maximum number of Flycheck diagnostics to include in one agent prompt."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-refactor-plan-prompt
+  "Draft a step-by-step, low-risk refactoring plan for this code.
+
+Do not provide rewritten code or patches.
+
+Focus on:
+- current responsibilities and likely coupling
+- small refactoring steps in a safe order
+- potential breaking changes
+- tests or checks to run after each step
+- rollback points
+- assumptions that need confirmation before editing
+
+Finish with the smallest safe first edit worth making."
+  "Prompt used by `my-codex-plan-refactor-region'."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-commit-message-prompt-template
+  "Inspect the staged Git diff using `git diff --cached -- .` and write a concise conventional commit message.
+
+Put only the final commit message between these exact markers:
+
+BEGIN_COMMIT_MESSAGE
+<commit message here>
+END_COMMIT_MESSAGE
+
+Use an imperative subject and a short explanatory body when useful. Limit each line to %d columns. Do not edit files.\n"
+  "Prompt template used by `my-codex-commit-message-from-diff'.
+The literal substring `%d' is replaced with
+`my-codex-commit-message-fill-column'.  Keep the
+BEGIN_COMMIT_MESSAGE and END_COMMIT_MESSAGE markers if you want
+`my-codex-latest-commit-message' to extract the generated message."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-commit-message-poll-interval 0.5
+  "Seconds between checks for a generated agent commit message."
+  :type 'number
+  :group 'my-codex)
+
+(defcustom my-codex-commit-message-poll-attempts 120
+  "Maximum number of checks for a generated agent commit message."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-warn-about-unsaved-project-buffers t
+  "When non-nil, warn before sending prompts if project buffers are unsaved."
+  :type 'boolean
+  :group 'my-codex)
+
+(defun my-codex-modified-project-buffers ()
+  "Return modified file-visiting buffers belonging to the current project."
+  (if-let (project (project-current))
+      (seq-filter (lambda (buf)
+                    (and (buffer-file-name buf)
+                         (buffer-modified-p buf)))
+                  (project-buffers project))
+    (let ((root (file-truename default-directory)))
+      (seq-filter (lambda (buf)
+                    (when-let (file (buffer-file-name buf))
+                      (and (buffer-modified-p buf)
+                           (file-in-directory-p (file-truename file) root))))
+                  (buffer-list)))))
+
+(defun my-codex--warn-about-unsaved-project-buffers ()
+  "Display a non-blocking warning if project buffers have unsaved changes."
+  (when my-codex-warn-about-unsaved-project-buffers
+    (when-let (buffers (my-codex-modified-project-buffers))
+      (message "Agent warning: unsaved buffer(s): %s"
+               (mapconcat #'buffer-name buffers ", ")))))
+
+(defcustom my-codex-enable-global-auto-revert t
+  "When non-nil, enable `global-auto-revert-mode' with `my-codex-global-mode'."
+  :type 'boolean
+  :group 'my-codex)
+
+(defcustom my-codex-enable-display-defaults nil
+  "When non-nil, enable editing display helpers with `my-codex-global-mode'."
+  :type 'boolean
+  :group 'my-codex)
+
+(defcustom my-codex-enable-vterm-integration t
+  "When non-nil, enable vterm helpers with `my-codex-global-mode'."
+  :type 'boolean
+  :group 'my-codex)
+
+(defcustom my-codex-vterm-min-scrollback 10000
+  "Minimum `vterm-max-scrollback' used in agent vterm buffers.
+This protects marked-output extraction from losing markers when
+the agent emits verbose output.  When nil, do not adjust vterm scrollback."
+  :type '(choice (const :tag "Do not adjust" nil)
+                 natnum)
+  :group 'my-codex)
+
+(defcustom my-codex-enable-session-links t
+  "When non-nil, make URLs and file references clickable in agent buffers."
+  :type 'boolean
+  :group 'my-codex)
+
+(defcustom my-codex-enable-prompt-preview nil
+  "When non-nil, show an editable preview before sending prompts."
+  :type 'boolean
+  :group 'my-codex)
+
+(defcustom my-codex-large-prompt-warning-chars 12000
+  "Prompt size in characters that requires confirmation before sending.
+When nil, do not warn about large prompts."
+  :type '(choice (const :tag "Do not warn" nil)
+                 natnum)
+  :group 'my-codex)
+
+(defcustom my-codex-large-prompt-error-chars nil
+  "Prompt size in characters that is refused before sending.
+When nil, do not enforce a hard prompt size limit."
+  :type '(choice (const :tag "No hard limit" nil)
+                 natnum)
+  :group 'my-codex)
+
+(defcustom my-codex-region-send-policy 'prefer-reference
+  "How selected regions are sent to the agent.
+When `prefer-reference', send a file reference whenever the selected
+region can be read safely from a saved project file, falling back to
+inline text otherwise.  When `automatic', use
+`my-codex-region-reference-threshold-chars'.  When `prefer-inline',
+send selected text inline."
+  :type '(choice (const :tag "Prefer file references" prefer-reference)
+                 (const :tag "Automatic by size" automatic)
+                 (const :tag "Prefer inline text" prefer-inline))
+  :group 'my-codex)
+
+(defcustom my-codex-region-reference-threshold-chars 5000
+  "Region size in characters that sends a file reference instead of text.
+This only applies when `my-codex-region-send-policy' is `automatic',
+and only to file-visiting buffers.  When nil, automatic mode always
+sends selected region text from `my-codex-send-region'."
+  :type '(choice (const :tag "Always send selected text" nil)
+                 natnum)
+  :group 'my-codex)
+
+(defcustom my-codex-symbol-context-lines 5
+  "Number of surrounding lines to include when explaining a symbol."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-symbol-include-xref-context t
+  "When non-nil, include xref definition and reference context for symbols."
+  :type 'boolean
+  :group 'my-codex)
+
+(defcustom my-codex-symbol-xref-definition-limit 1
+  "Maximum number of xref definitions to include for symbol explanations."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-symbol-xref-reference-limit 3
+  "Maximum number of xref references to include for symbol explanations."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-symbol-xref-context-lines 1
+  "Number of surrounding lines to include for each xref location."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-session-summary-prompt
+  "Summarise our conversation so far into useful project notes.
+
+Focus on:
+- decisions made
+- open questions
+- action items
+- proposed implementation details
+- risks or constraints
+
+Preserve concrete file names, command names, and technical details. Do not edit files."
+  "Prompt used by `my-codex-summarize-session-to-markdown'."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-github-issue-summary-prompt
+  "Summarise our conversation so far as a GitHub issue draft.
+
+Focus on:
+- concrete problem or feature context
+- decisions made
+- implementation details
+- remaining action items
+- risks or constraints
+
+Return a concise issue title and a Markdown issue body. Use this exact format:
+
+Title: <issue title>
+
+Body:
+<Markdown issue body>
+
+Preserve concrete file names, command names, and technical details. Do not edit files."
+  "Prompt used by `my-codex-summarize-session-to-github-issue'."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-session-summary-poll-interval
+  my-codex-commit-message-poll-interval
+  "Seconds between checks for generated agent session summaries."
+  :type 'number
+  :group 'my-codex)
+
+(defcustom my-codex-session-summary-poll-attempts 600
+  "Maximum number of checks for a generated agent session summary."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-doctor-terminal-timeout 3
+  "Seconds to wait for a diagnostic vterm process to start."
+  :type 'number
+  :group 'my-codex)
+
+(defcustom my-codex-prompt-presets
+  '(("Refactor" . "Review the following code and refactor it to improve readability and performance without changing its external behaviour.")
+    ("Document" . "Write clear docstrings and comments for the following code. Avoid over-commenting obvious logic.")
+    ("Test" . "Write focused unit tests for the following code.")
+    ("Explain" . "Explain the following code clearly and concisely."))
+  "Prompt presets offered by `my-codex-ask-with-preset'.
+Each entry is a cons cell of the form (NAME . PROMPT)."
+  :type '(alist :key-type string :value-type string)
+  :group 'my-codex)
+
+(defvar my-codex--auto-revert-enabled-by-mode nil
+  "Non-nil when `my-codex-global-mode' enabled `global-auto-revert-mode'.")
+
+(defvar my-codex--vterm-integration-enabled-by-mode nil
+  "Non-nil when `my-codex-global-mode' enabled vterm integration.")
+
+(defvar my-codex--saved-show-trailing-whitespace nil
+  "Previous default value of `show-trailing-whitespace'.")
+
+(defvar my-codex--saved-column-number-mode nil
+  "Previous value of `column-number-mode'.")
+
+(defvar my-codex--display-defaults-enabled-by-mode nil
+  "Non-nil when `my-codex-global-mode' changed display defaults.")
+
+(defconst my-codex--display-show-trailing-whitespace-value t
+  "Default `show-trailing-whitespace' value set by `my-codex-global-mode'.")
+
+(defconst my-codex--display-column-number-mode-value t
+  "Default `column-number-mode' value set by `my-codex-global-mode'.")
+
+(defvar-local my-codex--prompt-preview-origin-window nil
+  "Window selected before opening the current prompt preview.")
+
+(defvar-local my-codex--edit-fill-column-indicator-state nil
+  "Previous fill-column indicator state saved by my-codex.")
+
+(defvar my-codex--edit-fill-column-indicator-buffers nil
+  "Buffers whose fill-column indicator state is temporarily managed.")
+
+(defvar-local my-codex--commit-message-request-marker nil
+  "Marker for the start of the latest agent commit message request.")
+
+(defvar-local my-codex--commit-message-request-signature nil
+  "Staged diff signature used for the latest agent commit message request.")
+
+(defvar-local my-codex--commit-buffer-staged-signature nil
+  "Staged diff signature for the current editable commit message.")
+
+(defvar-local my-codex--commit-buffer-codex-buffer nil
+  "Agent session buffer associated with the current editable commit message.")
+
+(defvar-local my-codex--commit-message-wait-timer nil
+  "Active timer waiting for an agent commit message.")
+
+(defvar-local my-codex--session-summary-request-marker nil
+  "Marker for the start of the latest agent session summary request.")
+
+(defvar-local my-codex--session-summary-wait-timer nil
+  "Active timer waiting for an agent session summary.")
+
+(defvar-local my-codex-session-id nil
+  "Identifier for the agent session owned by the current buffer.")
+
+(defvar-local my-codex-session-name nil
+  "Human-readable agent session name for the current buffer.")
+
+(defvar-local my-codex-session-project-root nil
+  "Project root associated with the current agent session buffer.")
+
+(defvar-local my-codex-session-access-mode nil
+  "Access mode used for the current agent session buffer.")
+
+(defvar-local my-codex-session-agent nil
+  "Agent profile used for the current agent session buffer.")
+
+(defvar-local my-codex-session-start-time nil
+  "Time when the agent session started.")
+
+(defvar-local my-codex-session-last-activity nil
+  "Time of the last prompt sent to the agent.")
+
+(defvar-local my-codex-session-last-output-time nil
+  "Time of the last output received from the agent process.")
+
+(defvar-local my-codex-session-prompt-count 0
+  "Number of prompts sent during this agent session.")
+
+(defface my-codex-workspace-write-face
+  '((t :inherit warning :weight bold))
+  "Face used to mark workspace-write agent sessions."
+  :group 'my-codex)
+
+(defface my-codex-read-only-face
+  '((t :inherit shadow))
+  "Face used to mark read-only agent sessions."
+  :group 'my-codex)
+
+(defun my-codex--access-mode-label (access-mode &optional plain)
+  "Return a visual label for ACCESS-MODE.
+When PLAIN is non-nil, do not apply text properties."
+  (let* ((label
+          (pcase access-mode
+            ('workspace-write "WORKSPACE WRITE")
+            ('read-only "read-only [lock]")
+            ('resume "resume")
+            ('custom "custom")
+            ('unknown "unknown")
+            (_ (if access-mode (symbol-name access-mode) "unknown"))))
+         (face
+          (pcase access-mode
+            ('workspace-write 'my-codex-workspace-write-face)
+            ('read-only 'my-codex-read-only-face)
+            (_ nil))))
+    (if (or plain (null face))
+        label
+      (propertize label 'face face))))
+
+(defun my-codex--session-title (&optional agent session access-mode plain)
+  "Return the display title for an agent session."
+  (format "%s · %s · %s"
+          (my-codex--agent-label (or agent my-codex-agent))
+          (my-codex--access-mode-label access-mode plain)
+          (or session "default")))
+
+(defun my-codex--terminal-type-label ()
+  "Return a short label for the current terminal buffer type."
+  (cond
+   ((derived-mode-p 'vterm-mode) "vterm")
+   ((derived-mode-p 'term-mode) "ansi-term")
+   ((derived-mode-p 'shell-mode) "shell")
+   (t (format-mode-line mode-name))))
+
+(defun my-codex--short-directory-name (directory)
+  "Return DIRECTORY abbreviated for compact display."
+  (if (and directory (not (string-empty-p directory)))
+      (directory-file-name (abbreviate-file-name directory))
+    "-"))
+
+(defun my-codex--process-status-label (&optional process)
+  "Return a compact state label for PROCESS."
+  (if process
+      (pcase (process-status process)
+        ('run "running")
+        ('stop "stopped")
+        ('exit (format "exited %s" (process-exit-status process)))
+        ('signal (format "signalled %s" (process-exit-status process)))
+        (status (symbol-name status)))
+    "idle"))
+
+(defun my-codex--last-status-label (&optional process)
+  "Return the last command status label for PROCESS."
+  (if process
+      (pcase (process-status process)
+        ('exit (number-to-string (process-exit-status process)))
+        ('signal (pcase (process-exit-status process)
+                   (2 "SIGINT")
+                   (15 "SIGTERM")
+                   (9 "SIGKILL")
+                   (status (format "signal %s" status))))
+        (_ "-"))
+    "-"))
+
+(defun my-codex--last-output-label ()
+  "Return the latest output time for the current session."
+  (if my-codex-session-last-output-time
+      (format-time-string "%H:%M" my-codex-session-last-output-time)
+    "-"))
+
+(defun my-codex--session-footer ()
+  "Return the dynamic footer text for the current agent session."
+  (let ((process (get-buffer-process (current-buffer))))
+    (format " %s · %s · %s · %s · last %s"
+            (my-codex--terminal-type-label)
+            (my-codex--short-directory-name
+             (or my-codex-session-project-root default-directory))
+            (my-codex--process-status-label process)
+            (my-codex--last-status-label process)
+            (my-codex--last-output-label))))
+
+(defun my-codex--refresh-session-title ()
+  "Refresh the current buffer's agent session title surfaces."
+  (let ((title (my-codex--session-title
+                my-codex-session-agent
+                my-codex-session-name
+                my-codex-session-access-mode)))
+    (setq-local header-line-format title)
+    (setq-local mode-line-format
+                '((:eval (my-codex--session-footer))))))
+
+(defvar-local my-codex--github-issue-creation-in-progress nil
+  "Non-nil while the current GitHub issue draft is being submitted.")
+
+(defvar-local my-codex--github-issue-repository nil
+  "GitHub repository selected for the current issue draft.")
+
+(defvar my-codex--captured-selection nil
+  "Text captured before opening a transient from an active region.")
+
+
+(cl-defstruct (my-codex-vterm-backend
+               (:constructor my-codex--make-vterm-backend (buffer-name)))
+  "Backend implementation that runs an agent in a vterm buffer."
+  buffer-name)
+
+(defvar my-codex--backend nil
+  "Current backend instance for the active project agent session.")
+
+(defvar my-codex--backends (make-hash-table :test #'equal)
+  "Backend instances keyed by agent buffer name.")
+
+(defvar my-codex--project-active-agents (make-hash-table :test #'equal)
+  "Agent profile identifiers keyed by project root.")
+
+(cl-defgeneric my-codex-backend-start
+    (backend project-root command &optional session-name agent access-mode)
+  "Start BACKEND in PROJECT-ROOT with COMMAND and return its buffer.
+When SESSION-NAME is non-nil, mark the buffer as that named session.")
+
+(cl-defgeneric my-codex-backend-send (backend prompt)
+  "Send PROMPT through BACKEND.")
+
+(cl-defgeneric my-codex-backend-live-p (backend)
+  "Return non-nil when BACKEND has a live agent process.")
+
+(autoload 'vterm-send-string "vterm")
+(autoload 'vterm-send-return "vterm")
+
+(defun my-codex--backend-buffer-name (backend)
+  "Return BACKEND's buffer name."
+  (my-codex-vterm-backend-buffer-name backend))
+
+(defun my-codex--backend-buffer (backend)
+  "Return BACKEND's buffer, or nil when it does not exist."
+  (get-buffer (my-codex--backend-buffer-name backend)))
+
+(defun my-codex--backend-for-buffer-name (buffer-name)
+  "Return the backend for BUFFER-NAME."
+  (let ((backend (gethash buffer-name my-codex--backends)))
+    (unless (my-codex-vterm-backend-p backend)
+      (setq backend (my-codex--make-vterm-backend buffer-name))
+      (puthash buffer-name backend my-codex--backends))
+    (setq my-codex--backend backend)
+    backend))
+
+(defun my-codex--current-backend ()
+  "Return the backend for the current project default agent session."
+  (my-codex--backend-for-buffer-name (my-codex-current-buffer-name)))
+
+(defun my-codex--agent-profile (agent)
+  "Return the profile for AGENT, or raise an error."
+  (or (alist-get agent my-codex-agent-profiles)
+      (user-error "Unknown my-codex agent profile: %s" agent)))
+
+(defun my-codex--agent-ids ()
+  "Return configured agent profile identifiers."
+  (mapcar #'car my-codex-agent-profiles))
+
+(defun my-codex--agent-label (agent)
+  "Return the display label for AGENT."
+  (or (plist-get (my-codex--agent-profile agent) :label)
+      (symbol-name agent)))
+
+(defun my-codex--agent-buffer-prefix (agent)
+  "Return the buffer prefix for AGENT."
+  (let ((prefix (plist-get (my-codex--agent-profile agent) :buffer-prefix)))
+    (cond
+     ((and (stringp prefix) (not (string-empty-p prefix))) prefix)
+     ((symbolp prefix) (symbol-name prefix))
+     (t (symbol-name agent)))))
+
+(defun my-codex--agent-command (agent access-mode)
+  "Return AGENT's command string for ACCESS-MODE."
+  (let* ((profile (my-codex--agent-profile agent))
+         (key (pcase access-mode
+                ('read-only :read-only-command)
+                ('workspace-write :workspace-command)
+                ('resume :resume-command)
+                (_ (user-error "Unknown access mode: %s" access-mode))))
+         (command (plist-get profile key)))
+    (cond
+     ((and (stringp command) (not (string-empty-p command))) command)
+     ((and (symbolp command)
+           (boundp command)
+           (stringp (symbol-value command))
+           (not (string-empty-p (symbol-value command))))
+      (symbol-value command))
+     ((symbolp command)
+      (user-error "Agent %s command %s is not a non-empty string"
+                  agent command))
+     (t
+      (user-error "Agent %s has no %s command" agent access-mode)))))
+
+(defun my-codex--read-agent ()
+  "Read and return an agent profile identifier."
+  (intern
+   (minibuffer-with-setup-hook
+       (lambda () (minibuffer-completion-help))
+     (completing-read
+      "Agent: "
+      (mapcar #'symbol-name (my-codex--agent-ids))
+      nil t nil nil (symbol-name my-codex-agent)))))
+
+(cl-defmethod my-codex-backend-live-p ((backend my-codex-vterm-backend))
+  "Return non-nil when BACKEND's vterm process is live."
+  (when-let (buffer (my-codex--backend-buffer backend))
+    (process-live-p (get-buffer-process buffer))))
+
+(cl-defmethod my-codex-backend-send
+  ((backend my-codex-vterm-backend) prompt)
+  "Send PROMPT through BACKEND's vterm buffer."
+  (let ((buffer (or (my-codex--backend-buffer backend)
+                    (user-error "No %s buffer found"
+                                (my-codex--backend-buffer-name backend)))))
+    (with-current-buffer buffer
+      (goto-char (point-max))
+      (vterm-send-string prompt t)
+      (vterm-send-return)
+      (setq my-codex-session-last-activity (current-time))
+      (setq my-codex-session-prompt-count
+            (1+ (or my-codex-session-prompt-count 0))))))
+
+(defun my-codex--session-access-mode (command &optional agent)
+  "Return the session access mode represented by COMMAND."
+  (let ((agent (or agent my-codex-agent)))
+    (cond
+     ((equal command (my-codex--agent-command agent 'workspace-write))
+      'workspace-write)
+     ((equal command (my-codex--agent-command agent 'read-only))
+      'read-only)
+     ((equal command (my-codex--agent-command agent 'resume)) 'resume)
+     (t 'custom))))
+
+(defun my-codex--default-session-id (project-root &optional agent)
+  "Return the default session identifier for PROJECT-ROOT."
+  (format "%s:default:%s"
+          (or agent my-codex-agent)
+          (substring (secure-hash 'sha1 (file-truename project-root)) 0 8)))
+
+(defun my-codex--session-id (project-root session-name &optional agent)
+  "Return the named session identifier for PROJECT-ROOT and SESSION-NAME."
+  (format "%s:session:%s:%s"
+          (or agent my-codex-agent)
+          (substring (secure-hash 'sha1 (file-truename project-root)) 0 8)
+          (my-codex--safe-session-name session-name)))
+
+(defun my-codex--mark-session
+    (buffer session-id session-name project-root access-mode agent)
+  "Mark BUFFER as SESSION-ID named SESSION-NAME for PROJECT-ROOT."
+  (with-current-buffer buffer
+    (setq-local my-codex-session-id session-id)
+    (setq-local my-codex-session-name session-name)
+    (setq-local my-codex-session-project-root
+                (file-name-as-directory (file-truename project-root)))
+    (setq-local my-codex-session-access-mode access-mode)
+    (setq-local my-codex-session-agent agent)
+    (setq-local my-codex-session-start-time (current-time))
+    (setq-local my-codex-session-last-activity (current-time))
+    (setq-local my-codex-session-last-output-time nil)
+    (setq-local my-codex-session-prompt-count 0)
+    (my-codex--refresh-session-title)))
+
+(defun my-codex--mark-default-session
+    (buffer project-root access-mode &optional agent)
+  "Mark BUFFER as the default agent session for PROJECT-ROOT."
+  (let ((agent (or agent my-codex-agent)))
+    (my-codex--mark-session
+     buffer
+     (my-codex--default-session-id project-root agent)
+     "default"
+     project-root
+     access-mode
+     agent)))
+
+(defun my-codex--mark-named-session
+    (buffer session-name project-root access-mode &optional agent)
+  "Mark BUFFER as SESSION-NAME for PROJECT-ROOT."
+  (let ((agent (or agent my-codex-agent)))
+    (my-codex--mark-session
+     buffer
+     (my-codex--session-id project-root session-name agent)
+     session-name
+     project-root
+     access-mode
+     agent)))
+
+(defun my-codex--safe-root-name (root)
+  "Return a buffer-name-safe representation of ROOT."
+  (replace-regexp-in-string
+   "[^[:alnum:]._-]+" "!"
+   (directory-file-name (file-truename root))))
+
+(defun my-codex-project-root ()
+  "Return the current project root, or `default-directory' if not in a project."
+  (file-name-as-directory
+   (if-let (project (project-current))
+       (project-root project)
+     default-directory)))
+
+(defun my-codex--project-key (&optional root)
+  "Return the stable project key for ROOT or the current project."
+  (file-name-as-directory
+   (file-truename (or root (my-codex-project-root)))))
+
+(defun my-codex--active-agent (&optional root)
+  "Return the active agent profile for ROOT or the current project."
+  (or (gethash (my-codex--project-key root)
+               my-codex--project-active-agents)
+      my-codex-agent))
+
+(defun my-codex--active-agent-label (&optional root)
+  "Return the display label for the active agent."
+  (my-codex--agent-label (my-codex--active-agent root)))
+
+(defun my-codex--set-active-agent (agent &optional root)
+  "Record AGENT as the active agent for ROOT or the current project."
+  (puthash (my-codex--project-key root)
+           agent
+           my-codex--project-active-agents))
+
+(defun my-codex-current-buffer-name (&optional agent)
+  "Return the buffer name for the current agent session."
+  (let ((agent (or agent (my-codex--active-agent))))
+    (if-let* ((project (project-current))
+              (root (file-truename (project-root project)))
+              (name (file-name-nondirectory (directory-file-name root)))
+              (hash (substring (secure-hash 'sha1 root) 0 8)))
+        (format "*%s:%s:%s*"
+                (my-codex--agent-buffer-prefix agent) name hash)
+      (if (and (eq agent 'codex)
+               (not (equal my-codex-buffer-name
+                           my-codex-default-buffer-name)))
+          my-codex-buffer-name
+        (let* ((root (file-truename (my-codex-project-root)))
+               (name (file-name-nondirectory (directory-file-name root)))
+               (hash (substring (secure-hash 'sha1 root) 0 8)))
+          (format "*%s:%s:%s*"
+                  (my-codex--agent-buffer-prefix agent) name hash))))))
+
+(defun my-codex--normalise-session-name (name)
+  "Return a normalised agent session NAME, or raise an error."
+  (let ((normalised (string-trim name)))
+    (when (string-empty-p normalised)
+      (user-error "Session name cannot be empty"))
+    (when (string-equal normalised "default")
+      (user-error "Use F8 S o or F8 S w for the default session"))
+    normalised))
+
+(defun my-codex--safe-session-name (name)
+  "Return a buffer-name-safe representation of session NAME."
+  (let* ((normalised (my-codex--normalise-session-name name))
+         (slug (replace-regexp-in-string
+                "[^[:alnum:]._-]+" "!"
+                normalised))
+         (hash (substring (secure-hash 'sha1 normalised) 0 8)))
+    (format "%s-%s" slug hash)))
+
+(defun my-codex-session-buffer-name (session-name &optional agent)
+  "Return the buffer name for SESSION-NAME in the current project."
+  (let* ((safe-name (my-codex--safe-session-name session-name))
+         (default-name (my-codex-current-buffer-name agent)))
+    (if (string-suffix-p "*" default-name)
+        (concat (substring default-name 0 -1) ":" safe-name "*")
+      (format "%s:%s" default-name safe-name))))
+
+
+(defun my-codex--process-output-lines (program &rest args)
+  "Return PROGRAM output lines for ARGS, or nil when PROGRAM fails."
+  (with-temp-buffer
+    (when (eq 0 (apply #'process-file program nil t nil args))
+      (split-string (string-trim-right (buffer-string)) "\n" t))))
+
+
+(defun my-codex--session-export-buffer-name (root)
+  "Return the session export buffer name for ROOT."
+  (format "*%s session export:%s*"
+          (my-codex--active-agent-label root)
+          (my-codex--safe-root-name root)))
+
+(defun my-codex--session-summary-buffer-name (root)
+  "Return the session summary buffer name for ROOT."
+  (format "*%s session summary:%s*"
+          (my-codex--active-agent-label root)
+          (my-codex--safe-root-name root)))
+
+(defun my-codex--unique-output-markers (name)
+  "Return unique begin and end output markers for NAME."
+  (let ((suffix (substring
+                 (secure-hash
+                  'sha1
+                  (format "%s-%s-%s" name (float-time) (random)))
+                 0 12)))
+    (cons (format "BEGIN_%s_%s" name suffix)
+          (format "END_%s_%s" name suffix))))
+
+(defun my-codex--marked-output-instructions (begin-marker end-marker placeholder)
+  "Return prompt instructions for marked output.
+BEGIN-MARKER and END-MARKER delimit the output.  PLACEHOLDER is
+shown between them as an example."
+  (format "Put only the final answer between these exact markers:\n\n%s\n%s\n%s"
+          begin-marker
+          placeholder
+          end-marker))
+
+(defun my-codex--strip-terminal-control-codes (text)
+  "Return TEXT without common terminal control codes."
+  (let ((cleaned (ansi-color-filter-apply text)))
+    (setq cleaned
+          (replace-regexp-in-string
+           "\x1b\\][^\a\x1b]*\\(\a\\|\x1b\\\\\\)" "" cleaned))
+    (setq cleaned
+          (replace-regexp-in-string
+           "\x1b\\[[0-?]*[ -/]*[@-~]" "" cleaned))
+    (setq cleaned
+          (replace-regexp-in-string "\r" "" cleaned))
+    cleaned))
+
+(defun my-codex--clean-session-transcript (text)
+  "Return cleaned agent session transcript TEXT."
+  (with-temp-buffer
+    (insert (my-codex--strip-terminal-control-codes text))
+    (goto-char (point-min))
+    (while (re-search-forward "[[:blank:]]+$" nil t)
+      (replace-match ""))
+    (goto-char (point-min))
+    (while (re-search-forward "\n\\{4,\\}" nil t)
+      (replace-match "\n\n\n"))
+    (string-trim (buffer-string))))
+
+(defun my-codex-buffer ()
+  "Return the current project's agent backend buffer, or raise an error."
+  (let* ((backend (my-codex--current-backend))
+         (buffer-name (my-codex--backend-buffer-name backend))
+         (buffer (get-buffer buffer-name)))
+    (unless buffer
+      (user-error "No %s buffer found" buffer-name))
+    (unless (my-codex-backend-live-p backend)
+      (user-error "No running %s process in %s"
+                  (my-codex--active-agent-label)
+                  buffer-name))
+    buffer))
+
+(defun my-codex--session-buffer ()
+  "Return the current project's agent session buffer, or raise an error."
+  (let* ((buffer-name (my-codex-current-buffer-name))
+         (buffer (get-buffer buffer-name)))
+    (unless buffer
+      (user-error "No %s buffer found" buffer-name))
+    buffer))
+
+(defun my-codex-session-transcript ()
+  "Return the cleaned transcript from the current project's agent buffer."
+  (let ((buffer (my-codex--session-buffer)))
+    (with-current-buffer buffer
+      (my-codex--clean-session-transcript
+       (buffer-substring-no-properties (point-min) (point-max))))))
+
+(defun my-codex--session-export-mode ()
+  "Use a suitable mode for a session export buffer."
+  (if (require 'markdown-mode nil t)
+      (markdown-mode)
+    (text-mode)))
+
+(defun my-codex--markdown-code-fence (text)
+  "Return a Markdown code fence delimiter that does not occur in TEXT."
+  (let ((max-length 2)
+        (start 0))
+    (while (string-match "`+" text start)
+      (setq max-length (max max-length
+                            (- (match-end 0) (match-beginning 0)))
+            start (match-end 0)))
+    (make-string (1+ max-length) ?`)))
+
+(defun my-codex--insert-session-export-markdown (transcript root source-buffer)
+  "Insert Markdown for TRANSCRIPT from ROOT and SOURCE-BUFFER."
+  (let ((fence (my-codex--markdown-code-fence transcript)))
+    (insert (format "# %s Session\n\n" (my-codex--active-agent-label root)))
+    (insert (format "- Project root: `%s`\n" root))
+    (insert (format "- Source buffer: `%s`\n" source-buffer))
+    (insert (format "- Exported: `%s`\n\n"
+                    (format-time-string "%Y-%m-%d %H:%M:%S %Z")))
+    (insert "## Transcript\n\n")
+    (insert fence "text\n")
+    (insert transcript)
+    (insert "\n" fence "\n")))
+
+(defun my-codex--session-summary-prompt
+    (summary-prompt begin-marker end-marker &optional placeholder)
+  "Return a marked session summary prompt.
+SUMMARY-PROMPT describes the requested summary.  BEGIN-MARKER and
+END-MARKER delimit the answer.  PLACEHOLDER is shown inside the output
+markers."
+  (format "%s\n\n%s"
+          summary-prompt
+          (my-codex--marked-output-instructions
+           begin-marker end-marker (or placeholder "<Markdown notes here>"))))
+
+
+(provide 'my-codex-core)
+
+;;; my-codex-core.el ends here

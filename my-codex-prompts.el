@@ -16,7 +16,7 @@
 (require 'thingatpt)
 (require 'transient)
 (require 'xref)
-(require 'my-codex)
+(require 'my-codex-core)
 
 (defvar my-codex--captured-selection)
 (defvar my-codex--prompt-preview-origin-window)
@@ -41,18 +41,18 @@
 (defvar flycheck-mode)
 
 (declare-function my-codex--project-files "my-codex-git" (root))
-(declare-function my-codex--active-agent "my-codex" (&optional root))
-(declare-function my-codex--active-agent-label "my-codex" (&optional root))
-(declare-function my-codex--agent-label "my-codex" (agent))
-(declare-function my-codex--backend-for-buffer-name "my-codex" (buffer-name))
-(declare-function my-codex-backend-live-p "my-codex" (backend))
-(declare-function my-codex--current-backend "my-codex" ())
-(declare-function my-codex--safe-root-name "my-codex" (root))
-(declare-function my-codex--warn-about-unsaved-project-buffers "my-codex" ())
-(declare-function my-codex-backend-send "my-codex" (backend prompt))
-(declare-function my-codex-buffer "my-codex" ())
-(declare-function my-codex-current-buffer-name "my-codex" ())
-(declare-function my-codex-project-root "my-codex" ())
+(declare-function my-codex--active-agent "my-codex-core" (&optional root))
+(declare-function my-codex--active-agent-label "my-codex-core" (&optional root))
+(declare-function my-codex--agent-label "my-codex-core" (agent))
+(declare-function my-codex--backend-for-buffer-name "my-codex-core" (buffer-name))
+(declare-function my-codex-backend-live-p "my-codex-core" (backend))
+(declare-function my-codex--current-backend "my-codex-core" ())
+(declare-function my-codex--safe-root-name "my-codex-core" (root))
+(declare-function my-codex--warn-about-unsaved-project-buffers "my-codex-core" ())
+(declare-function my-codex-backend-send "my-codex-core" (backend prompt))
+(declare-function my-codex-buffer "my-codex-core" ())
+(declare-function my-codex-current-buffer-name "my-codex-core" ())
+(declare-function my-codex-project-root "my-codex-core" ())
 (declare-function flycheck-error-< "flycheck" (err1 err2))
 (declare-function flycheck-error-checker "flycheck" (err))
 (declare-function flycheck-error-column "flycheck" (err))
@@ -992,6 +992,7 @@ Send only a file and line-range reference, not the selected text."
   "Read optional additional instructions with project file completion.
 When a minibuffer line starts with @, complete project-relative file names
 after the at-sign with `completion-at-point'."
+  (require 'my-codex-git)
   (let* ((root (my-codex-project-root))
          (files (my-codex--project-files root)))
     (minibuffer-with-setup-hook

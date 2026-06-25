@@ -12,7 +12,8 @@
 
 (require 'ediff)
 (require 'subr-x)
-(require 'my-codex)
+(require 'my-codex-core)
+(require 'my-codex-prompts)
 
 (defvar my-codex--commit-buffer-staged-signature)
 (defvar my-codex--commit-buffer-codex-buffer)
@@ -28,14 +29,15 @@
 (defvar my-codex-session-summary-poll-interval)
 
 (declare-function my-codex--preview-and-send-prompt "my-codex-prompts" (prompt))
-(declare-function my-codex--active-agent-label "my-codex" (&optional root))
-(declare-function my-codex--process-output-lines "my-codex" (program &rest args))
-(declare-function my-codex--safe-root-name "my-codex" (root))
-(declare-function my-codex--session-export-mode "my-codex" ())
-(declare-function my-codex--session-summary-buffer-name "my-codex" (root))
-(declare-function my-codex-buffer "my-codex" ())
-(declare-function my-codex-current-buffer-name "my-codex" ())
-(declare-function my-codex-project-root "my-codex" ())
+(declare-function my-codex-send-prompt "my-codex-prompts" (prompt))
+(declare-function my-codex--active-agent-label "my-codex-core" (&optional root))
+(declare-function my-codex--process-output-lines "my-codex-core" (program &rest args))
+(declare-function my-codex--safe-root-name "my-codex-core" (root))
+(declare-function my-codex--session-export-mode "my-codex-core" ())
+(declare-function my-codex--session-summary-buffer-name "my-codex-core" (root))
+(declare-function my-codex-buffer "my-codex-core" ())
+(declare-function my-codex-current-buffer-name "my-codex-core" ())
+(declare-function my-codex-project-root "my-codex-core" ())
 
 (defun my-codex--commit-message-trailer-line-p (line)
   "Return non-nil if LINE looks like a Git commit message trailer."
