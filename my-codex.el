@@ -1137,9 +1137,6 @@ Open the generated notes in an editable Markdown buffer when they are ready."
      ["List open sessions" my-codex-list-sessions
       :keys "F8 S l"
       :help "List open agent session buffers"]
-     ["Session dashboard" my-codex-top
-      :keys "F8 T t"
-      :help "Display a dashboard of all agent sessions"]
      ["New named session" my-codex-new-session
       :keys "F8 S n"
       :help "Start or show a named agent session"]
@@ -1181,10 +1178,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
      ["Explain symbol at point" my-codex-explain-symbol-at-point
       :keys "F8 x"
       :active buffer-file-name
-      :help "Ask the active agent to explain the symbol at point"]
-     ["Send project overview" my-codex-send-project-overview
-      :keys "F8 T p"
-      :help "Send the active agent a compact project overview"])
+      :help "Ask the active agent to explain the symbol at point"])
     ("Git"
      ["Review Git diff" my-codex-send-git-diff
       :keys "F8 g"
@@ -1213,19 +1207,26 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       :keys "F8 e"
       :active (use-region-p)
       :help "Ask the active agent to explain the selected compiler/test error"]
-     ["Explain diagnostics" my-codex-diagnostics-transient
-      :keys "F8 T E"
-      :help "Open diagnostic explanation commands"]
      ["Open project instructions" my-codex-open-project-instructions
       :keys "F8 i"
       :help "Open AGENTS.md, CODEX.md, or .codex/instructions.md"]
-     ["Export session to Markdown" my-codex-export-session-to-markdown
-      :keys "F8 T X"
-      :help "Export the current agent session transcript to Markdown"]
      ["Summarize session to Markdown" my-codex-summarize-session-to-markdown
       :keys "F8 M"
-      :help "Ask the active agent to summarize the conversation as Markdown notes"]
-     ["Run health check" my-codex-doctor
+      :help "Ask the active agent to summarize the conversation as Markdown notes"])
+    ("Tools"
+     ["Project overview" my-codex-send-project-overview
+      :keys "F8 T p"
+      :help "Send the active agent a compact project overview"]
+     ["Export session" my-codex-export-session-to-markdown
+      :keys "F8 T X"
+      :help "Export the current agent session transcript to Markdown"]
+     ["Session dashboard" my-codex-top
+      :keys "F8 T t"
+      :help "Display a dashboard of all agent sessions"]
+     ["Diagnostics" my-codex-diagnostics-transient
+      :keys "F8 T E"
+      :help "Open diagnostic explanation commands"]
+     ["Doctor" my-codex-doctor
       :keys "F8 T !"
       :help "Check Emacs, agent, vterm, Git, gh, project, configuration, and terminal startup"])
     ("GitHub"
