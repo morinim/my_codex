@@ -141,6 +141,28 @@
       (should (equal received "fix: preserve request marker"))
       (should (eq (marker-buffer request-marker) (current-buffer))))))
 
+(ert-deftest my-codex-wait-for-marked-output-accepts-final-attempt ()
+  (with-temp-buffer
+    (let ((request-marker (copy-marker (point)))
+          received)
+      (insert "BEGIN_COMMIT_MESSAGE\n"
+              "fix: accept final poll\n"
+              "END_COMMIT_MESSAGE\n")
+      (my-codex--wait-for-marked-output
+       (current-buffer)
+       (copy-marker request-marker)
+       "BEGIN_COMMIT_MESSAGE"
+       "END_COMMIT_MESSAGE"
+       (lambda (message)
+         (setq received message))
+       "Timed out."
+       "Ready."
+       0.1
+       1
+       nil
+       1)
+      (should (equal received "fix: accept final poll")))))
+
 (ert-deftest my-codex-latest-marked-output-after-uses-latest-block ()
   (with-temp-buffer
     (let ((start (copy-marker (point))))
@@ -482,7 +504,18 @@
                                     (buffer-string)))
             (should (string-match-p "codex" (buffer-string)))
             (should (string-match-p "plan" (buffer-string)))
-            (should (string-match-p "read-only \\[lock\\]" (buffer-string)))))
+            (should (string-match-p "read-only \\[lock\\]" (buffer-string)))
+            (setq-local header-line-format nil)
+            (tabulated-list-init-header)
+            (should (equal header-line-format
+                           '("" header-line-indent
+                             (:eval
+                              (let ((hscroll (window-hscroll)))
+                                (if (< hscroll
+                                       (length my-codex--header-string))
+                                    (substring my-codex--header-string
+                                               hscroll)
+                                  ""))))))))
       (delete-directory root t)
       (when (buffer-live-p session-buffer)
         (kill-buffer session-buffer))

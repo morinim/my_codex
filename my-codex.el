@@ -24,9 +24,7 @@
 ;;; Code:
 
 (require 'compile)
-(require 'ansi-color)
 (require 'my-codex-core)
-(require 'browse-url)
 (require 'cl-lib)
 (require 'ediff)
 (require 'easymenu)
@@ -34,9 +32,7 @@
 (require 'seq)
 (require 'subr-x)
 (require 'tabulated-list)
-(require 'thingatpt)
 (require 'transient)
-(require 'xref)
 
 (autoload 'vterm-mode "vterm" nil t)
 (autoload 'vterm-send-string "vterm")

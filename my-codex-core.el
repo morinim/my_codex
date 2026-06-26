@@ -882,17 +882,17 @@ the extracted text.  ATTEMPTS tracks polling cycles."
         (output (my-codex--latest-marked-output-after
                  buffer start-point begin-marker end-marker ignored-values)))
     (cond
-     ((> attempts poll-attempts)
-      (my-codex--clear-marker start-point)
-      (when timer-var
-        (my-codex--clear-buffer-local-timer buffer timer-var))
-      (message "%s" timeout-message))
      (output
       (my-codex--clear-marker start-point)
       (when timer-var
         (my-codex--clear-buffer-local-timer buffer timer-var))
       (funcall callback output)
       (message "%s" ready-message))
+     ((>= attempts poll-attempts)
+      (my-codex--clear-marker start-point)
+      (when timer-var
+        (my-codex--clear-buffer-local-timer buffer timer-var))
+      (message "%s" timeout-message))
      (t
       (let ((timer
              (run-with-timer

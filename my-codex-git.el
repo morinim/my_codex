@@ -317,14 +317,6 @@ Do not modify files."))
     (my-codex--ensure-git-repository)
     (my-codex--preview-and-send-prompt prompt)))
 
-(defun my-codex--git-diff-review-prompt ()
-  "Return the prompt for reviewing the current Git diff."
-  my-codex-git-diff-review-prompt)
-
-(defun my-codex--git-staged-diff-review-prompt ()
-  "Return the prompt for reviewing the staged Git diff."
-  my-codex-git-staged-diff-review-prompt)
-
 (defun my-codex--commit-message-prompt (&optional begin-marker end-marker)
   "Return the prompt for drafting a commit message from staged changes."
   (let ((prompt
@@ -374,13 +366,13 @@ When STAGED is non-nil, show the staged diff."
 (defun my-codex-send-git-diff ()
   "Ask the agent to review the current Git diff."
   (interactive)
-  (my-codex--send-git-prompt (my-codex--git-diff-review-prompt)))
+  (my-codex--send-git-prompt my-codex-git-diff-review-prompt))
 
 ;;;###autoload
 (defun my-codex-send-git-staged-diff ()
   "Ask the agent to review the staged Git diff."
   (interactive)
-  (my-codex--send-git-prompt (my-codex--git-staged-diff-review-prompt)))
+  (my-codex--send-git-prompt my-codex-git-staged-diff-review-prompt))
 
 ;;;###autoload
 (defun my-codex-show-git-diff ()
