@@ -2396,7 +2396,45 @@ Do not modify files."))))
         (should (string-match-p "source: Flycheck" sent))
         (should (string-match-p "message: \"broken\"" sent))))))
 
-(ert-deftest my-codex-xref-items-section-formats-relative-excerpts ()
+(ert-deftest my-codex-explain-symbol-references-saved-file ()
+  (let ((sent nil))
+    (with-temp-buffer
+      (setq buffer-file-name "/repo/src/example.el")
+      (insert "(defun alpha ()\n  42)\n")
+      (goto-char (point-min))
+      (search-forward "alpha")
+      (set-buffer-modified-p nil)
+      (cl-letf (((symbol-function 'my-codex-project-root)
+                 (lambda () "/repo/"))
+                ((symbol-function 'my-codex--symbol-xref-context)
+                 (lambda (_symbol _root) nil))
+                ((symbol-function 'my-codex--preview-and-send-prompt)
+                 (lambda (prompt) (setq sent prompt))))
+        (my-codex-explain-symbol-at-point)))
+    (should (string-match-p "symbol: \"alpha\"" sent))
+    (should (string-match-p "location: \"src/example\\.el:1\"" sent))
+    (should-not (string-match-p "excerpt: |" sent))))
+
+(ert-deftest my-codex-explain-symbol-includes-modified-buffer-excerpt ()
+  (let ((sent nil))
+    (with-temp-buffer
+      (setq buffer-file-name "/repo/src/example.el")
+      (insert "(defun alpha ()\n  42)\n")
+      (goto-char (point-min))
+      (search-forward "alpha")
+      (set-buffer-modified-p t)
+      (cl-letf (((symbol-function 'my-codex-project-root)
+                 (lambda () "/repo/"))
+                ((symbol-function 'my-codex--symbol-xref-context)
+                 (lambda (_symbol _root) nil))
+                ((symbol-function 'my-codex--preview-and-send-prompt)
+                 (lambda (prompt) (setq sent prompt))))
+        (my-codex-explain-symbol-at-point)))
+    (should (string-match-p "location: \"src/example\\.el:1\"" sent))
+    (should (string-match-p "excerpt: |" sent))
+    (should (string-match-p "(defun alpha" sent))))
+
+(ert-deftest my-codex-xref-items-section-formats-relative-locations ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-xref" t))))
     (unwind-protect
         (with-temp-buffer
@@ -2406,11 +2444,12 @@ Do not modify files."))))
                   "\n"
                   "(defun beta ()\n"
                   "  42)\n")
+          (set-buffer-modified-p nil)
           (let* ((first-marker (copy-marker (point-min)))
                  (second-marker (copy-marker (point-max)))
                  (section
                   (my-codex--xref-items-section
-                   "Definition context"
+                   "Definitions"
                    (list
                     (xref-make
                      "alpha"
@@ -2425,14 +2464,40 @@ Do not modify files."))))
                    root
                    1
                    1)))
-            (should (string-match-p "definition_context:" section))
+            (should (string-match-p "definitions:" section))
             (should (string-match-p
                      "location: \"src/example\\.el:1\""
                      section))
-            (should (string-match-p "summary: \"alpha\"" section))
+            (should-not (string-match-p "summary: \"alpha\"" section))
+            (should-not (string-match-p "excerpt: |" section))
+            (should-not (string-match-p "location: \"src/example\\.el:6\""
+                                        section))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-xref-items-section-includes-modified-buffer-excerpt ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-xref" t))))
+    (unwind-protect
+        (with-temp-buffer
+          (setq buffer-file-name (expand-file-name "src/example.el" root))
+          (insert "(defun alpha ()\n"
+                  "  (beta))\n")
+          (set-buffer-modified-p t)
+          (let* ((marker (copy-marker (point-min)))
+                 (section
+                  (my-codex--xref-items-section
+                   "Definitions"
+                   (list
+                    (xref-make
+                     "alpha"
+                     (xref-make-buffer-location
+                      (current-buffer)
+                      (marker-position marker))))
+                   root
+                   1
+                   1)))
+            (should (string-match-p "definitions:" section))
             (should (string-match-p "excerpt: |" section))
-            (should (string-match-p "(defun alpha" section))
-            (should-not (string-match-p "summary: \"beta\"" section))))
+            (should (string-match-p "(defun alpha" section))))
       (delete-directory root t))))
 
 (ert-deftest my-codex-dynamic-helper-buffer-names-support-active-agent ()

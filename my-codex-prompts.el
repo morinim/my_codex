@@ -98,12 +98,12 @@ sends selected region text from `my-codex-send-region'."
   :group 'my-codex)
 
 (defcustom my-codex-symbol-context-lines 5
-  "Number of surrounding lines to include when explaining a symbol."
+  "Number of surrounding lines to include for modified symbol buffers."
   :type 'natnum
   :group 'my-codex)
 
 (defcustom my-codex-symbol-include-xref-context t
-  "When non-nil, include xref definition and reference context for symbols."
+  "When non-nil, include xref definition and reference locations for symbols."
   :type 'boolean
   :group 'my-codex)
 
@@ -118,7 +118,7 @@ sends selected region text from `my-codex-send-region'."
   :group 'my-codex)
 
 (defcustom my-codex-symbol-xref-context-lines 1
-  "Number of surrounding lines to include for each xref location."
+  "Number of surrounding lines to include for each modified xref buffer."
   :type 'natnum
   :group 'my-codex)
 
@@ -647,31 +647,27 @@ IMPLEMENTATION-RELATIVE and TEST-RELATIVE are project-relative file names."
      "\n")))
 
 (defun my-codex--xref-items-section (title items root limit context-lines)
-  "Format an xref context section named TITLE from ITEMS.
+  "Format an xref location section named TITLE from ITEMS.
 
 ROOT is used for project-relative paths.  LIMIT caps the number of entries,
-and CONTEXT-LINES controls the excerpt radius around each xref location."
+and CONTEXT-LINES controls the excerpt radius for modified xref buffers."
   (let ((entries
          (seq-keep
           (lambda (item)
             (when-let ((marker (my-codex--xref-location-marker item)))
-              (let ((summary (xref-item-summary item)))
-                (string-join
-                 (delq nil
-                       (list
-                        (format "  - location: %s"
-                                (my-codex--yaml-string
-                                 (my-codex--xref-location-label marker root)))
-                        (unless (or (null summary)
-                                    (string-empty-p summary))
-                          (format "    summary: %s"
-                                  (my-codex--yaml-string summary)))
+              (string-join
+               (delq nil
+                     (list
+                      (format "  - location: %s"
+                              (my-codex--yaml-string
+                               (my-codex--xref-location-label marker root)))
+                      (when (buffer-modified-p (marker-buffer marker))
                         (format "    excerpt: |\n%s"
                                 (my-codex--yaml-literal-block
                                  (my-codex--line-context-around-marker
                                   marker context-lines)
-                                 6))))
-                 "\n"))))
+                                 6)))))
+               "\n")))
           (seq-take items limit))))
     (when entries
       (format "%s:\n%s"
@@ -682,7 +678,7 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
               (string-join entries "\n")))))
 
 (defun my-codex--symbol-xref-context (symbol root)
-  "Return formatted xref context for SYMBOL under ROOT, or nil."
+  "Return formatted xref locations for SYMBOL under ROOT, or nil."
   (when my-codex-symbol-include-xref-context
     (when-let ((backend (my-codex--xref-call #'xref-find-backend)))
       (let* ((identifier (or (my-codex--xref-call
@@ -698,13 +694,13 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
               (delq nil
                     (list
                      (my-codex--xref-items-section
-                      "Definition context"
+                      "Definitions"
                       definitions
                       root
                       my-codex-symbol-xref-definition-limit
                       my-codex-symbol-xref-context-lines)
                      (my-codex--xref-items-section
-                      "Reference context"
+                      "References"
                       references
                       root
                       my-codex-symbol-xref-reference-limit
@@ -714,7 +710,7 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
 
 ;;;###autoload
 (defun my-codex-explain-symbol-at-point ()
-  "Ask the agent to explain the symbol at point with nearby file context."
+  "Ask the agent to explain the symbol at point with compact context."
   (interactive)
   (unless buffer-file-name
     (user-error "Current buffer is not visiting a file"))
@@ -722,24 +718,31 @@ and CONTEXT-LINES controls the excerpt radius around each xref location."
          (file (file-relative-name buffer-file-name root))
          (line (line-number-at-pos))
          (symbol (my-codex--symbol-at-point))
-         (context (my-codex--line-context-around-point
-                   my-codex-symbol-context-lines))
+         (context (when (buffer-modified-p)
+                    (my-codex--line-context-around-point
+                     my-codex-symbol-context-lines)))
+         (symbol-context
+          (string-join
+           (delq nil
+                 (list
+                  (format (concat "symbol_context:\n"
+                                  "  symbol: %s\n"
+                                  "  location: %s")
+                          (my-codex--yaml-string symbol)
+                          (my-codex--yaml-string
+                           (format "%s:%d" file line)))
+                  (when context
+                    (format "  excerpt: |\n%s"
+                            (my-codex--yaml-literal-block context 4)))))
+           "\n"))
          (xref-context (my-codex--symbol-xref-context symbol root)))
     (my-codex--preview-and-send-prompt
      (string-join
       (delq nil
             (list
-             (format (concat "Explain the role of this symbol using the YAML "
-                             "context below.\n\n"
-                             "symbol_context:\n"
-                             "  file: %s\n"
-                             "  symbol: %s\n"
-                             "  line: %d\n"
-                             "  excerpt: |\n%s")
-                     (my-codex--yaml-string file)
-                     (my-codex--yaml-string symbol)
-                     line
-                     (my-codex--yaml-literal-block context 4))
+             (concat "Explain the role of this symbol using the YAML "
+                     "context below.\n\n"
+                     symbol-context)
              xref-context
              "Inspect the file directly if needed. Do not edit files."))
       "\n\n"))))
