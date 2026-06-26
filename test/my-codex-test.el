@@ -2378,6 +2378,105 @@ Do not modify files."))))
           (should (string-match-p "message: \"second\"" prompt))
           (should-not (string-match-p "message: \"third\"" prompt)))))))
 
+(ert-deftest my-codex-flycheck-diagnostics-prompt-deduplicates-diagnostics ()
+  (let ((diagnostics
+         '((:line 1 :column 1 :level error :checker mock :message "same")
+           (:line 1 :column 1 :level error :checker mock :message "same")
+           (:line 2 :column 1 :level error :checker mock :message "other"))))
+    (my-codex-test--with-mock-flycheck diagnostics
+      (cl-letf (((symbol-function 'my-codex-project-root)
+                 (lambda () "/repo/")))
+        (let ((prompt (my-codex--flycheck-diagnostics-prompt diagnostics)))
+          (should (string-match-p "diagnostic_count: 3" prompt))
+          (should (string-match-p "unique_diagnostic_count: 2" prompt))
+          (should (string-match-p "included_count: 2" prompt))
+          (should (string-match-p "omitted_count: 1" prompt))
+          (should (= 1
+                     (let ((start 0)
+                           (count 0))
+                       (while (string-match "message: \"same\"" prompt start)
+                         (setq count (1+ count)
+                               start (match-end 0)))
+                       count))))))))
+
+(ert-deftest my-codex-flycheck-diagnostics-prompt-groups-repeated-messages ()
+  (let ((diagnostics
+         '((:line 1 :column 1 :level error :checker mock :message "repeat")
+           (:line 2 :column 3 :level error :checker mock :message "repeat")
+           (:line 4 :column 1 :level warning :checker mock :message "repeat"))))
+    (my-codex-test--with-mock-flycheck diagnostics
+      (cl-letf (((symbol-function 'my-codex-project-root)
+                 (lambda () "/repo/")))
+        (let ((prompt (my-codex--flycheck-diagnostics-prompt diagnostics)))
+          (should (string-match-p "occurrence_count: 2" prompt))
+          (should (string-match-p "locations:" prompt))
+          (should (string-match-p "- line: 1" prompt))
+          (should (string-match-p "- line: 2" prompt))
+          (should (string-match-p "- line: 4" prompt)))))))
+
+(ert-deftest my-codex-flycheck-diagnostics-prompt-obeys-context-budget ()
+  (let ((my-codex-flycheck-diagnostics-limit 100)
+        (my-codex-context-token-budget 80)
+        (diagnostics
+         '((:line 1 :column 1 :level error :checker mock :message "short")
+           (:line 2 :column 1 :level error :checker mock
+            :message "this diagnostic has a much longer message")
+           (:line 3 :column 1 :level error :checker mock :message "later"))))
+    (my-codex-test--with-mock-flycheck diagnostics
+      (cl-letf (((symbol-function 'my-codex-project-root)
+                 (lambda () "/repo/")))
+        (let ((prompt (my-codex--flycheck-diagnostics-prompt diagnostics)))
+          (should (string-match-p "diagnostic_count: 3" prompt))
+          (should (string-match-p "included_count: 1" prompt))
+          (should (string-match-p "omitted_count: 2" prompt))
+          (should (string-match-p "context_budget_tokens: 80" prompt))
+          (should (string-match-p "truncated: true" prompt))
+          (should (string-match-p "message: \"short\"" prompt))
+          (should-not (string-match-p "much longer message" prompt))
+          (should-not (string-match-p "message: \"later\"" prompt)))))))
+
+(ert-deftest my-codex-flycheck-diagnostics-prompt-keeps-one-tight-budget ()
+  (let ((my-codex-flycheck-diagnostics-limit 100)
+        (my-codex-context-token-budget 1)
+        (diagnostics
+         '((:line 1 :column 1 :level error :checker mock
+            :message "verbose diagnostic that exceeds the tiny budget")
+           (:line 2 :column 1 :level error :checker mock
+            :message "later"))))
+    (my-codex-test--with-mock-flycheck diagnostics
+      (cl-letf (((symbol-function 'my-codex-project-root)
+                 (lambda () "/repo/")))
+        (let ((prompt (my-codex--flycheck-diagnostics-prompt diagnostics)))
+          (should (string-match-p "diagnostic_count: 2" prompt))
+          (should (string-match-p "included_count: 1" prompt))
+          (should (string-match-p "omitted_count: 1" prompt))
+          (should (string-match-p
+                   "message: \"verbose diagnostic that exceeds the tiny budget\""
+                   prompt))
+          (should-not (string-match-p "message: \"later\"" prompt)))))))
+
+(ert-deftest my-codex-flycheck-diagnostics-prompt-caps-first-repeated-group ()
+  (let ((my-codex-flycheck-diagnostics-limit 100)
+        (my-codex-context-token-budget 10)
+        (diagnostics
+         '((:line 1 :column 1 :level error :checker mock :message "repeat")
+           (:line 2 :column 1 :level error :checker mock :message "repeat")
+           (:line 3 :column 1 :level error :checker mock :message "repeat"))))
+    (my-codex-test--with-mock-flycheck diagnostics
+      (cl-letf (((symbol-function 'my-codex-project-root)
+                 (lambda () "/repo/"))
+                ((symbol-function 'my-codex--approx-token-count)
+                 (lambda (text)
+                   (if (string-match-p "- line: 2" text) 99 1))))
+        (let ((prompt (my-codex--flycheck-diagnostics-prompt diagnostics)))
+          (should (string-match-p "diagnostic_count: 3" prompt))
+          (should (string-match-p "included_count: 1" prompt))
+          (should (string-match-p "omitted_count: 2" prompt))
+          (should (string-match-p "message: \"repeat\"" prompt))
+          (should (string-match-p "- line: 1" prompt))
+          (should-not (string-match-p "- line: 2" prompt))
+          (should-not (string-match-p "- line: 3" prompt)))))))
+
 (ert-deftest my-codex-explain-buffer-diagnostics-sends-flycheck-prompt ()
   (let ((diagnostics
          '((:line 1

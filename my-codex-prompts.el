@@ -39,6 +39,14 @@ Identify missing edge cases, unhandled exceptions, logical flaws and important b
   :type 'natnum
   :group 'my-codex)
 
+(defcustom my-codex-context-token-budget 2000
+  "Approximate token budget for generated prompt context.
+When nil, generated context is not capped by token budget.  Specific
+features may still apply their own item-count limits."
+  :type '(choice (const :tag "No context token budget" nil)
+                 natnum)
+  :group 'my-codex)
+
 (defcustom my-codex-refactor-plan-prompt
   "Draft a step-by-step, low-risk refactoring plan for this code.
 
@@ -808,6 +816,102 @@ and CONTEXT-LINES controls the excerpt radius for modified xref buffers."
                      (or (flycheck-error-message diagnostic) "")))))
      "\n")))
 
+(defun my-codex--flycheck-diagnostic-key (diagnostic root)
+  "Return a duplicate-detection key for DIAGNOSTIC under ROOT."
+  (list
+   (my-codex--flycheck-diagnostic-file diagnostic root)
+   (flycheck-error-line diagnostic)
+   (flycheck-error-column diagnostic)
+   (flycheck-error-level diagnostic)
+   (flycheck-error-checker diagnostic)
+   (flycheck-error-id diagnostic)
+   (flycheck-error-message diagnostic)))
+
+(defun my-codex--flycheck-unique-diagnostics (diagnostics root)
+  "Return DIAGNOSTICS with exact duplicates removed."
+  (let ((seen (make-hash-table :test #'equal))
+        unique)
+    (dolist (diagnostic diagnostics)
+      (let ((key (my-codex--flycheck-diagnostic-key diagnostic root)))
+        (unless (gethash key seen)
+          (puthash key t seen)
+          (setq unique (append unique (list diagnostic))))))
+    unique))
+
+(defun my-codex--flycheck-group-key (diagnostic root)
+  "Return a repeated-message grouping key for DIAGNOSTIC under ROOT."
+  (list
+   (my-codex--flycheck-diagnostic-file diagnostic root)
+   (flycheck-error-level diagnostic)
+   (flycheck-error-checker diagnostic)
+   (flycheck-error-id diagnostic)
+   (flycheck-error-message diagnostic)))
+
+(defun my-codex--flycheck-group-diagnostics (diagnostics root)
+  "Return compact repeated-message groups for DIAGNOSTICS under ROOT."
+  (let ((table (make-hash-table :test #'equal))
+        groups)
+    (dolist (diagnostic diagnostics)
+      (let* ((key (my-codex--flycheck-group-key diagnostic root))
+             (group (gethash key table)))
+        (if group
+            (setf (plist-get group :diagnostics)
+                  (append (plist-get group :diagnostics) (list diagnostic)))
+          (setq group
+                (list :file (my-codex--flycheck-diagnostic-file diagnostic root)
+                      :level (flycheck-error-level diagnostic)
+                      :checker (flycheck-error-checker diagnostic)
+                      :id (flycheck-error-id diagnostic)
+                      :message (flycheck-error-message diagnostic)
+                      :diagnostics (list diagnostic)))
+          (puthash key group table)
+          (setq groups (append groups (list group))))))
+    groups))
+
+(defun my-codex--flycheck-group-count (group)
+  "Return the number of diagnostics represented by GROUP."
+  (length (plist-get group :diagnostics)))
+
+(defun my-codex--flycheck-truncate-group (group count)
+  "Return GROUP with at most COUNT diagnostic locations."
+  (let ((copy (copy-sequence group)))
+    (setf (plist-get copy :diagnostics)
+          (seq-take (plist-get group :diagnostics) count))
+    copy))
+
+(defun my-codex--flycheck-group-entry (group)
+  "Return a YAML-ish entry for a compact Flycheck GROUP."
+  (let ((diagnostics (plist-get group :diagnostics)))
+    (if (= (length diagnostics) 1)
+        (my-codex--flycheck-diagnostic-entry (car diagnostics))
+      (string-join
+       (delq nil
+             (list
+              (format "      - severity: %s"
+                      (my-codex--yaml-string
+                       (format "%s" (plist-get group :level))))
+              (format "        checker: %s"
+                      (my-codex--yaml-string
+                       (format "%s" (plist-get group :checker))))
+              (when (plist-get group :id)
+                (format "        id: %s"
+                        (my-codex--yaml-string
+                         (format "%s" (plist-get group :id)))))
+              (format "        message: %s"
+                      (my-codex--yaml-string
+                       (or (plist-get group :message) "")))
+              (format "        occurrence_count: %d" (length diagnostics))
+              "        locations:"
+              (string-join
+               (mapcar
+                (lambda (diagnostic)
+                  (format "          - line: %s\n            column: %s"
+                          (or (flycheck-error-line diagnostic) "unknown")
+                          (or (flycheck-error-column diagnostic) "unknown")))
+                diagnostics)
+               "\n")))
+       "\n"))))
+
 (defun my-codex--flycheck-diagnostic-at-point (diagnostics)
   "Return the most relevant Flycheck diagnostic at point from DIAGNOSTICS."
   (let* ((line (line-number-at-pos nil t))
@@ -834,35 +938,103 @@ and CONTEXT-LINES controls the excerpt radius for modified xref buffers."
                (abs (- (or (flycheck-error-column right) 1) (1+ column)))))
           (< left-distance right-distance)))))))
 
-(defun my-codex--flycheck-diagnostics-by-file (diagnostics root)
-  "Return DIAGNOSTICS grouped by file relative to ROOT."
-  (let ((groups nil))
-    (dolist (diagnostic diagnostics)
-      (let* ((file (my-codex--flycheck-diagnostic-file diagnostic root))
-             (group (assoc file groups)))
-        (if group
-            (setcdr group (append (cdr group) (list diagnostic)))
-          (setq groups (append groups (list (list file diagnostic)))))))
-    groups))
+(defun my-codex--flycheck-groups-by-file (groups)
+  "Return compact diagnostic GROUPS grouped by file."
+  (let ((file-groups nil))
+    (dolist (group groups)
+      (let* ((file (plist-get group :file))
+             (file-group (assoc file file-groups)))
+        (if file-group
+            (setcdr file-group (append (cdr file-group) (list group)))
+          (setq file-groups
+                (append file-groups (list (list file group)))))))
+    file-groups))
 
-(defun my-codex--flycheck-diagnostic-file-entry (group)
-  "Return a YAML-ish entry for diagnostics in GROUP."
+(defun my-codex--flycheck-group-file-entry (group)
+  "Return a YAML-ish file entry for compact diagnostics in GROUP."
   (string-join
    (list
     (format "  - file: %s" (my-codex--yaml-string (car group)))
     "    diagnostics:"
-    (string-join (mapcar #'my-codex--flycheck-diagnostic-entry (cdr group))
+    (string-join (mapcar #'my-codex--flycheck-group-entry (cdr group))
                  "\n"))
    "\n"))
+
+(defun my-codex--flycheck-groups-context (groups)
+  "Return the YAML-ish diagnostics context for compact GROUPS."
+  (string-join
+   (mapcar #'my-codex--flycheck-group-file-entry
+           (my-codex--flycheck-groups-by-file groups))
+   "\n"))
+
+(defun my-codex--flycheck-fit-group-to-budget (selected group token-budget)
+  "Return GROUP truncated to fit TOKEN-BUDGET after SELECTED, or nil.
+When SELECTED is nil, return one diagnostic if even one exceeds the budget."
+  (let ((count (my-codex--flycheck-group-count group))
+        fitted)
+    (catch 'done
+      (dotimes (index count)
+        (let* ((candidate
+                (my-codex--flycheck-truncate-group group (1+ index)))
+               (context
+                (my-codex--flycheck-groups-context
+                 (append selected (list candidate)))))
+          (if (> (my-codex--approx-token-count context) token-budget)
+              (throw 'done nil)
+            (setq fitted candidate)))))
+    (or fitted
+        (unless selected
+          (my-codex--flycheck-truncate-group group 1)))))
+
+(defun my-codex--flycheck-select-groups (groups limit token-budget)
+  "Return compact GROUPS constrained by LIMIT and TOKEN-BUDGET."
+  (let ((selected nil)
+        (included 0))
+    (catch 'done
+      (dolist (group groups)
+        (let* ((remaining (if limit (- limit included) most-positive-fixnum))
+               (candidate-group
+                (cond
+                 ((<= remaining 0) (throw 'done nil))
+                 ((> (my-codex--flycheck-group-count group) remaining)
+                  (my-codex--flycheck-truncate-group group remaining))
+                 (t group)))
+               (candidate-selected (append selected (list candidate-group)))
+               (candidate-context
+                (my-codex--flycheck-groups-context candidate-selected)))
+          (when (and token-budget
+                     (> (my-codex--approx-token-count candidate-context)
+                        token-budget))
+            (setq candidate-group
+                  (my-codex--flycheck-fit-group-to-budget
+                   selected candidate-group token-budget))
+            (unless candidate-group
+              (throw 'done nil))
+            (setq candidate-selected (append selected (list candidate-group))))
+          (setq selected candidate-selected
+                included (+ included
+                            (my-codex--flycheck-group-count
+                             candidate-group))))))
+    selected))
 
 (defun my-codex--flycheck-diagnostics-prompt (diagnostics)
   "Return an agent prompt for Flycheck DIAGNOSTICS."
   (let* ((root (my-codex-project-root))
          (limit my-codex-flycheck-diagnostics-limit)
          (total (length diagnostics))
-         (included (if limit (min limit total) total))
-         (truncated (> total included))
-         (selected (seq-take diagnostics included)))
+         (unique (my-codex--flycheck-unique-diagnostics diagnostics root))
+         (unique-total (length unique))
+         (groups (my-codex--flycheck-group-diagnostics unique root))
+         (selected-groups
+          (my-codex--flycheck-select-groups
+           groups limit my-codex-context-token-budget))
+         (diagnostics-context
+          (my-codex--flycheck-groups-context selected-groups))
+         (included
+          (apply #'+ (mapcar #'my-codex--flycheck-group-count
+                             selected-groups)))
+         (omitted (- total included))
+         (truncated (> omitted 0)))
     (format
      (concat "Analyse these Flycheck diagnostics as a batch.\n\n"
              "Identify common root causes, cascade errors, missing imports/"
@@ -871,16 +1043,23 @@ and CONTEXT-LINES controls the excerpt radius for modified xref buffers."
              "one fix per diagnostic unless they are genuinely unrelated.\n\n"
              "source: Flycheck\n"
              "diagnostic_count: %d\n"
+             "unique_diagnostic_count: %d\n"
              "included_count: %d\n"
+             "omitted_count: %d\n"
+             "context_budget_tokens: %s\n"
+             "context_tokens: %d\n"
              "truncated: %s\n"
              "diagnostics:\n%s")
      total
+     unique-total
      included
+     omitted
+     (if my-codex-context-token-budget
+         (number-to-string my-codex-context-token-budget)
+       "unlimited")
+     (my-codex--approx-token-count diagnostics-context)
      (if truncated "true" "false")
-     (string-join
-      (mapcar #'my-codex--flycheck-diagnostic-file-entry
-              (my-codex--flycheck-diagnostics-by-file selected root))
-      "\n"))))
+     diagnostics-context)))
 
 (defun my-codex--flycheck-diagnostic-at-point-prompt (diagnostic)
   "Return an agent prompt for a single Flycheck DIAGNOSTIC."
