@@ -1440,10 +1440,12 @@
         (target (get-buffer-create "*my-codex-active-target*")))
     (unwind-protect
         (let ((default-directory root))
-          (my-codex--mark-named-session
-           target "review" root 'workspace-write 'antigravity)
-          (set-window-parameter (selected-window) 'my-codex-term-buffer target)
-          (should (eq (my-codex-active-session-buffer) target)))
+          (cl-letf (((symbol-function 'project-current)
+                     (lambda (&rest _args) nil)))
+            (my-codex--mark-named-session
+             target "review" root 'workspace-write 'antigravity)
+            (set-window-parameter (selected-window) 'my-codex-term-buffer target)
+            (should (eq (my-codex-active-session-buffer) target))))
       (set-window-parameter (selected-window) 'my-codex-term-buffer nil)
       (when (buffer-live-p target)
         (kill-buffer target))
@@ -1501,7 +1503,9 @@
           (my-codex--mark-named-session
            target "review" root 'workspace-write 'antigravity)
           (set-window-parameter (selected-window) 'my-codex-term-buffer target)
-          (cl-letf (((symbol-function 'my-codex--warn-about-unsaved-project-buffers)
+          (cl-letf (((symbol-function 'project-current)
+                     (lambda (&rest _args) nil))
+                    ((symbol-function 'my-codex--warn-about-unsaved-project-buffers)
                      #'ignore)
                     ((symbol-function 'get-buffer-process)
                      (lambda (buffer) (eq buffer target)))
@@ -2017,6 +2021,13 @@
       (should
        (equal (buffer-substring-no-properties (car bounds) (cdr bounds))
               "(defun second ()\n  2)\n")))))
+
+(ert-deftest my-codex-defun-bounds-at-point-rejects-leading-text ()
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (insert ";; header\n\n(defun first ()\n  1)\n")
+    (goto-char (point-min))
+    (should-error (my-codex--defun-bounds-at-point) :type 'user-error)))
 
 (ert-deftest my-codex-review-defun-at-point-reuses-region-review-prompt ()
   (let (sent-beg sent-end sent-prompt)

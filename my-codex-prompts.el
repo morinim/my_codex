@@ -447,21 +447,8 @@ marker, begin marker and end marker before PROMPT is sent."
 
 (defun my-codex--defun-bounds-at-point ()
   "Return the bounds of the defun at point."
-  (let ((origin (point))
-        beg end)
-    (condition-case nil
-        (save-excursion
-          (beginning-of-defun)
-          (setq beg (point))
-          (end-of-defun)
-          (setq end (point))
-          (unless (and (< beg end)
-                       (<= beg origin)
-                       (<= origin end))
-            (user-error "No defun at point"))
-          (cons beg end))
-      (error
-       (user-error "No defun at point")))))
+  (or (bounds-of-thing-at-point 'defun)
+      (user-error "No defun at point")))
 
 ;;;###autoload
 (defun my-codex-review-defun-at-point ()

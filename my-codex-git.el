@@ -197,12 +197,13 @@ Preserve concrete file names, command names, and technical details. Do not edit 
   (let ((default-directory root))
     (let ((files
            (if (my-codex--git-repository-p)
-               (my-codex--process-output-lines
-                "git" "ls-files" "--cached" "--others" "--exclude-standard")
+             (my-codex--process-output-lines
+              "git" "ls-files" "--cached" "--others" "--exclude-standard")
              (when-let (project (project-current nil root))
-               (mapcar (lambda (file)
-                         (file-relative-name file root))
-                       (project-files project))))))
+               (ignore-errors
+                 (mapcar (lambda (file)
+                           (file-relative-name file root))
+                         (project-files project)))))))
       (sort (or files nil) #'string<))))
 
 ;;;###autoload
