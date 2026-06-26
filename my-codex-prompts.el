@@ -465,7 +465,10 @@ marker, begin marker and end marker before PROMPT is sent."
   (unless buffer-file-name
     (user-error "Current buffer is not visiting a file"))
   (let* ((root (my-codex-project-root))
-         (file (file-relative-name buffer-file-name root)))
+         (file (my-codex--project-relative-file buffer-file-name root)))
+    (my-codex--ensure-file-reference-current buffer-file-name)
+    (unless file
+      (user-error "Current file is outside the current project"))
     (my-codex--preview-and-send-prompt
      (format "Inspect `%s` directly and report findings. Do not edit unless asked\n"
              file))))
@@ -476,6 +479,20 @@ marker, begin marker and end marker before PROMPT is sent."
         (root-truename (file-name-as-directory (file-truename root))))
     (when (file-in-directory-p truename root-truename)
       (file-relative-name truename root-truename))))
+
+(defun my-codex--ensure-file-reference-current (file &optional label)
+  "Raise when FILE is visited by a stale or modified buffer.
+LABEL describes FILE in user-facing errors."
+  (let ((buffer (find-buffer-visiting file))
+        (label (or label "buffer")))
+    (when buffer
+      (with-current-buffer buffer
+        (when (buffer-modified-p)
+          (user-error "Save the %s before sending a file reference" label))
+        (unless (verify-visited-file-modtime buffer)
+          (user-error
+           "%s changed on disk; revert or save before sending a file reference"
+           (capitalize label)))))))
 
 (defun my-codex--projectile-counterpart-file ()
   "Return Projectile's implementation/test counterpart for current file, or nil."
@@ -575,6 +592,9 @@ IMPLEMENTATION-RELATIVE and TEST-RELATIVE are project-relative file names."
          (implementation-relative
           (my-codex--project-relative-file implementation-file root))
          (test-relative (my-codex--project-relative-file test-file root)))
+    (my-codex--ensure-file-reference-current implementation-file
+                                             "implementation file")
+    (my-codex--ensure-file-reference-current test-file "test file")
     (unless implementation-relative
       (user-error "Implementation file is outside the current project"))
     (unless test-relative
@@ -1108,10 +1128,7 @@ When SELECTED is nil, return one diagnostic if even one exceeds the budget."
   "Return an agent file reference for the region between BEG and END."
   (unless buffer-file-name
     (user-error "Current buffer is not visiting a file"))
-  (when (buffer-modified-p)
-    (user-error "Save the buffer before sending a file reference"))
-  (unless (verify-visited-file-modtime (current-buffer))
-    (user-error "File changed on disk; revert or save before sending a file reference"))
+  (my-codex--ensure-file-reference-current buffer-file-name)
   (let* ((root (my-codex-project-root))
          (file (my-codex--project-relative-file buffer-file-name root))
          (line-start (line-number-at-pos beg t))

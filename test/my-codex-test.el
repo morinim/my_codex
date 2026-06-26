@@ -1809,6 +1809,40 @@
       (delete-directory root t)
       (delete-directory outside-root t))))
 
+(ert-deftest my-codex-send-current-file-rejects-unsaved-files ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-file" t))))
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "src/example.el" root))
+          (insert "unsaved\n")
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root)))
+            (should-error
+             (my-codex-send-current-file)
+             :type 'user-error)))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-send-current-file-rejects-outside-project-files ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-file" t)))
+        (outside-root (file-name-as-directory
+                       (make-temp-file "my-codex-outside" t))))
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "example.el" outside-root))
+          (insert "saved\n")
+          (set-buffer-modified-p nil)
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root))
+                    ((symbol-function 'verify-visited-file-modtime)
+                     (lambda (_buffer) t)))
+            (should-error
+             (my-codex-send-current-file)
+             :type 'user-error)))
+      (delete-directory root t)
+      (delete-directory outside-root t))))
+
 (ert-deftest my-codex-region-review-prompt-references-small-file-regions-by-default ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t)))
         (my-codex-region-reference-threshold-chars 100))
@@ -2104,6 +2138,60 @@
       (should (< context-pos implementation-pos))
       (should (< implementation-pos test-pos))
       (should (< test-pos request-pos)))))
+
+(ert-deftest my-codex-analyse-test-coverage-rejects-unsaved-implementation ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-coverage" t)))
+        sent)
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "src/example.el" root))
+          (insert "unsaved\n")
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root))
+                    ((symbol-function 'my-codex--read-test-file)
+                     (lambda (_implementation-file _root)
+                       (expand-file-name "test/example-test.el" root)))
+                    ((symbol-function 'my-codex--preview-and-send-prompt)
+                     (lambda (prompt) (setq sent prompt))))
+            (should-error
+             (my-codex-analyse-test-coverage)
+             :type 'user-error)
+            (should-not sent)))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-analyse-test-coverage-rejects-unsaved-test-file ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-coverage" t)))
+        (test-buffer (generate-new-buffer "example-test.el"))
+        sent)
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "src/example.el" root))
+          (insert "saved\n")
+          (set-buffer-modified-p nil)
+          (with-current-buffer test-buffer
+            (setq default-directory root)
+            (setq buffer-file-name
+                  (expand-file-name "test/example-test.el" root))
+            (insert "unsaved test\n")
+            (set-buffer-modified-p t))
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root))
+                    ((symbol-function 'my-codex--read-test-file)
+                     (lambda (_implementation-file _root)
+                       (buffer-file-name test-buffer)))
+                    ((symbol-function 'verify-visited-file-modtime)
+                     (lambda (_buffer) t))
+                    ((symbol-function 'my-codex--preview-and-send-prompt)
+                     (lambda (prompt) (setq sent prompt))))
+            (should-error
+             (my-codex-analyse-test-coverage)
+             :type 'user-error)
+            (should-not sent)))
+      (when (buffer-live-p test-buffer)
+        (kill-buffer test-buffer))
+      (delete-directory root t))))
 
 (ert-deftest my-codex-doctor-command-executable-token-handles-shell-prefixes ()
   (should
