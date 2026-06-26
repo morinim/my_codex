@@ -13,10 +13,12 @@
 (require 'subr-x)
 (require 'my-codex-core)
 (require 'my-codex-prompts)
-(require 'my-codex-git)
 
-(defvar my-codex--github-issue-creation-in-progress)
-(defvar my-codex--github-issue-repository)
+(defvar-local my-codex--github-issue-creation-in-progress nil
+  "Non-nil while the current GitHub issue draft is being submitted.")
+
+(defvar-local my-codex--github-issue-repository nil
+  "GitHub repository selected for the current issue draft.")
 
 (defcustom my-codex-github-issue-summary-prompt
   "Summarise our conversation so far as a GitHub issue draft.
@@ -336,8 +338,8 @@ Open an editable issue draft before running `gh issue create'."
                  (my-codex-edit-github-issue-draft draft root))
      :timeout-message "Timed out waiting for agent GitHub issue draft."
      :ready-message "Agent GitHub issue draft is ready for editing."
-     :poll-interval my-codex-session-summary-poll-interval
-     :poll-attempts my-codex-session-summary-poll-attempts
+     :poll-interval my-codex-generated-output-poll-interval
+     :poll-attempts my-codex-generated-output-poll-attempts
      :timer-var 'my-codex--generated-artifact-wait-timer)
     (message "Asked %s to draft a GitHub issue; waiting to open editor."
              (my-codex--active-agent-label root))))

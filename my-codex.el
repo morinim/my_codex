@@ -955,8 +955,8 @@ Open the generated notes in an editable Markdown buffer when they are ready."
                  (my-codex-edit-session-summary summary root))
      :timeout-message "Timed out waiting for agent session summary."
      :ready-message "Agent session summary is ready for editing."
-     :poll-interval my-codex-session-summary-poll-interval
-     :poll-attempts my-codex-session-summary-poll-attempts
+     :poll-interval my-codex-generated-output-poll-interval
+     :poll-attempts my-codex-generated-output-poll-attempts
      :timer-var 'my-codex--generated-artifact-wait-timer)
     (message "Asked %s to summarize the session; waiting to open editor."
              (my-codex--active-agent-label root))))

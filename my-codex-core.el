@@ -261,25 +261,25 @@ When nil, use `compile-command'."
 (defvar my-codex--edit-fill-column-indicator-buffers nil
   "Buffers whose fill-column indicator state is temporarily managed.")
 
-;; Commit message requests keep their own state so they can validate the
-;; staged diff and reopen the latest generated message.
-(defvar-local my-codex--commit-message-request-marker nil
-  "Marker for the start of the latest agent commit message request.")
+(define-obsolete-variable-alias
+  'my-codex-session-summary-poll-interval
+  'my-codex-generated-output-poll-interval
+  "0.96.0")
 
-(defvar-local my-codex--commit-message-request-output-markers nil
-  "Begin and end markers for the latest agent commit message request.")
+(define-obsolete-variable-alias
+  'my-codex-session-summary-poll-attempts
+  'my-codex-generated-output-poll-attempts
+  "0.96.0")
 
-(defvar-local my-codex--commit-message-request-signature nil
-  "Staged diff signature used for the latest agent commit message request.")
+(defcustom my-codex-generated-output-poll-interval 0.5
+  "Seconds between checks for generated agent output."
+  :type 'number
+  :group 'my-codex)
 
-(defvar-local my-codex--commit-buffer-staged-signature nil
-  "Staged diff signature for the current editable commit message.")
-
-(defvar-local my-codex--commit-buffer-codex-buffer nil
-  "Agent session buffer associated with the current editable commit message.")
-
-(defvar-local my-codex--commit-message-wait-timer nil
-  "Active timer waiting for an agent commit message.")
+(defcustom my-codex-generated-output-poll-attempts 600
+  "Maximum number of checks for generated agent output."
+  :type 'natnum
+  :group 'my-codex)
 
 (defvar-local my-codex--generated-artifact-wait-timer nil
   "Active timer waiting for a generated session artefact.")
@@ -412,12 +412,6 @@ When PLAIN is non-nil, do not apply text properties."
     (setq-local header-line-format title)
     (setq-local mode-line-format
                 '((:eval (my-codex--session-footer))))))
-
-(defvar-local my-codex--github-issue-creation-in-progress nil
-  "Non-nil while the current GitHub issue draft is being submitted.")
-
-(defvar-local my-codex--github-issue-repository nil
-  "GitHub repository selected for the current issue draft.")
 
 (defvar my-codex--captured-selection nil
   "Text captured before opening a transient from an active region.")

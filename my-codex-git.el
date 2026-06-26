@@ -15,10 +15,26 @@
 (require 'my-codex-core)
 (require 'my-codex-prompts)
 
-(defvar my-codex--commit-buffer-staged-signature)
-(defvar my-codex--commit-buffer-codex-buffer)
-(defvar my-codex--commit-message-request-marker)
-(defvar my-codex--commit-message-request-signature)
+;; Commit message requests keep their own state so they can validate the
+;; staged diff and reopen the latest generated message.
+(defvar-local my-codex--commit-message-request-marker nil
+  "Marker for the start of the latest agent commit message request.")
+
+(defvar-local my-codex--commit-message-request-output-markers nil
+  "Begin and end markers for the latest agent commit message request.")
+
+(defvar-local my-codex--commit-message-request-signature nil
+  "Staged diff signature used for the latest agent commit message request.")
+
+(defvar-local my-codex--commit-buffer-staged-signature nil
+  "Staged diff signature for the current editable commit message.")
+
+(defvar-local my-codex--commit-buffer-codex-buffer nil
+  "Agent session buffer associated with the current editable commit message.")
+
+(defvar-local my-codex--commit-message-wait-timer nil
+  "Active timer waiting for an agent commit message.")
+
 (defcustom my-codex-commit-message-fill-column 76
   "Maximum line width for generated commit messages."
   :type 'natnum
@@ -70,17 +86,6 @@ Focus on:
 Preserve concrete file names, command names, and technical details. Do not edit files."
   "Prompt used by `my-codex-summarize-session-to-markdown'."
   :type 'string
-  :group 'my-codex)
-
-(defcustom my-codex-session-summary-poll-interval
-  my-codex-commit-message-poll-interval
-  "Seconds between checks for generated agent session summaries."
-  :type 'number
-  :group 'my-codex)
-
-(defcustom my-codex-session-summary-poll-attempts 600
-  "Maximum number of checks for a generated agent session summary."
-  :type 'natnum
   :group 'my-codex)
 
 (declare-function my-codex--preview-and-send-prompt "my-codex-prompts" (prompt))
