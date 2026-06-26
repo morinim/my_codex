@@ -14,9 +14,8 @@
 (require 'seq)
 (require 'subr-x)
 (require 'my-codex-core)
+(require 'my-codex-vterm)
 
-(defvar my-codex-doctor-terminal-timeout)
-(defvar my-codex-vterm-min-scrollback)
 (defvar my-codex-agent)
 (defvar my-codex-project-build-command)
 (defvar my-codex-read-only-command)
@@ -26,6 +25,11 @@
 (defvar my-codex-antigravity-workspace-command)
 (defvar my-codex-antigravity-resume-command)
 (defvar vterm-max-scrollback)
+
+(defcustom my-codex-doctor-terminal-timeout 3
+  "Seconds to wait for a diagnostic vterm process to start."
+  :type 'number
+  :group 'my-codex)
 
 (declare-function my-codex--agent-command "my-codex-core" (agent access-mode))
 (declare-function my-codex-project-root "my-codex-core" ())

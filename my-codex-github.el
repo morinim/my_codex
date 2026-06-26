@@ -18,7 +18,28 @@
 (defvar my-codex--github-issue-creation-in-progress)
 (defvar my-codex--github-issue-repository)
 (defvar my-codex--session-summary-request-marker)
-(defvar my-codex-github-issue-summary-prompt)
+
+(defcustom my-codex-github-issue-summary-prompt
+  "Summarise our conversation so far as a GitHub issue draft.
+
+Focus on:
+- concrete problem or feature context
+- decisions made
+- implementation details
+- remaining action items
+- risks or constraints
+
+Return a concise issue title and a Markdown issue body. Use this exact format:
+
+Title: <issue title>
+
+Body:
+<Markdown issue body>
+
+Preserve concrete file names, command names, and technical details. Do not edit files."
+  "Prompt used by `my-codex-summarize-session-to-github-issue'."
+  :type 'string
+  :group 'my-codex)
 
 (declare-function my-codex--active-agent "my-codex-core" (&optional root))
 (declare-function my-codex--active-agent-label "my-codex-core" (&optional root))

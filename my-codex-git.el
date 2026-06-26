@@ -19,14 +19,76 @@
 (defvar my-codex--commit-buffer-codex-buffer)
 (defvar my-codex--commit-message-request-marker)
 (defvar my-codex--commit-message-request-signature)
-(defvar my-codex-commit-message-fill-column)
-(defvar my-codex-commit-message-poll-attempts)
-(defvar my-codex-commit-message-poll-interval)
-(defvar my-codex-commit-message-prompt-template)
-(defvar my-codex-git-diff-review-prompt)
-(defvar my-codex-git-staged-diff-review-prompt)
-(defvar my-codex-session-summary-poll-attempts)
-(defvar my-codex-session-summary-poll-interval)
+(defcustom my-codex-commit-message-fill-column 76
+  "Maximum line width for generated commit messages."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-git-diff-review-prompt
+  "Review the current Git diff using `git diff -- .`. Focus on correctness, regressions, edge cases, naming and maintainability. Do not edit unless asked\n"
+  "Prompt used by `my-codex-send-git-diff'."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-git-staged-diff-review-prompt
+  "Review the staged Git diff using `git diff --cached -- .`. Focus on correctness, regressions, edge cases and commit readiness. Do not edit unless asked\n"
+  "Prompt used by `my-codex-send-git-staged-diff'."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-commit-message-prompt-template
+  "Inspect the staged Git diff using `git diff --cached -- .` and write a concise conventional commit message.
+
+Put only the final commit message between these exact markers:
+
+BEGIN_COMMIT_MESSAGE
+<commit message here>
+END_COMMIT_MESSAGE
+
+Use an imperative subject and a short explanatory body when useful. Limit each line to %d columns. Do not edit files.\n"
+  "Prompt template used by `my-codex-commit-message-from-diff'.
+The literal substring `%d' is replaced with
+`my-codex-commit-message-fill-column'.  Keep the
+BEGIN_COMMIT_MESSAGE and END_COMMIT_MESSAGE markers if you want
+`my-codex-latest-commit-message' to extract the generated message."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-commit-message-poll-interval 0.5
+  "Seconds between checks for a generated agent commit message."
+  :type 'number
+  :group 'my-codex)
+
+(defcustom my-codex-commit-message-poll-attempts 120
+  "Maximum number of checks for a generated agent commit message."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-session-summary-prompt
+  "Summarise our conversation so far into useful project notes.
+
+Focus on:
+- decisions made
+- open questions
+- action items
+- proposed implementation details
+- risks or constraints
+
+Preserve concrete file names, command names, and technical details. Do not edit files."
+  "Prompt used by `my-codex-summarize-session-to-markdown'."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-session-summary-poll-interval
+  my-codex-commit-message-poll-interval
+  "Seconds between checks for generated agent session summaries."
+  :type 'number
+  :group 'my-codex)
+
+(defcustom my-codex-session-summary-poll-attempts 600
+  "Maximum number of checks for a generated agent session summary."
+  :type 'natnum
+  :group 'my-codex)
 
 (declare-function my-codex--preview-and-send-prompt "my-codex-prompts" (prompt))
 (declare-function my-codex-send-prompt "my-codex-prompts" (prompt))

@@ -22,23 +22,115 @@
 (defvar my-codex--prompt-preview-origin-window)
 (defvar-local my-codex--prompt-preview-target-buffer nil
   "Agent session buffer targeted by the current prompt preview.")
-(defvar my-codex-enable-prompt-preview)
-(defvar my-codex-flycheck-diagnostics-limit)
-(defvar my-codex-large-prompt-error-chars)
-(defvar my-codex-large-prompt-warning-chars)
 (defvar my-codex-project-instruction-files)
-(defvar my-codex-prompt-presets)
-(defvar my-codex-refactor-plan-prompt)
-(defvar my-codex-region-reference-threshold-chars)
-(defvar my-codex-region-send-policy)
-(defvar my-codex-symbol-context-lines)
-(defvar my-codex-symbol-include-xref-context)
-(defvar my-codex-symbol-xref-context-lines)
-(defvar my-codex-symbol-xref-definition-limit)
-(defvar my-codex-symbol-xref-reference-limit)
-(defvar my-codex-test-coverage-prompt)
 (defvar flycheck-current-errors)
 (defvar flycheck-mode)
+
+(defcustom my-codex-test-coverage-prompt
+  "Analyse test coverage for this implementation and its test file.
+
+Identify missing edge cases, unhandled exceptions, logical flaws and important behaviour that is not currently tested. Do not edit or write tests; list missing scenarios only."
+  "Prompt used by `my-codex-analyse-test-coverage'."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-flycheck-diagnostics-limit 100
+  "Maximum number of Flycheck diagnostics to include in one agent prompt."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-refactor-plan-prompt
+  "Draft a step-by-step, low-risk refactoring plan for this code.
+
+Do not provide rewritten code or patches.
+
+Focus on:
+- current responsibilities and likely coupling
+- small refactoring steps in a safe order
+- potential breaking changes
+- tests or checks to run after each step
+- rollback points
+- assumptions that need confirmation before editing
+
+Finish with the smallest safe first edit worth making."
+  "Prompt used by `my-codex-plan-refactor-region'."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-enable-prompt-preview nil
+  "When non-nil, show an editable preview before sending prompts."
+  :type 'boolean
+  :group 'my-codex)
+
+(defcustom my-codex-large-prompt-warning-chars 12000
+  "Prompt size in characters that requires confirmation before sending.
+When nil, do not warn about large prompts."
+  :type '(choice (const :tag "Do not warn" nil)
+                 natnum)
+  :group 'my-codex)
+
+(defcustom my-codex-large-prompt-error-chars nil
+  "Prompt size in characters that is refused before sending.
+When nil, do not enforce a hard prompt size limit."
+  :type '(choice (const :tag "No hard limit" nil)
+                 natnum)
+  :group 'my-codex)
+
+(defcustom my-codex-region-send-policy 'prefer-reference
+  "How selected regions are sent to the agent.
+When `prefer-reference', send a file reference whenever the selected
+region can be read safely from a saved project file, falling back to
+inline text otherwise.  When `automatic', use
+`my-codex-region-reference-threshold-chars'.  When `prefer-inline',
+send selected text inline."
+  :type '(choice (const :tag "Prefer file references" prefer-reference)
+                 (const :tag "Automatic by size" automatic)
+                 (const :tag "Prefer inline text" prefer-inline))
+  :group 'my-codex)
+
+(defcustom my-codex-region-reference-threshold-chars 5000
+  "Region size in characters that sends a file reference instead of text.
+This only applies when `my-codex-region-send-policy' is `automatic',
+and only to file-visiting buffers.  When nil, automatic mode always
+sends selected region text from `my-codex-send-region'."
+  :type '(choice (const :tag "Always send selected text" nil)
+                 natnum)
+  :group 'my-codex)
+
+(defcustom my-codex-symbol-context-lines 5
+  "Number of surrounding lines to include when explaining a symbol."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-symbol-include-xref-context t
+  "When non-nil, include xref definition and reference context for symbols."
+  :type 'boolean
+  :group 'my-codex)
+
+(defcustom my-codex-symbol-xref-definition-limit 1
+  "Maximum number of xref definitions to include for symbol explanations."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-symbol-xref-reference-limit 3
+  "Maximum number of xref references to include for symbol explanations."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-symbol-xref-context-lines 1
+  "Number of surrounding lines to include for each xref location."
+  :type 'natnum
+  :group 'my-codex)
+
+(defcustom my-codex-prompt-presets
+  '(("Refactor" . "Review the following code and refactor it to improve readability and performance without changing its external behaviour.")
+    ("Document" . "Write clear docstrings and comments for the following code. Avoid over-commenting obvious logic.")
+    ("Test" . "Write focused unit tests for the following code.")
+    ("Explain" . "Explain the following code clearly and concisely."))
+  "Prompt presets offered by `my-codex-ask-with-preset'.
+Each entry is a cons cell of the form (NAME . PROMPT)."
+  :type '(alist :key-type string :value-type string)
+  :group 'my-codex)
 
 (declare-function my-codex--project-files "my-codex-git" (root))
 (declare-function my-codex--active-agent "my-codex-core" (&optional root))
