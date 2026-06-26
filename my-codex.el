@@ -983,14 +983,11 @@ Open the generated notes in an editable Markdown buffer when they are ready."
   "D"       #'my-codex-ediff-changed-file-against-head
   "c"       #'my-codex-git-commit-with-latest-message
   "e"       #'my-codex-explain-region-as-error
-  "E"       #'my-codex-diagnostics-transient
   "i"       #'my-codex-open-project-instructions
-  "p"       #'my-codex-send-project-overview
-  "X"       #'my-codex-export-session-to-markdown
+  "I"       #'my-codex-summarize-session-to-github-issue
   "M"       #'my-codex-summarize-session-to-markdown
   "t"       #'my-codex-list-open-issues
-  "T"       #'my-codex-summarize-session-to-github-issue
-  "!"       #'my-codex-doctor
+  "T"       #'my-codex-tools-transient
   "TAB"     #'my-codex-toggle-focus
   "<tab>"   #'my-codex-toggle-focus)
 
@@ -1002,7 +999,6 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     ("w" "Workspace" my-codex-default-workspace)]
    ["Session"
     ("l" "List" my-codex-list-sessions)
-    ("t" "Session dashboard" my-codex-top)
     ("n" "New named" my-codex-new-session)
     ("r" "Resume" my-codex-resume)
     ("q" "Hide agent" my-codex-hide-session-window)]])
@@ -1013,6 +1009,16 @@ Open the generated notes in an editable Markdown buffer when they are ready."
   [["Diagnostics"
     ("p" "At point" my-codex-explain-diagnostic-at-point)
     ("a" "All" my-codex-explain-buffer-diagnostics)]])
+
+;;;###autoload
+(transient-define-prefix my-codex-tools-transient ()
+  "Show infrequent agent tools."
+  [["Tools"
+    ("p" "Project overview" my-codex-send-project-overview)
+    ("X" "Export session" my-codex-export-session-to-markdown)
+    ("t" "Session dashboard" my-codex-top)
+    ("E" "Diagnostics" my-codex-diagnostics-transient)
+    ("!" "Doctor" my-codex-doctor)]])
 
 ;;;###autoload
 (transient-define-prefix my-codex-transient ()
@@ -1033,8 +1039,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     ("<left>" "Insert selection" my-codex-insert-selection-into-code)
     ("f" "Current file" my-codex-send-current-file)
     ("C" "Coverage gaps" my-codex-analyse-test-coverage)
-    ("x" "Explain symbol" my-codex-explain-symbol-at-point)
-    ("p" "Project overview" my-codex-send-project-overview)]
+    ("x" "Explain symbol" my-codex-explain-symbol-at-point)]
    ["Git"
     ("g" "Review diff" my-codex-send-git-diff)
     ("G" "Review staged diff" my-codex-send-git-staged-diff)
@@ -1045,14 +1050,12 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     ("c" "Commit with agent message" my-codex-git-commit-with-latest-message)]
    ["Context"
     ("e" "Explain error" my-codex-explain-region-as-error)
-    ("E" "Diagnostics" my-codex-diagnostics-transient)
     ("i" "Project instructions" my-codex-open-project-instructions)
-    ("X" "Export session" my-codex-export-session-to-markdown)
     ("M" "Summarize session" my-codex-summarize-session-to-markdown)
-    ("!" "Doctor" my-codex-doctor)]
+    ("T" "Tools" my-codex-tools-transient)]
    ["GitHub"
     ("t" "List issues" my-codex-list-open-issues)
-    ("T" "Draft issue" my-codex-summarize-session-to-github-issue)]])
+    ("I" "Draft issue" my-codex-summarize-session-to-github-issue)]])
 
 ;;;###autoload
 (defun my-codex-transient-preserve-selection ()
@@ -1135,7 +1138,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       :keys "F8 S l"
       :help "List open agent session buffers"]
      ["Session dashboard" my-codex-top
-      :keys "F8 S t"
+      :keys "F8 T t"
       :help "Display a dashboard of all agent sessions"]
      ["New named session" my-codex-new-session
       :keys "F8 S n"
@@ -1180,7 +1183,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       :active buffer-file-name
       :help "Ask the active agent to explain the symbol at point"]
      ["Send project overview" my-codex-send-project-overview
-      :keys "F8 p"
+      :keys "F8 T p"
       :help "Send the active agent a compact project overview"])
     ("Git"
      ["Review Git diff" my-codex-send-git-diff
@@ -1211,26 +1214,26 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       :active (use-region-p)
       :help "Ask the active agent to explain the selected compiler/test error"]
      ["Explain diagnostics" my-codex-diagnostics-transient
-      :keys "F8 E"
+      :keys "F8 T E"
       :help "Open diagnostic explanation commands"]
      ["Open project instructions" my-codex-open-project-instructions
       :keys "F8 i"
       :help "Open AGENTS.md, CODEX.md, or .codex/instructions.md"]
      ["Export session to Markdown" my-codex-export-session-to-markdown
-      :keys "F8 X"
+      :keys "F8 T X"
       :help "Export the current agent session transcript to Markdown"]
      ["Summarize session to Markdown" my-codex-summarize-session-to-markdown
       :keys "F8 M"
       :help "Ask the active agent to summarize the conversation as Markdown notes"]
      ["Run health check" my-codex-doctor
-      :keys "F8 !"
+      :keys "F8 T !"
       :help "Check Emacs, agent, vterm, Git, gh, project, configuration, and terminal startup"])
     ("GitHub"
      ["List issues" my-codex-list-open-issues
       :keys "F8 t"
       :help "List open GitHub issues for the current repository in a buffer"]
      ["Draft issue" my-codex-summarize-session-to-github-issue
-      :keys "F8 T"
+      :keys "F8 I"
       :help "Ask the active agent to draft a GitHub issue, then edit it before creating it with gh"])
     "---"
     ["Compile project" my-codex-project-build
