@@ -975,7 +975,8 @@ Open the generated notes in an editable Markdown buffer when they are ready."
   "<right>" #'my-codex-send-region
   "R"       #'my-codex-plan-refactor-region
   "<left>"  #'my-codex-insert-selection-into-code
-  "f"       #'my-codex-send-current-file
+  "f"       #'my-codex-review-defun-at-point
+  "F"       #'my-codex-send-current-file
   "C"       #'my-codex-analyse-test-coverage
   "x"       #'my-codex-explain-symbol-at-point
   "g"       #'my-codex-send-git-diff
@@ -1040,7 +1041,8 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     ("<right>" "Region" my-codex-send-region)
     ("R" "Refactor plan" my-codex-plan-refactor-region)
     ("<left>" "Insert selection" my-codex-insert-selection-into-code)
-    ("f" "Current file" my-codex-send-current-file)
+    ("f" "Current defun" my-codex-review-defun-at-point)
+    ("F" "Current file" my-codex-send-current-file)
     ("C" "Coverage gaps" my-codex-analyse-test-coverage)
     ("x" "Explain symbol" my-codex-explain-symbol-at-point)]
    ["Git"
@@ -1170,8 +1172,11 @@ Open the generated notes in an editable Markdown buffer when they are ready."
      ["Insert selection" my-codex-insert-selection-into-code
       :keys "F8 Left"
       :help "Insert the captured agent selection into the code buffer"]
-     ["Inspect current file" my-codex-send-current-file
+     ["Review current defun" my-codex-review-defun-at-point
       :keys "F8 f"
+      :help "Ask the active agent to review the defun at point"]
+     ["Inspect current file" my-codex-send-current-file
+      :keys "F8 F"
       :active buffer-file-name
       :help "Ask the active agent to inspect the current file directly"]
      ["Analyse test coverage" my-codex-analyse-test-coverage

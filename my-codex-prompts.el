@@ -445,6 +445,32 @@ marker, begin marker and end marker before PROMPT is sent."
   (my-codex--preview-and-send-prompt
    (my-codex--region-review-prompt beg end)))
 
+(defun my-codex--defun-bounds-at-point ()
+  "Return the bounds of the defun at point."
+  (let ((origin (point))
+        beg end)
+    (condition-case nil
+        (save-excursion
+          (beginning-of-defun)
+          (setq beg (point))
+          (end-of-defun)
+          (setq end (point))
+          (unless (and (< beg end)
+                       (<= beg origin)
+                       (<= origin end))
+            (user-error "No defun at point"))
+          (cons beg end))
+      (error
+       (user-error "No defun at point")))))
+
+;;;###autoload
+(defun my-codex-review-defun-at-point ()
+  "Ask the agent to review the defun at point."
+  (interactive)
+  (pcase-let ((`(,beg . ,end) (my-codex--defun-bounds-at-point)))
+    (my-codex--preview-and-send-prompt
+     (my-codex--region-review-prompt beg end))))
+
 ;;;###autoload
 (defun my-codex-send-current-file ()
   "Ask the agent to inspect the current file directly."

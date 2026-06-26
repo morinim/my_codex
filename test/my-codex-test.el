@@ -2008,6 +2008,35 @@
       (delete-directory root t)
       (delete-directory outside-root t))))
 
+(ert-deftest my-codex-defun-bounds-at-point-finds-current-defun ()
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (insert "(defun first ()\n  1)\n\n(defun second ()\n  2)\n")
+    (search-backward "2")
+    (let ((bounds (my-codex--defun-bounds-at-point)))
+      (should
+       (equal (buffer-substring-no-properties (car bounds) (cdr bounds))
+              "(defun second ()\n  2)\n")))))
+
+(ert-deftest my-codex-review-defun-at-point-reuses-region-review-prompt ()
+  (let (sent-beg sent-end sent-prompt)
+    (with-temp-buffer
+      (emacs-lisp-mode)
+      (insert "(defun reviewed ()\n  1)\n")
+      (goto-char (point-min))
+      (cl-letf (((symbol-function 'my-codex--region-review-prompt)
+                 (lambda (beg end)
+                   (setq sent-beg beg
+                         sent-end end)
+                   "review prompt"))
+                ((symbol-function 'my-codex--preview-and-send-prompt)
+                 (lambda (prompt)
+                   (setq sent-prompt prompt))))
+        (my-codex-review-defun-at-point)
+        (should (= sent-beg (point-min)))
+        (should (= sent-end (point-max)))
+        (should (equal sent-prompt "review prompt"))))))
+
 (ert-deftest my-codex-test-coverage-prompt-puts-dynamic-context-late ()
   (let* ((my-codex-test-coverage-prompt "Stable coverage instructions.")
          (prompt (my-codex--test-coverage-prompt
