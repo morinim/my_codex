@@ -45,7 +45,7 @@ Preserve concrete file names, command names, and technical details. Do not edit 
 (declare-function my-codex--agent-label "my-codex-core" (agent))
 (declare-function my-codex--safe-root-name "my-codex-core" (root))
 (declare-function my-codex--session-export-mode "my-codex-core" ())
-(declare-function my-codex-buffer "my-codex-core" ())
+(declare-function my-codex-active-session-buffer "my-codex-core" (&optional require-live))
 (declare-function my-codex-project-root "my-codex-core" ())
 (declare-function my-codex--request-marked-output "my-codex-prompts" (&rest args))
 
@@ -321,8 +321,10 @@ Preserve concrete file names, command names, and technical details. Do not edit 
   "Ask the agent to draft a GitHub issue from the current conversation.
 Open an editable issue draft before running `gh issue create'."
   (interactive)
-  (let* ((root (my-codex-project-root))
-         (buffer (my-codex-buffer)))
+  (let* ((buffer (my-codex-active-session-buffer t))
+         (root (with-current-buffer buffer
+                 (or my-codex-session-project-root
+                     (my-codex-project-root)))))
     (unless (executable-find "gh")
       (user-error "GitHub CLI `gh' not found in exec-path"))
     (my-codex--request-marked-output

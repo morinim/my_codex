@@ -22,6 +22,7 @@
 (require 'ansi-color)
 (require 'cl-lib)
 (require 'project)
+(require 'seq)
 (require 'subr-x)
 
 (declare-function markdown-mode "markdown-mode")
@@ -688,6 +689,61 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
       (format "%s:%s" default-name safe-name))))
 
 
+(defun my-codex--session-buffer-live-p (buffer)
+  "Return non-nil when BUFFER has a live process."
+  (when-let ((process (and (buffer-live-p buffer)
+                           (get-buffer-process buffer))))
+    (process-live-p process)))
+
+(defun my-codex--project-session-buffer-p (buffer root)
+  "Return non-nil when BUFFER is an agent session for ROOT."
+  (and (buffer-live-p buffer)
+       (with-current-buffer buffer
+         (and (bound-and-true-p my-codex-session-id)
+              (equal my-codex-session-project-root
+                     (file-name-as-directory
+                      (file-truename root)))))))
+
+(defun my-codex--session-buffer-for-window (window root)
+  "Return WINDOW's project session buffer for ROOT, if any."
+  (when (window-live-p window)
+    (or (when-let ((buffer (window-parameter window 'my-codex-term-buffer)))
+          (when (my-codex--project-session-buffer-p buffer root)
+            buffer))
+        (let ((buffer (window-buffer window)))
+          (when (my-codex--project-session-buffer-p buffer root)
+            buffer)))))
+
+(defun my-codex--project-visible-session-window (root)
+  "Return a visible agent session window for ROOT, if any."
+  (seq-find
+   (lambda (window)
+     (my-codex--project-session-buffer-p (window-buffer window) root))
+   (window-list (selected-frame) 'no-minibuf)))
+
+(defun my-codex-active-session-buffer (&optional require-live)
+  "Return the active agent session buffer.
+When REQUIRE-LIVE is non-nil, require the returned buffer to have a live
+process."
+  (let* ((root (my-codex-project-root))
+         (buffer
+          (or (my-codex--session-buffer-for-window (selected-window) root)
+              (when (my-codex--project-session-buffer-p (current-buffer) root)
+                (current-buffer))
+              (when-let ((window (my-codex--project-visible-session-window root)))
+                (window-buffer window))
+              (my-codex--session-buffer))))
+    (when (and require-live
+               (not (my-codex--session-buffer-live-p buffer)))
+      (user-error "No running agent process in %s" (buffer-name buffer)))
+    buffer))
+
+(defun my-codex-active-session-window ()
+  "Return the visible window for the active agent session."
+  (let ((buffer (my-codex-active-session-buffer)))
+    (or (get-buffer-window buffer)
+        (user-error "No visible agent window in selected frame"))))
+
 (defun my-codex--process-output-lines (program &rest args)
   "Return PROGRAM output lines for ARGS, or nil when PROGRAM fails."
   (with-temp-buffer
@@ -913,7 +969,7 @@ the extracted text.  ATTEMPTS tracks polling cycles."
 
 (defun my-codex-session-transcript ()
   "Return the cleaned transcript from the current project's agent buffer."
-  (let ((buffer (my-codex--session-buffer)))
+  (let ((buffer (my-codex-active-session-buffer)))
     (with-current-buffer buffer
       (my-codex--clean-session-transcript
        (buffer-substring-no-properties (point-min) (point-max))))))

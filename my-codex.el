@@ -813,9 +813,12 @@ AGENT identifies the agent profile used for buffer names and metadata."
 (defun my-codex-hide-window ()
   "Hide visible windows showing the current agent buffer."
   (interactive)
-  (let* ((label (my-codex--active-agent-label))
-         (buffer-name (my-codex-current-buffer-name))
-         (windows (get-buffer-window-list buffer-name nil t)))
+  (let* ((buffer (my-codex-active-session-buffer))
+         (label (with-current-buffer buffer
+                  (if my-codex-session-agent
+                      (my-codex--agent-label my-codex-session-agent)
+                    (my-codex--active-agent-label))))
+         (windows (get-buffer-window-list buffer nil t)))
     (unless windows
       (user-error "%s window is not visible" label))
     (dolist (window windows)
@@ -825,11 +828,7 @@ AGENT identifies the agent profile used for buffer names and metadata."
 
 (defun my-codex--session-layout-buffer ()
   "Return the agent buffer associated with the selected session layout."
-  (or (window-parameter (selected-window) 'my-codex-term-buffer)
-      (when (bound-and-true-p my-codex-session-id)
-        (current-buffer))
-      (get-buffer (my-codex-current-buffer-name))
-      (user-error "Agent window is not visible")))
+  (my-codex-active-session-buffer))
 
 ;;;###autoload
 (defun my-codex-hide-session-window ()
@@ -918,8 +917,10 @@ For compatibility, AGENT may also be a command string when ACCESS-MODE is nil."
 (defun my-codex-export-session-to-markdown ()
   "Export the current project's agent session transcript to Markdown."
   (interactive)
-  (let* ((root (my-codex-project-root))
-         (buffer (my-codex--session-buffer))
+  (let* ((buffer (my-codex-active-session-buffer))
+         (root (with-current-buffer buffer
+                 (or my-codex-session-project-root
+                     (my-codex-project-root))))
          (transcript (my-codex-session-transcript))
          (export-buffer
           (get-buffer-create (my-codex--session-export-buffer-name root))))
@@ -941,8 +942,10 @@ For compatibility, AGENT may also be a command string when ACCESS-MODE is nil."
   "Ask the agent to summarize the current conversation as Markdown notes.
 Open the generated notes in an editable Markdown buffer when they are ready."
   (interactive)
-  (let* ((root (my-codex-project-root))
-         (buffer (my-codex-buffer)))
+  (let* ((buffer (my-codex-active-session-buffer t))
+         (root (with-current-buffer buffer
+                 (or my-codex-session-project-root
+                     (my-codex-project-root)))))
     (my-codex--request-marked-output
      :name "SESSION_SUMMARY"
      :buffer buffer

@@ -138,12 +138,11 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 (declare-function my-codex--agent-label "my-codex-core" (agent))
 (declare-function my-codex--backend-for-buffer-name "my-codex-core" (buffer-name))
 (declare-function my-codex-backend-live-p "my-codex-core" (backend))
-(declare-function my-codex--current-backend "my-codex-core" ())
 (declare-function my-codex--safe-root-name "my-codex-core" (root))
 (declare-function my-codex--warn-about-unsaved-project-buffers "my-codex-core" ())
+(declare-function my-codex-active-session-buffer "my-codex-core" (&optional require-live))
+(declare-function my-codex-active-session-window "my-codex-core" ())
 (declare-function my-codex-backend-send "my-codex-core" (backend prompt))
-(declare-function my-codex-buffer "my-codex-core" ())
-(declare-function my-codex-current-buffer-name "my-codex-core" ())
 (declare-function my-codex-project-root "my-codex-core" ())
 (declare-function flycheck-error-< "flycheck" (err1 err2))
 (declare-function flycheck-error-checker "flycheck" (err))
@@ -172,30 +171,16 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
           (length prompt)
           (my-codex--approx-token-count prompt)))
 
-(defun my-codex--session-buffer-for-window (window root)
-  "Return WINDOW's project session buffer for ROOT, if any."
-  (let ((buffer (or (and (window-live-p window)
-                         (window-parameter window 'my-codex-term-buffer))
-                    (and (window-live-p window)
-                         (window-buffer window)))))
-    (when (and (buffer-live-p buffer)
-               (with-current-buffer buffer
-                 (and (bound-and-true-p my-codex-session-id)
-                      (equal my-codex-session-project-root
-                             (file-name-as-directory
-                              (file-truename root))))))
-      buffer)))
-
 (defun my-codex--prompt-target-buffer (&optional window noerror)
   "Return the agent session buffer targeted from WINDOW.
 When NOERROR is non-nil, return nil instead of raising if no default
 session is available."
-  (let ((root (my-codex-project-root)))
-    (or (my-codex--session-buffer-for-window (or window (selected-window))
-                                             root)
-        (if noerror
-            (ignore-errors (my-codex-buffer))
-          (my-codex-buffer)))))
+  (if noerror
+      (ignore-errors
+        (with-selected-window (or window (selected-window))
+          (my-codex-active-session-buffer)))
+    (with-selected-window (or window (selected-window))
+      (my-codex-active-session-buffer))))
 
 (defun my-codex--prompt-target-description (&optional buffer)
   "Return a concise prompt target description for BUFFER."
@@ -312,10 +297,8 @@ session is available."
   "Send PROMPT to the agent backend buffer and show it."
   (my-codex--warn-about-unsaved-project-buffers)
   (my-codex--check-prompt-size prompt)
-  (let* ((buffer (or target-buffer (my-codex-buffer)))
-         (backend (if target-buffer
-                      (my-codex--backend-for-buffer-name (buffer-name buffer))
-                    (my-codex--current-backend))))
+  (let* ((buffer (or target-buffer (my-codex-active-session-buffer t)))
+         (backend (my-codex--backend-for-buffer-name (buffer-name buffer))))
     (unless (and (buffer-live-p buffer)
                  (my-codex-backend-live-p backend))
       (user-error "No running agent process in %s" (buffer-name buffer)))
@@ -367,8 +350,10 @@ marker, begin marker and end marker before PROMPT is sent."
   "Display prompt preview BUFFER, preferring ORIGIN-WINDOW."
   (if-let* ((origin-frame (and (window-live-p origin-window)
                                (window-frame origin-window)))
-            (codex-window (get-buffer-window (my-codex-current-buffer-name)
-                                             origin-frame))
+            (codex-window (get-buffer-window
+                           (with-selected-window origin-window
+                             (my-codex-active-session-buffer))
+                           origin-frame))
             (preview-window
              (cond
               ((not (eq origin-window codex-window))
@@ -1008,9 +993,7 @@ Send only a file and line-range reference, not the selected text."
 
 (defun my-codex-visible-window ()
   "Return the visible agent window in the selected frame, or raise an error."
-  (or (get-buffer-window (my-codex-current-buffer-name))
-      (user-error "No visible %s window in selected frame"
-                  (my-codex--active-agent-label))))
+  (my-codex-active-session-window))
 
 (defun my-codex--associated-edit-window (codex-window)
   "Return the edit window associated with CODEX-WINDOW, or nil."

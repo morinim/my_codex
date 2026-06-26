@@ -799,12 +799,17 @@
       (delete-directory root t))))
 
 (ert-deftest my-codex-hide-session-window-hides-associated-session ()
-  (let ((default-buffer (get-buffer-create "*codex-default-test*"))
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-hide" t)))
+        (default-buffer (get-buffer-create "*codex-default-test*"))
         (session-buffer (get-buffer-create "*codex-session-test*"))
         term-window
         hidden)
     (unwind-protect
-        (let ((edit-window (selected-window)))
+        (let ((default-directory root)
+              (edit-window (selected-window)))
+          (my-codex--mark-default-session default-buffer root 'workspace-write)
+          (my-codex--mark-named-session
+           session-buffer "review" root 'workspace-write)
           (setq term-window (split-window-right))
           (set-window-buffer term-window session-buffer)
           (set-window-parameter
@@ -812,6 +817,8 @@
           (select-window edit-window)
           (cl-letf (((symbol-function 'my-codex-current-buffer-name)
                      (lambda () (buffer-name default-buffer)))
+                    ((symbol-function 'my-codex-project-root)
+                     (lambda () root))
                     ((symbol-function 'quit-window)
                      (lambda (&optional _kill window)
                        (setq hidden (window-buffer window)))))
@@ -822,7 +829,8 @@
       (when (window-live-p term-window)
         (delete-window term-window))
       (kill-buffer default-buffer)
-      (kill-buffer session-buffer))))
+      (kill-buffer session-buffer)
+      (delete-directory root t))))
 
 (ert-deftest my-codex-reused-live-buffer-preserves-session-metadata ()
   (let ((root-a (file-name-as-directory (make-temp-file "my-codex-a" t)))
@@ -1356,9 +1364,11 @@
           (my-codex--mark-named-session
            target "review" root 'workspace-write 'antigravity)
           (set-window-parameter (selected-window) 'my-codex-term-buffer target)
-          (should
-           (equal (my-codex--ask-prompt-label)
-                  "Antigravity [review/WORKSPACE WRITE]")))
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root)))
+            (should
+             (equal (my-codex--ask-prompt-label)
+                    "Antigravity [review/WORKSPACE WRITE]"))))
       (set-window-parameter (selected-window) 'my-codex-term-buffer nil)
       (when (buffer-live-p target)
         (kill-buffer target))
@@ -1385,7 +1395,9 @@
           (my-codex--mark-named-session
            target "review" root 'workspace-write 'antigravity)
           (set-window-parameter (selected-window) 'my-codex-term-buffer target)
-          (cl-letf (((symbol-function 'my-codex-send-prompt)
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root))
+                    ((symbol-function 'my-codex-send-prompt)
                      (lambda (prompt &optional target-buffer)
                        (setq sent (list prompt target-buffer)))))
             (my-codex--preview-and-send-prompt "hello")
@@ -1419,6 +1431,93 @@
             (my-codex-send-prompt "hello" target)
             (should
              (equal sent '("*my-codex-send-target*" "hello")))))
+      (when (buffer-live-p target)
+        (kill-buffer target))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-active-session-buffer-uses-window-session ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-active" t)))
+        (target (get-buffer-create "*my-codex-active-target*")))
+    (unwind-protect
+        (let ((default-directory root))
+          (my-codex--mark-named-session
+           target "review" root 'workspace-write 'antigravity)
+          (set-window-parameter (selected-window) 'my-codex-term-buffer target)
+          (should (eq (my-codex-active-session-buffer) target)))
+      (set-window-parameter (selected-window) 'my-codex-term-buffer nil)
+      (when (buffer-live-p target)
+        (kill-buffer target))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-active-session-buffer-ignores-foreign-window-session ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-active" t)))
+        (foreign-root
+         (file-name-as-directory (make-temp-file "my-codex-foreign" t)))
+        default-buffer
+        (foreign-buffer (get-buffer-create "*my-codex-active-foreign*")))
+    (unwind-protect
+        (let ((default-directory root))
+          (setq default-buffer
+                (get-buffer-create (my-codex-current-buffer-name)))
+          (my-codex--mark-default-session
+           default-buffer root 'workspace-write)
+          (my-codex--mark-named-session
+           foreign-buffer "review" foreign-root 'workspace-write)
+          (set-window-parameter
+           (selected-window) 'my-codex-term-buffer foreign-buffer)
+          (should (eq (my-codex-active-session-buffer) default-buffer)))
+      (set-window-parameter (selected-window) 'my-codex-term-buffer nil)
+      (when (buffer-live-p default-buffer)
+        (kill-buffer default-buffer))
+      (when (buffer-live-p foreign-buffer)
+        (kill-buffer foreign-buffer))
+      (delete-directory root t)
+      (delete-directory foreign-root t))))
+
+(ert-deftest my-codex-active-session-buffer-requires-live-process ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-active" t)))
+        (target (get-buffer-create "*my-codex-active-live*")))
+    (unwind-protect
+        (let ((default-directory root))
+          (my-codex--mark-named-session
+           target "review" root 'workspace-write 'antigravity)
+          (set-window-parameter (selected-window) 'my-codex-term-buffer target)
+          (cl-letf (((symbol-function 'get-buffer-process)
+                     (lambda (_buffer) nil)))
+            (should-error
+             (my-codex-active-session-buffer t)
+             :type 'user-error)))
+      (set-window-parameter (selected-window) 'my-codex-term-buffer nil)
+      (when (buffer-live-p target)
+        (kill-buffer target))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-send-prompt-uses-active-session-by-default ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-send" t)))
+        (target (get-buffer-create "*my-codex-send-active*"))
+        sent)
+    (unwind-protect
+        (let ((default-directory root))
+          (my-codex--mark-named-session
+           target "review" root 'workspace-write 'antigravity)
+          (set-window-parameter (selected-window) 'my-codex-term-buffer target)
+          (cl-letf (((symbol-function 'my-codex--warn-about-unsaved-project-buffers)
+                     #'ignore)
+                    ((symbol-function 'get-buffer-process)
+                     (lambda (buffer) (eq buffer target)))
+                    ((symbol-function 'process-live-p)
+                     (lambda (process) process))
+                    ((symbol-function 'pop-to-buffer)
+                     #'ignore)
+                    ((symbol-function 'my-codex-backend-send)
+                     (lambda (backend prompt)
+                       (setq sent
+                             (list (my-codex--backend-buffer-name backend)
+                                   prompt)))))
+            (my-codex-send-prompt "hello")
+            (should
+             (equal sent '("*my-codex-send-active*" "hello")))))
+      (set-window-parameter (selected-window) 'my-codex-term-buffer nil)
       (when (buffer-live-p target)
         (kill-buffer target))
       (delete-directory root t))))

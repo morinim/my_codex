@@ -91,7 +91,7 @@ Preserve concrete file names, command names, and technical details. Do not edit 
 (declare-function my-codex--safe-root-name "my-codex-core" (root))
 (declare-function my-codex--session-export-mode "my-codex-core" ())
 (declare-function my-codex--session-summary-buffer-name "my-codex-core" (root))
-(declare-function my-codex-buffer "my-codex-core" ())
+(declare-function my-codex-active-session-buffer "my-codex-core" (&optional require-live))
 (declare-function my-codex-current-buffer-name "my-codex-core" ())
 (declare-function my-codex-project-root "my-codex-core" ())
 
@@ -422,10 +422,11 @@ repository toplevel."
          (worktree-buffer (find-file-noselect file)))
     (ediff-buffers head-buffer worktree-buffer)))
 
-(defun my-codex--selected-codex-vterm-window-p ()
-  "Return non-nil when the selected window is the current Codex vterm."
+(defun my-codex--selected-agent-vterm-window-p ()
+  "Return non-nil when the selected window is the active agent vterm."
   (let ((buffer (window-buffer (selected-window))))
-    (and (eq buffer (get-buffer (my-codex-current-buffer-name)))
+    (and (eq buffer (ignore-errors
+                      (my-codex-active-session-buffer)))
          (with-current-buffer buffer
            (derived-mode-p 'vterm-mode)))))
 
@@ -439,7 +440,7 @@ repository toplevel."
   "Return the current file, using the left window from the agent vterm."
   (cond
    (buffer-file-name)
-   ((my-codex--selected-codex-vterm-window-p)
+   ((my-codex--selected-agent-vterm-window-p)
     (or (my-codex--left-window-file-name)
         (user-error "No file-visiting buffer to the left of agent")))
    (t
@@ -448,7 +449,7 @@ repository toplevel."
 (defun my-codex--current-or-left-file-available-p ()
   "Return non-nil when a file target is available for current-file commands."
   (or buffer-file-name
-      (and (my-codex--selected-codex-vterm-window-p)
+      (and (my-codex--selected-agent-vterm-window-p)
            (my-codex--left-window-file-name))))
 
 ;;;###autoload
@@ -484,7 +485,7 @@ When invoked from the agent vterm, use the file in the window to its left."
 (defun my-codex-commit-message-from-diff ()
   "Ask the agent to draft a commit message from the staged Git diff."
   (interactive)
-  (let* ((buffer (my-codex-buffer))
+  (let* ((buffer (my-codex-active-session-buffer t))
          (root (my-codex-project-root))
          (default-directory root)
          (markers (my-codex--unique-output-markers "COMMIT_MESSAGE"))
@@ -523,7 +524,9 @@ When invoked from the agent vterm, use the file in the window to its left."
 (defun my-codex-latest-commit-message ()
   "Return latest requested commit message from current agent buffer.
 Return nil when no matching message is available."
-  (when-let ((buffer (get-buffer (my-codex-current-buffer-name))))
+  (when-let ((buffer (or (ignore-errors
+                           (my-codex-active-session-buffer))
+                         (get-buffer (my-codex-current-buffer-name)))))
     (with-current-buffer buffer
       (when-let* ((marker my-codex--commit-message-request-marker)
                   ((markerp marker))
@@ -620,7 +623,8 @@ Clear request state in CODEX-BUFFER after a successful commit when it is live."
         (output-buffer (get-buffer-create "*Codex git commit*"))
         (codex-buffer (or codex-buffer
                           (let ((default-directory root))
-                            (get-buffer (my-codex-current-buffer-name))))))
+                            (ignore-errors
+                              (my-codex-active-session-buffer))))))
     (condition-case err
         (progn
           (with-temp-file file
@@ -743,7 +747,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
       (unless (my-codex--staged-changes-p)
         (user-error "No staged Git changes to commit"))
       (setq current-signature (my-codex--staged-diff-signature)))
-    (let* ((buffer (my-codex-buffer))
+    (let* ((buffer (my-codex-active-session-buffer t))
            marker
            request-signature
            current-request-p)
