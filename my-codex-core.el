@@ -261,16 +261,6 @@ When nil, use `compile-command'."
 (defvar my-codex--edit-fill-column-indicator-buffers nil
   "Buffers whose fill-column indicator state is temporarily managed.")
 
-(define-obsolete-variable-alias
-  'my-codex-session-summary-poll-interval
-  'my-codex-generated-output-poll-interval
-  "0.96.0")
-
-(define-obsolete-variable-alias
-  'my-codex-session-summary-poll-attempts
-  'my-codex-generated-output-poll-attempts
-  "0.96.0")
-
 (defcustom my-codex-generated-output-poll-interval 0.5
   "Seconds between checks for generated agent output."
   :type 'number

@@ -890,20 +890,16 @@ AGENT identifies the agent profile used for buffer names and metadata."
 
 ;;;###autoload
 (defun my-codex-new-session (name agent &optional access-mode)
-  "Start or show a named agent session NAME using AGENT and ACCESS-MODE.
-For compatibility, AGENT may also be a command string when ACCESS-MODE is nil."
+  "Start or show a named agent session NAME using AGENT and ACCESS-MODE."
   (interactive
    (list
     (read-string "Session name: ")
     (my-codex--read-agent)
     (my-codex--read-session-access-mode)))
   (let ((session-name (my-codex--normalise-session-name name)))
-    (if (and (stringp agent) (null access-mode))
-        (my-codex-two-column-layout-with-command
-         agent nil session-name my-codex-agent)
-      (my-codex-two-column-layout-with-command
-       (my-codex--agent-command agent access-mode)
-       nil session-name agent access-mode))))
+    (my-codex-two-column-layout-with-command
+     (my-codex--agent-command agent access-mode)
+     nil session-name agent access-mode)))
 
 ;;;###autoload
 (defun my-codex-resume ()
