@@ -260,6 +260,8 @@ When nil, use `compile-command'."
 (defvar my-codex--edit-fill-column-indicator-buffers nil
   "Buffers whose fill-column indicator state is temporarily managed.")
 
+;; Commit message requests keep their own state so they can validate the
+;; staged diff and reopen the latest generated message.
 (defvar-local my-codex--commit-message-request-marker nil
   "Marker for the start of the latest agent commit message request.")
 
@@ -278,8 +280,8 @@ When nil, use `compile-command'."
 (defvar-local my-codex--commit-message-wait-timer nil
   "Active timer waiting for an agent commit message.")
 
-(defvar-local my-codex--session-summary-wait-timer nil
-  "Active timer waiting for an agent session summary.")
+(defvar-local my-codex--generated-artifact-wait-timer nil
+  "Active timer waiting for a generated session artefact.")
 
 (defvar-local my-codex-session-id nil
   "Identifier for the agent session owned by the current buffer.")

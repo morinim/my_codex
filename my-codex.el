@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.94.0
+;; Version: 0.95.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -954,7 +954,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
      :ready-message "Agent session summary is ready for editing."
      :poll-interval my-codex-session-summary-poll-interval
      :poll-attempts my-codex-session-summary-poll-attempts
-     :timer-var 'my-codex--session-summary-wait-timer)
+     :timer-var 'my-codex--generated-artifact-wait-timer)
     (message "Asked %s to summarize the session; waiting to open editor."
              (my-codex--active-agent-label root))))
 

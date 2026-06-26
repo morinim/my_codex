@@ -336,7 +336,7 @@ Open an editable issue draft before running `gh issue create'."
      :ready-message "Agent GitHub issue draft is ready for editing."
      :poll-interval my-codex-session-summary-poll-interval
      :poll-attempts my-codex-session-summary-poll-attempts
-     :timer-var 'my-codex--session-summary-wait-timer)
+     :timer-var 'my-codex--generated-artifact-wait-timer)
     (message "Asked %s to draft a GitHub issue; waiting to open editor."
              (my-codex--active-agent-label root))))
 
