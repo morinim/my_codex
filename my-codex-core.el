@@ -263,6 +263,9 @@ When nil, use `compile-command'."
 (defvar-local my-codex--commit-message-request-marker nil
   "Marker for the start of the latest agent commit message request.")
 
+(defvar-local my-codex--commit-message-request-output-markers nil
+  "Begin and end markers for the latest agent commit message request.")
+
 (defvar-local my-codex--commit-message-request-signature nil
   "Staged diff signature used for the latest agent commit message request.")
 
@@ -274,9 +277,6 @@ When nil, use `compile-command'."
 
 (defvar-local my-codex--commit-message-wait-timer nil
   "Active timer waiting for an agent commit message.")
-
-(defvar-local my-codex--session-summary-request-marker nil
-  "Marker for the start of the latest agent session summary request.")
 
 (defvar-local my-codex--session-summary-wait-timer nil
   "Active timer waiting for an agent session summary.")
@@ -724,6 +724,145 @@ shown between them as an example."
           placeholder
           end-marker))
 
+(defun my-codex--terminal-marker-regexp (marker)
+  "Return a regexp matching MARKER with terminal whitespace artefacts."
+  (mapconcat
+   (lambda (char)
+     (regexp-quote (char-to-string char)))
+   marker
+   "[[:space:]\r\n]*"))
+
+(defun my-codex--trim-blank-lines (text)
+  "Return TEXT without leading or trailing blank lines."
+  (setq text (replace-regexp-in-string "\\`[ \t\n]*\n" "" text))
+  (setq text (replace-regexp-in-string "\n[ \t\n]*\\'" "" text))
+  text)
+
+(defun my-codex--common-leading-whitespace-width (text)
+  "Return the common leading whitespace width among nonblank lines in TEXT."
+  (let (width)
+    (dolist (line (split-string text "\n"))
+      (unless (string-blank-p line)
+        (let ((line-width
+               (if (string-match "\\`[ \t]*" line)
+                   (length (match-string 0 line))
+                 0)))
+          (setq width
+                (if width
+                    (min width line-width)
+                  line-width)))))
+    (or width 0)))
+
+(defun my-codex--remove-leading-whitespace-width (text width)
+  "Return TEXT with WIDTH leading whitespace characters removed per line."
+  (if (<= width 0)
+      text
+    (mapconcat
+     (lambda (line)
+       (if (string-blank-p line)
+           ""
+         (replace-regexp-in-string
+          (format "\\`[ \t]\\{0,%d\\}" width)
+          ""
+          line
+          nil
+          nil)))
+     (split-string text "\n")
+     "\n")))
+
+(defun my-codex--normalize-marked-output (text)
+  "Return generated marked output TEXT without terminal layout indentation."
+  (let ((output (my-codex--trim-blank-lines
+                 (replace-regexp-in-string "\r" "" text))))
+    (my-codex--remove-leading-whitespace-width
+     output
+     (my-codex--common-leading-whitespace-width output))))
+
+(defun my-codex--latest-marked-output-after
+    (buffer start-point begin-marker end-marker &optional ignored-values)
+  "Return marked output in BUFFER after START-POINT, or nil.
+BEGIN-MARKER and END-MARKER delimit the generated output.  Ignore
+empty output and any exact string in IGNORED-VALUES."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (save-restriction
+        (widen)
+        (save-excursion
+          (goto-char (point-max))
+          (let* ((valid-start-point-p
+                  (and start-point
+                       (integer-or-marker-p start-point)
+                       (or (not (markerp start-point))
+                           (eq (marker-buffer start-point) buffer))
+                       (<= (point-min) start-point)
+                       (< start-point (point))))
+                 (bound (when valid-start-point-p start-point)))
+            (when (or (null start-point) bound)
+              (when (re-search-backward
+                     (my-codex--terminal-marker-regexp begin-marker)
+                     bound t)
+                (let ((marker-beg (match-beginning 0))
+                      (beg (match-end 0)))
+                  (when (re-search-forward
+                         (my-codex--terminal-marker-regexp end-marker)
+                         nil t)
+                    (when (or (null bound) (>= marker-beg bound))
+                      (let ((output
+                             (my-codex--normalize-marked-output
+                              (buffer-substring-no-properties
+                               beg
+                               (match-beginning 0)))))
+                        (unless (member output
+                                        (append '("") ignored-values))
+                          output)))))))))))))
+
+(defun my-codex--clear-marker (marker)
+  "Detach MARKER from its buffer when MARKER is a marker."
+  (when (markerp marker)
+    (set-marker marker nil)))
+
+(defun my-codex--clear-buffer-local-timer (buffer timer-var)
+  "Cancel and clear TIMER-VAR in BUFFER when it names a timer."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (when (timerp (symbol-value timer-var))
+        (cancel-timer (symbol-value timer-var)))
+      (set timer-var nil))))
+
+(defun my-codex--wait-for-marked-output
+    (buffer start-point begin-marker end-marker callback timeout-message
+            ready-message poll-interval poll-attempts &optional
+            ignored-values attempts timer-var)
+  "Poll BUFFER after START-POINT for marked output, then run CALLBACK.
+BEGIN-MARKER and END-MARKER delimit the output.  CALLBACK receives
+the extracted text.  ATTEMPTS tracks polling cycles."
+  (let ((attempts (or attempts 0))
+        (output (my-codex--latest-marked-output-after
+                 buffer start-point begin-marker end-marker ignored-values)))
+    (cond
+     ((> attempts poll-attempts)
+      (my-codex--clear-marker start-point)
+      (when timer-var
+        (my-codex--clear-buffer-local-timer buffer timer-var))
+      (message "%s" timeout-message))
+     (output
+      (my-codex--clear-marker start-point)
+      (when timer-var
+        (my-codex--clear-buffer-local-timer buffer timer-var))
+      (funcall callback output)
+      (message "%s" ready-message))
+     (t
+      (let ((timer
+             (run-with-timer
+              poll-interval nil
+              #'my-codex--wait-for-marked-output
+              buffer start-point begin-marker end-marker callback timeout-message
+              ready-message poll-interval poll-attempts ignored-values
+              (1+ attempts) timer-var)))
+        (when (and timer-var (buffer-live-p buffer))
+          (with-current-buffer buffer
+            (set timer-var timer))))))))
+
 (defun my-codex--strip-terminal-control-codes (text)
   "Return TEXT without common terminal control codes."
   (let ((cleaned (ansi-color-filter-apply text)))
@@ -805,18 +944,6 @@ shown between them as an example."
     (insert fence "text\n")
     (insert transcript)
     (insert "\n" fence "\n")))
-
-(defun my-codex--session-summary-prompt
-    (summary-prompt begin-marker end-marker &optional placeholder)
-  "Return a marked session summary prompt.
-SUMMARY-PROMPT describes the requested summary.  BEGIN-MARKER and
-END-MARKER delimit the answer.  PLACEHOLDER is shown inside the output
-markers."
-  (format "%s\n\n%s"
-          summary-prompt
-          (my-codex--marked-output-instructions
-           begin-marker end-marker (or placeholder "<Markdown notes here>"))))
-
 
 (provide 'my-codex-core)
 

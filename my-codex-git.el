@@ -39,18 +39,11 @@
 (defcustom my-codex-commit-message-prompt-template
   "Inspect the staged Git diff using `git diff --cached -- .` and write a concise conventional commit message.
 
-Put only the final commit message between these exact markers:
-
-BEGIN_COMMIT_MESSAGE
-<commit message here>
-END_COMMIT_MESSAGE
-
 Use an imperative subject and a short explanatory body when useful. Limit each line to %d columns. Do not edit files.\n"
   "Prompt template used by `my-codex-commit-message-from-diff'.
 The literal substring `%d' is replaced with
-`my-codex-commit-message-fill-column'.  Keep the
-BEGIN_COMMIT_MESSAGE and END_COMMIT_MESSAGE markers if you want
-`my-codex-latest-commit-message' to extract the generated message."
+`my-codex-commit-message-fill-column'.  Marked-output instructions
+are appended for each request."
   :type 'string
   :group 'my-codex)
 
@@ -91,7 +84,8 @@ Preserve concrete file names, command names, and technical details. Do not edit 
   :group 'my-codex)
 
 (declare-function my-codex--preview-and-send-prompt "my-codex-prompts" (prompt))
-(declare-function my-codex-send-prompt "my-codex-prompts" (prompt))
+(declare-function my-codex--request-marked-output "my-codex-prompts" (&rest args))
+(declare-function my-codex-send-prompt "my-codex-prompts" (prompt &optional target-buffer))
 (declare-function my-codex--active-agent-label "my-codex-core" (&optional root))
 (declare-function my-codex--process-output-lines "my-codex-core" (program &rest args))
 (declare-function my-codex--safe-root-name "my-codex-core" (root))
@@ -325,11 +319,18 @@ Do not modify files."))
   "Return the prompt for reviewing the staged Git diff."
   my-codex-git-staged-diff-review-prompt)
 
-(defun my-codex--commit-message-prompt ()
+(defun my-codex--commit-message-prompt (&optional begin-marker end-marker)
   "Return the prompt for drafting a commit message from staged changes."
-  (replace-regexp-in-string
-   "%d" (number-to-string my-codex-commit-message-fill-column)
-   my-codex-commit-message-prompt-template t t))
+  (let ((prompt
+         (replace-regexp-in-string
+          "%d" (number-to-string my-codex-commit-message-fill-column)
+          my-codex-commit-message-prompt-template t t)))
+    (if (and begin-marker end-marker)
+        (format "%s\n\n%s"
+                prompt
+                (my-codex--marked-output-instructions
+                 begin-marker end-marker "<commit message here>"))
+      prompt)))
 
 (defun my-codex--git-diff-buffer-name (root staged)
   "Return the diff buffer name for ROOT.
@@ -486,6 +487,9 @@ When invoked from the agent vterm, use the file in the window to its left."
   (let* ((buffer (my-codex-buffer))
          (root (my-codex-project-root))
          (default-directory root)
+         (markers (my-codex--unique-output-markers "COMMIT_MESSAGE"))
+         (begin-marker (car markers))
+         (end-marker (cdr markers))
          (signature nil))
     (my-codex--ensure-git-repository)
     (unless (my-codex--staged-changes-p)
@@ -493,148 +497,28 @@ When invoked from the agent vterm, use the file in the window to its left."
     (setq signature (my-codex--staged-diff-signature))
     (with-current-buffer buffer
       (setq my-codex--commit-message-request-signature signature)
+      (setq my-codex--commit-message-request-output-markers markers)
       (setq my-codex--commit-message-request-marker
             (copy-marker (point-max))))
-    (my-codex-send-prompt (my-codex--commit-message-prompt))
+    (my-codex-send-prompt
+     (my-codex--commit-message-prompt begin-marker end-marker)
+     buffer)
     (message
      "Asked %s to draft a commit message; use F8 c or M-x %s to edit and commit it."
      (my-codex--active-agent-label root)
      "my-codex-git-commit-with-latest-message")
     signature))
 
-(defun my-codex--terminal-marker-regexp (marker)
-  "Return a regexp matching MARKER with terminal whitespace artefacts."
-  (mapconcat
-   (lambda (char)
-     (regexp-quote (char-to-string char)))
-   marker
-   "[[:space:]\r\n]*"))
-
-(defun my-codex--trim-blank-lines (text)
-  "Return TEXT without leading or trailing blank lines."
-  (setq text (replace-regexp-in-string "\\`[ \t\n]*\n" "" text))
-  (setq text (replace-regexp-in-string "\n[ \t\n]*\\'" "" text))
-  text)
-
-(defun my-codex--common-leading-whitespace-width (text)
-  "Return the common leading whitespace width among nonblank lines in TEXT."
-  (let (width)
-    (dolist (line (split-string text "\n"))
-      (unless (string-blank-p line)
-        (let ((line-width
-               (if (string-match "\\`[ \t]*" line)
-                   (length (match-string 0 line))
-                 0)))
-          (setq width
-                (if width
-                    (min width line-width)
-                  line-width)))))
-    (or width 0)))
-
-(defun my-codex--remove-leading-whitespace-width (text width)
-  "Return TEXT with WIDTH leading whitespace characters removed per line."
-  (if (<= width 0)
-      text
-    (mapconcat
-     (lambda (line)
-       (if (string-blank-p line)
-           ""
-         (replace-regexp-in-string
-          (format "\\`[ \t]\\{0,%d\\}" width)
-          ""
-          line
-          nil
-          nil)))
-     (split-string text "\n")
-     "\n")))
-
-(defun my-codex--normalize-marked-output (text)
-  "Return generated marked output TEXT without terminal layout indentation."
-  (let ((output (my-codex--trim-blank-lines
-                 (replace-regexp-in-string "\r" "" text))))
-    (my-codex--remove-leading-whitespace-width
-     output
-     (my-codex--common-leading-whitespace-width output))))
-
-(defun my-codex--latest-marked-output-after
-    (buffer start-point begin-marker end-marker &optional ignored-values)
-  "Return marked output in BUFFER after START-POINT, or nil.
-BEGIN-MARKER and END-MARKER delimit the generated output.  Ignore
-empty output and any exact string in IGNORED-VALUES."
-  (when (buffer-live-p buffer)
-    (with-current-buffer buffer
-      (save-restriction
-        (widen)
-        (save-excursion
-          (goto-char (point-max))
-          (let* ((valid-start-point-p
-                  (and start-point
-                       (integer-or-marker-p start-point)
-                       (or (not (markerp start-point))
-                           (eq (marker-buffer start-point) buffer))
-                       (<= (point-min) start-point)
-                       (< start-point (point))))
-                 (bound (when valid-start-point-p start-point)))
-            (when (or (null start-point) bound)
-              (when (re-search-backward
-                     (my-codex--terminal-marker-regexp begin-marker)
-                     bound t)
-                (let ((marker-beg (match-beginning 0))
-                      (beg (match-end 0)))
-                  (when (re-search-forward
-                         (my-codex--terminal-marker-regexp end-marker)
-                         nil t)
-                    (when (or (null bound) (>= marker-beg bound))
-                      (let ((output
-                             (my-codex--normalize-marked-output
-                              (buffer-substring-no-properties
-                               beg
-                               (match-beginning 0)))))
-                        (unless (member output
-                                        (append '("") ignored-values))
-                          output)))))))))))))
-
-(defun my-codex--wait-for-marked-output
-    (buffer start-point begin-marker end-marker callback timeout-message
-            ready-message poll-interval poll-attempts &optional
-            ignored-values attempts timer-var)
-  "Poll BUFFER after START-POINT for marked output, then run CALLBACK.
-BEGIN-MARKER and END-MARKER delimit the output.  CALLBACK receives
-the extracted text.  ATTEMPTS tracks polling cycles."
-  (let ((attempts (or attempts 0))
-        (output (my-codex--latest-marked-output-after
-                 buffer start-point begin-marker end-marker ignored-values)))
-    (cond
-     ((> attempts poll-attempts)
-      (my-codex--clear-marker start-point)
-      (when timer-var
-        (my-codex--clear-buffer-local-timer buffer timer-var))
-      (message "%s" timeout-message))
-     (output
-      (my-codex--clear-marker start-point)
-      (when timer-var
-        (my-codex--clear-buffer-local-timer buffer timer-var))
-      (funcall callback output)
-      (message "%s" ready-message))
-     (t
-      (let ((timer
-             (run-with-timer
-              poll-interval nil
-              #'my-codex--wait-for-marked-output
-              buffer start-point begin-marker end-marker callback timeout-message
-              ready-message poll-interval poll-attempts ignored-values
-              (1+ attempts) timer-var)))
-        (when (and timer-var (buffer-live-p buffer))
-          (with-current-buffer buffer
-            (set timer-var timer))))))))
-
-(defun my-codex-latest-commit-message-after (buffer start-point)
+(defun my-codex-latest-commit-message-after
+    (buffer start-point &optional output-markers)
   "Return the commit message in BUFFER appearing after START-POINT, or nil."
-  (my-codex--latest-marked-output-after
-   buffer start-point
-   "BEGIN_COMMIT_MESSAGE"
-   "END_COMMIT_MESSAGE"
-   '("..." "<commit message here>")))
+  (let ((markers (or output-markers
+                     '("BEGIN_COMMIT_MESSAGE" . "END_COMMIT_MESSAGE"))))
+    (my-codex--latest-marked-output-after
+     buffer start-point
+     (car markers)
+     (cdr markers)
+     '("..." "<commit message here>"))))
 
 (defun my-codex-latest-commit-message ()
   "Return latest requested commit message from current agent buffer.
@@ -644,7 +528,8 @@ Return nil when no matching message is available."
       (when-let* ((marker my-codex--commit-message-request-marker)
                   ((markerp marker))
                   ((eq (marker-buffer marker) buffer)))
-        (my-codex-latest-commit-message-after buffer marker)))))
+        (my-codex-latest-commit-message-after
+         buffer marker my-codex--commit-message-request-output-markers)))))
 
 (defun my-codex--commit-message-buffer-name (root)
   "Return the commit message buffer name for ROOT."
@@ -769,6 +654,7 @@ Clear request state in CODEX-BUFFER after a successful commit when it is live."
                                  (kill-buffer buffer))
                                (when (buffer-live-p codex-buffer)
                                  (with-current-buffer codex-buffer
+                                   (setq my-codex--commit-message-request-output-markers nil)
                                    (setq my-codex--commit-message-request-signature nil)
                                    (my-codex--clear-marker my-codex--commit-message-request-marker)))
                                (message "Git commit finished successfully."))
@@ -794,19 +680,6 @@ Clear request state in CODEX-BUFFER after a successful commit when it is live."
     (with-demoted-errors "Failed to delete temporary file: %S"
       (delete-file file))))
 
-(defun my-codex--clear-marker (marker)
-  "Detach MARKER from its buffer when MARKER is a marker."
-  (when (markerp marker)
-    (set-marker marker nil)))
-
-(defun my-codex--clear-buffer-local-timer (buffer timer-var)
-  "Cancel and clear TIMER-VAR in BUFFER when it names a timer."
-  (when (buffer-live-p buffer)
-    (with-current-buffer buffer
-      (when (timerp (symbol-value timer-var))
-        (cancel-timer (symbol-value timer-var)))
-      (set timer-var nil))))
-
 (defun my-codex--wait-for-commit-message
     (buffer start-point root &optional staged-signature attempts)
   "Poll BUFFER after START-POINT for a finished commit message.
@@ -816,47 +689,48 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
   (unless attempts
     (my-codex--clear-buffer-local-timer
      buffer 'my-codex--commit-message-wait-timer))
-  (my-codex--wait-for-marked-output
-   buffer start-point
-   "BEGIN_COMMIT_MESSAGE"
-   "END_COMMIT_MESSAGE"
-   (lambda (msg)
-     (my-codex-edit-git-commit-with-message msg root staged-signature buffer))
-   "Timed out waiting for agent commit message."
-   "Agent commit message is ready for editing."
-   my-codex-commit-message-poll-interval
-   my-codex-commit-message-poll-attempts
-   '("..." "<commit message here>")
-   attempts
-   'my-codex--commit-message-wait-timer))
+  (let ((markers
+         (with-current-buffer buffer
+           (or my-codex--commit-message-request-output-markers
+               '("BEGIN_COMMIT_MESSAGE" . "END_COMMIT_MESSAGE")))))
+    (my-codex--wait-for-marked-output
+     buffer start-point
+     (car markers)
+     (cdr markers)
+     (lambda (msg)
+       (my-codex-edit-git-commit-with-message msg root staged-signature buffer))
+     "Timed out waiting for agent commit message."
+     "Agent commit message is ready for editing."
+     my-codex-commit-message-poll-interval
+     my-codex-commit-message-poll-attempts
+     '("..." "<commit message here>")
+     attempts
+     'my-codex--commit-message-wait-timer)))
 
-(defun my-codex--wait-for-session-summary
-    (buffer start-point root begin-marker end-marker
-            &optional callback ready-message ignored-values attempts)
-  "Poll BUFFER after START-POINT for a finished session summary.
-ROOT is the project root used for the editable summary buffer.
-BEGIN-MARKER and END-MARKER delimit this request's summary.
-CALLBACK receives the summary and defaults to opening an editable buffer.
-READY-MESSAGE is shown after a summary is found.
-IGNORED-VALUES are additional exact placeholder outputs to ignore.
-ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
-  (unless attempts
-    (my-codex--clear-buffer-local-timer
-     buffer 'my-codex--session-summary-wait-timer))
-  (my-codex--wait-for-marked-output
-   buffer start-point
-   begin-marker
-   end-marker
-   (or callback
-       (lambda (summary)
-         (my-codex-edit-session-summary summary root)))
-   "Timed out waiting for agent session summary."
-   (or ready-message "Agent session summary is ready for editing.")
-   my-codex-session-summary-poll-interval
-   my-codex-session-summary-poll-attempts
-   (append '("..." "<Markdown notes here>") ignored-values)
-   attempts
-   'my-codex--session-summary-wait-timer))
+(defun my-codex--request-commit-message-and-wait
+    (buffer root staged-signature)
+  "Ask for a commit message in BUFFER and open an editor when ready."
+  (my-codex--request-marked-output
+   :name "COMMIT_MESSAGE"
+   :buffer buffer
+   :prompt (my-codex--commit-message-prompt)
+   :placeholder "<commit message here>"
+   :parser #'my-codex-clean-commit-message
+   :callback (lambda (message)
+               (my-codex-edit-git-commit-with-message
+                message root staged-signature buffer))
+   :timeout-message "Timed out waiting for agent commit message."
+   :ready-message "Agent commit message is ready for editing."
+   :poll-interval my-codex-commit-message-poll-interval
+   :poll-attempts my-codex-commit-message-poll-attempts
+   :timer-var 'my-codex--commit-message-wait-timer
+   :start-callback
+   (lambda (start-point begin-marker end-marker)
+     (with-current-buffer buffer
+       (setq my-codex--commit-message-request-signature staged-signature)
+       (setq my-codex--commit-message-request-output-markers
+             (cons begin-marker end-marker))
+       (setq my-codex--commit-message-request-marker start-point)))))
 
 ;;;###autoload
 (defun my-codex-git-commit-with-latest-message ()
@@ -889,12 +763,9 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
             (my-codex--wait-for-commit-message
              buffer marker root request-signature)
             (message "Waiting for agent commit message."))
-        (let* ((request-signature (my-codex-commit-message-from-diff))
-               (start-point
-                (with-current-buffer buffer
-                  (copy-marker my-codex--commit-message-request-marker))))
-          (my-codex--wait-for-commit-message
-           buffer start-point root request-signature)
+        (progn
+          (my-codex--request-commit-message-and-wait
+           buffer root current-signature)
           (message "Asked %s to draft a commit message; waiting to open editor."
                    (my-codex--active-agent-label root)))))))
 

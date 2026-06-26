@@ -325,6 +325,38 @@ session is available."
     (redisplay t)
     (my-codex-backend-send backend prompt)))
 
+(cl-defun my-codex--request-marked-output
+    (&key name buffer prompt placeholder parser callback timeout-message
+          ready-message poll-interval poll-attempts ignored-values timer-var
+          start-callback)
+  "Send PROMPT and wait for uniquely marked output named NAME.
+CALLBACK receives the parsed output.  START-CALLBACK receives the request
+marker, begin marker and end marker before PROMPT is sent."
+  (let* ((markers (my-codex--unique-output-markers name))
+         (begin-marker (car markers))
+         (end-marker (cdr markers))
+         (start-point (with-current-buffer buffer
+                        (copy-marker (point-max))))
+         (ignored-values
+          (append (list "..." placeholder) ignored-values)))
+    (when timer-var
+      (my-codex--clear-buffer-local-timer buffer timer-var))
+    (when start-callback
+      (funcall start-callback start-point begin-marker end-marker))
+    (my-codex-send-prompt
+     (format "%s\n\n%s"
+             prompt
+             (my-codex--marked-output-instructions
+              begin-marker end-marker placeholder))
+     buffer)
+    (my-codex--wait-for-marked-output
+     buffer start-point begin-marker end-marker
+     (lambda (output)
+       (funcall callback (funcall (or parser #'identity) output)))
+     timeout-message ready-message poll-interval poll-attempts
+     ignored-values nil timer-var)
+    start-point))
+
 (defun my-codex--prompt-preview-buffer-name (root)
   "Return the prompt preview buffer name for ROOT."
   (let* ((agent (my-codex--active-agent root))

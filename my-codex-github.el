@@ -17,7 +17,6 @@
 
 (defvar my-codex--github-issue-creation-in-progress)
 (defvar my-codex--github-issue-repository)
-(defvar my-codex--session-summary-request-marker)
 
 (defcustom my-codex-github-issue-summary-prompt
   "Summarise our conversation so far as a GitHub issue draft.
@@ -46,17 +45,9 @@ Preserve concrete file names, command names, and technical details. Do not edit 
 (declare-function my-codex--agent-label "my-codex-core" (agent))
 (declare-function my-codex--safe-root-name "my-codex-core" (root))
 (declare-function my-codex--session-export-mode "my-codex-core" ())
-(declare-function my-codex--session-summary-prompt
-                  "my-codex-core"
-                  (summary-prompt begin-marker end-marker &optional placeholder))
-(declare-function my-codex--unique-output-markers "my-codex-core" (name))
-(declare-function my-codex--wait-for-session-summary
-                  "my-codex-git"
-                  (buffer start-point root begin-marker end-marker
-                          &optional callback ready-message ignored-values))
 (declare-function my-codex-buffer "my-codex-core" ())
 (declare-function my-codex-project-root "my-codex-core" ())
-(declare-function my-codex-send-prompt "my-codex-prompts" (prompt))
+(declare-function my-codex--request-marked-output "my-codex-prompts" (&rest args))
 
 (defun my-codex--github-issue-output-buffer-name (root)
   "Return the GitHub issue process buffer name for ROOT."
@@ -331,29 +322,23 @@ Preserve concrete file names, command names, and technical details. Do not edit 
 Open an editable issue draft before running `gh issue create'."
   (interactive)
   (let* ((root (my-codex-project-root))
-         (buffer (my-codex-buffer))
-         (markers (my-codex--unique-output-markers "GITHUB_ISSUE_DRAFT"))
-         (begin-marker (car markers))
-         (end-marker (cdr markers)))
+         (buffer (my-codex-buffer)))
     (unless (executable-find "gh")
       (user-error "GitHub CLI `gh' not found in exec-path"))
-    (let ((start-point (with-current-buffer buffer
-                         (copy-marker (point-max))))
-          (prompt (my-codex--session-summary-prompt
-                   my-codex-github-issue-summary-prompt
-                   begin-marker end-marker
-                   "<GitHub issue draft here>")))
-      (with-current-buffer buffer
-        (setq my-codex--session-summary-request-marker start-point))
-      (my-codex-send-prompt prompt)
-      (my-codex--wait-for-session-summary
-       buffer start-point root begin-marker end-marker
-       (lambda (draft)
-         (my-codex-edit-github-issue-draft draft root))
-       "Agent GitHub issue draft is ready for editing."
-       '("<GitHub issue draft here>"))
-      (message "Asked %s to draft a GitHub issue; waiting to open editor."
-               (my-codex--active-agent-label root)))))
+    (my-codex--request-marked-output
+     :name "GITHUB_ISSUE_DRAFT"
+     :buffer buffer
+     :prompt my-codex-github-issue-summary-prompt
+     :placeholder "<GitHub issue draft here>"
+     :callback (lambda (draft)
+                 (my-codex-edit-github-issue-draft draft root))
+     :timeout-message "Timed out waiting for agent GitHub issue draft."
+     :ready-message "Agent GitHub issue draft is ready for editing."
+     :poll-interval my-codex-session-summary-poll-interval
+     :poll-attempts my-codex-session-summary-poll-attempts
+     :timer-var 'my-codex--session-summary-wait-timer)
+    (message "Asked %s to draft a GitHub issue; waiting to open editor."
+             (my-codex--active-agent-label root))))
 
 (provide 'my-codex-github)
 

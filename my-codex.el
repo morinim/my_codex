@@ -942,22 +942,21 @@ For compatibility, AGENT may also be a command string when ACCESS-MODE is nil."
 Open the generated notes in an editable Markdown buffer when they are ready."
   (interactive)
   (let* ((root (my-codex-project-root))
-         (buffer (my-codex-buffer))
-         (markers (my-codex--unique-output-markers "SESSION_SUMMARY"))
-         (begin-marker (car markers))
-         (end-marker (cdr markers)))
-    (let ((start-point (with-current-buffer buffer
-                         (copy-marker (point-max))))
-          (prompt (my-codex--session-summary-prompt
-                   my-codex-session-summary-prompt
-                   begin-marker end-marker)))
-      (with-current-buffer buffer
-        (setq my-codex--session-summary-request-marker start-point))
-      (my-codex-send-prompt prompt)
-      (my-codex--wait-for-session-summary
-       buffer start-point root begin-marker end-marker)
-      (message "Asked %s to summarize the session; waiting to open editor."
-               (my-codex--active-agent-label root)))))
+         (buffer (my-codex-buffer)))
+    (my-codex--request-marked-output
+     :name "SESSION_SUMMARY"
+     :buffer buffer
+     :prompt my-codex-session-summary-prompt
+     :placeholder "<Markdown notes here>"
+     :callback (lambda (summary)
+                 (my-codex-edit-session-summary summary root))
+     :timeout-message "Timed out waiting for agent session summary."
+     :ready-message "Agent session summary is ready for editing."
+     :poll-interval my-codex-session-summary-poll-interval
+     :poll-attempts my-codex-session-summary-poll-attempts
+     :timer-var 'my-codex--session-summary-wait-timer)
+    (message "Asked %s to summarize the session; waiting to open editor."
+             (my-codex--active-agent-label root))))
 
 ;; Prefix keymap for agent commands.
 (defvar-keymap my-codex-map
