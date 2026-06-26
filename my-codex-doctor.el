@@ -179,6 +179,14 @@ VTERM-LOADABLE is non-nil when `vterm' can be loaded."
          line)
     (match-string 2 line)))
 
+(defun my-codex--doctor-toml-integer-value (line key)
+  "Return KEY's TOML integer value from LINE, or nil."
+  (when (string-match
+         (format "\\`[[:space:]]*%s[[:space:]]*=[[:space:]]*\\([0-9][0-9_]*\\)"
+                 (regexp-quote key))
+         line)
+    (string-to-number (string-replace "_" "" (match-string 1 line)))))
+
 (defun my-codex--doctor-toml-profile-table (line)
   "Return the Codex profile name from a TOML table LINE, or nil."
   (when (string-match
@@ -225,6 +233,41 @@ The result is a cons of (TIER . SOURCE), or nil when unset."
       (when top-tier
         (cons top-tier top-source)))))
 
+(defun my-codex--doctor-codex-effective-integer-setting (key)
+  "Return the effective Codex CLI integer setting KEY in the current buffer.
+The result is a cons of (VALUE . SOURCE), or nil when unset."
+  (let (active-profile top-value top-source profile-values current-profile
+                       (current-section 'top))
+    (goto-char (point-min))
+    (while (not (eobp))
+      (let ((line (buffer-substring-no-properties
+                   (line-beginning-position)
+                   (line-end-position))))
+        (cond
+         ((or (string-blank-p line)
+              (string-match-p "\\`[[:space:]]*#" line)))
+         ((string-match-p "\\`[[:space:]]*\\[" line)
+          (setq current-profile
+                (my-codex--doctor-toml-profile-table line))
+          (setq current-section (if current-profile 'profile 'other)))
+         ((eq current-section 'profile)
+          (when-let ((value (my-codex--doctor-toml-integer-value line key)))
+            (setf (alist-get current-profile profile-values nil nil #'equal)
+                  value)))
+         ((eq current-section 'top)
+          (when-let ((profile (my-codex--doctor-toml-string-value
+                               line "profile")))
+            (setq active-profile profile))
+          (when-let ((value (my-codex--doctor-toml-integer-value line key)))
+            (setq top-value value)
+            (setq top-source "top level")))))
+      (forward-line 1))
+    (if-let* ((active-profile)
+              (value (alist-get active-profile profile-values nil nil #'equal)))
+        (cons value (format "profile %S" active-profile))
+      (when top-value
+        (cons top-value top-source)))))
+
 (defun my-codex--doctor-codex-config-file ()
   "Return the Codex CLI config file path."
   (expand-file-name
@@ -253,12 +296,54 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
                   (source (cdr tier-source)))
               (if (string= tier "fast")
                   (list "Codex service_tier" 'warn
-                        (format "fast in %s disables token usage optimisation; remove it or choose another tier"
+                        (format "fast in %s uses priority processing and increases costs; use it only when lower latency is worth it"
                                 source))
                 (list "Codex service_tier" 'ok
                       (format "Configured as %S in %s" tier source))))
           (list "Codex service_tier" 'ok
                 "Not configured; Codex default applies")))))))
+
+(defun my-codex--doctor-grouped-number (number)
+  "Return NUMBER formatted with comma digit grouping."
+  (let ((text (number-to-string number)))
+    (while (string-match "\\([0-9]+\\)\\([0-9][0-9][0-9]\\)" text)
+      (setq text (replace-match "\\1,\\2" nil nil text)))
+    text))
+
+(defun my-codex--doctor-codex-integer-setting
+    (key label &optional unit file)
+  "Return a diagnostic row for Codex integer setting KEY.
+LABEL is the row label.  UNIT, when non-nil, is appended to configured values.
+When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
+  (let ((config-file (or file (my-codex--doctor-codex-config-file))))
+    (cond
+     ((not (file-exists-p config-file))
+      (list label 'ok "default applies"))
+     ((not (file-readable-p config-file))
+      (list label 'warn (format "Cannot read %s" config-file)))
+     (t
+      (with-temp-buffer
+        (insert-file-contents config-file)
+        (if-let ((value-source
+                  (my-codex--doctor-codex-effective-integer-setting key)))
+            (let ((value (my-codex--doctor-grouped-number
+                          (car value-source))))
+              (list label 'ok
+                    (if unit
+                        (format "%s %s" value unit)
+                      value)))
+          (list label 'ok "default applies")))))))
+
+(defun my-codex--doctor-codex-context-rows (&optional file)
+  "Return diagnostic rows for Codex context-related config in FILE."
+  (list
+   (my-codex--doctor-codex-integer-setting
+    "tool_output_token_limit" "Codex tool_output_token_limit" "tokens" file)
+   (my-codex--doctor-codex-integer-setting
+    "model_auto_compact_token_limit" "Codex model_auto_compact_token_limit"
+    "tokens" file)
+   (my-codex--doctor-codex-integer-setting
+    "project_doc_max_bytes" "Codex project_doc_max_bytes" "bytes" file)))
 
 (defun my-codex--doctor-rows ()
   "Return diagnostic rows for `my-codex-doctor'."
@@ -344,6 +429,7 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
                 (expand-file-name "AGENTS.md" root)
               (format "Not found in %s" root)))
       (my-codex--doctor-codex-service-tier))
+     (my-codex--doctor-codex-context-rows)
      (list
       (my-codex--doctor-command-status
        (format "agent %s read-only" my-codex-agent)

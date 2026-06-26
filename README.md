@@ -34,8 +34,8 @@ It keeps your code on the left and the active agent CLI on the right, providing 
 
 The package treats token cost as part of the workflow: it limits generated
 project context, warns before oversized prompts, references saved project-file
-regions by file and line range, and checks for Codex CLI settings that can
-bypass token usage optimisation.
+regions by file and line range, and checks for Codex CLI settings that affect
+costs and retained context.
 
 ## Requirements
 

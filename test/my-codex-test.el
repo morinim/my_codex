@@ -2074,10 +2074,10 @@
           (with-temp-file config
             (insert "service_tier = \"fast\"\n"))
           (should
-           (equal
-            (my-codex--doctor-codex-service-tier config)
-            '("Codex service_tier" warn
-              "fast in top level disables token usage optimisation; remove it or choose another tier"))))
+            (equal
+             (my-codex--doctor-codex-service-tier config)
+             '("Codex service_tier" warn
+              "fast in top level uses priority processing and increases costs; use it only when lower latency is worth it"))))
       (delete-file config))))
 
 (ert-deftest my-codex-doctor-codex-service-tier-accepts-non-fast ()
@@ -2103,10 +2103,10 @@
           (with-temp-file config
             (insert "service_tier = \"fast\"\n"))
           (should
-           (equal
-            (my-codex--doctor-codex-service-tier)
-            '("Codex service_tier" warn
-              "fast in top level disables token usage optimisation; remove it or choose another tier"))))
+            (equal
+             (my-codex--doctor-codex-service-tier)
+             '("Codex service_tier" warn
+              "fast in top level uses priority processing and increases costs; use it only when lower latency is worth it"))))
       (delete-directory codex-home t))))
 
 (ert-deftest my-codex-doctor-codex-service-tier-ignores-inactive-profile ()
@@ -2142,10 +2142,10 @@
                     "[profiles.fast-profile]\n"
                     "service_tier = \"fast\"\n"))
           (should
-           (equal
-            (my-codex--doctor-codex-service-tier config)
-            '("Codex service_tier" warn
-              "fast in profile \"fast-profile\" disables token usage optimisation; remove it or choose another tier"))))
+            (equal
+             (my-codex--doctor-codex-service-tier config)
+             '("Codex service_tier" warn
+              "fast in profile \"fast-profile\" uses priority processing and increases costs; use it only when lower latency is worth it"))))
       (delete-file config))))
 
 (ert-deftest my-codex-doctor-codex-service-tier-accepts-missing-config ()
@@ -2156,6 +2156,39 @@
       (my-codex--doctor-codex-service-tier config)
       '("Codex service_tier" ok
         "Not configured; Codex default applies")))))
+
+(ert-deftest my-codex-doctor-codex-context-rows-report-configured-values ()
+  (let ((config (make-temp-file "my-codex-config-" nil ".toml")))
+    (unwind-protect
+        (progn
+          (with-temp-file config
+            (insert "tool_output_token_limit = 8000\n"
+                    "model_auto_compact_token_limit = 120_000\n"))
+          (should
+           (equal
+            (my-codex--doctor-codex-context-rows config)
+            '(("Codex tool_output_token_limit" ok "8,000 tokens")
+              ("Codex model_auto_compact_token_limit" ok "120,000 tokens")
+              ("Codex project_doc_max_bytes" ok "default applies")))))
+      (delete-file config))))
+
+(ert-deftest my-codex-doctor-codex-context-rows-honour-active-profile ()
+  (let ((config (make-temp-file "my-codex-config-" nil ".toml")))
+    (unwind-protect
+        (progn
+          (with-temp-file config
+            (insert "profile = \"compact\"\n"
+                    "tool_output_token_limit = 8000\n"
+                    "\n"
+                    "[profiles.compact]\n"
+                    "tool_output_token_limit = 4000\n"))
+          (should
+           (equal
+            (my-codex--doctor-codex-context-rows config)
+            '(("Codex tool_output_token_limit" ok "4,000 tokens")
+              ("Codex model_auto_compact_token_limit" ok "default applies")
+              ("Codex project_doc_max_bytes" ok "default applies")))))
+      (delete-file config))))
 
 (ert-deftest my-codex-project-overview-sends-orientation-instructions ()
   (let (prompt)
