@@ -94,13 +94,15 @@ different profile interactively."
      :buffer-prefix "codex"
      :read-only-command my-codex-read-only-command
      :workspace-command my-codex-workspace-command
-     :resume-command my-codex-resume-command)
+     :resume-command my-codex-resume-command
+     :doctor-function my-codex--doctor-codex-rows)
     (antigravity
      :label "Antigravity"
      :buffer-prefix "agy"
      :read-only-command my-codex-antigravity-read-only-command
      :workspace-command my-codex-antigravity-workspace-command
-     :resume-command my-codex-antigravity-resume-command))
+     :resume-command my-codex-antigravity-resume-command
+     :doctor-function nil))
   "Agent profiles available to my-codex.
 Each entry has the form:
 
@@ -108,12 +110,14 @@ Each entry has the form:
       :buffer-prefix PREFIX
       :read-only-command COMMAND
       :workspace-command COMMAND
-      :resume-command COMMAND)
+      :resume-command COMMAND
+      :doctor-function FUNCTION)
 
 ID is a symbol used for configuration and session metadata.  PREFIX is
 used in buffer names, so different agents can have sessions with the
 same project and session name without colliding.  COMMAND may be either
-a string or a symbol whose value is a string."
+a string or a symbol whose value is a string.  FUNCTION may be nil or a
+function returning backend-specific doctor rows."
   :type '(repeat
           (list :tag "Agent profile"
                 (symbol :tag "Identifier")
@@ -132,7 +136,11 @@ a string or a symbol whose value is a string."
                 (const :format "" :value :resume-command)
                 (choice :tag "Resume command"
                         (string :tag "Command")
-                        (symbol :tag "Variable"))))
+                        (symbol :tag "Variable"))
+                (const :format "" :value :doctor-function)
+                (choice :tag "Doctor function"
+                        (const :tag "None" nil)
+                        (function :tag "Function"))))
   :group 'my-codex)
 
 (defcustom my-codex-left-width 81

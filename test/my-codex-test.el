@@ -2576,6 +2576,25 @@
               ("Codex project_doc_max_bytes" ok "default applies")))))
       (delete-file config))))
 
+(ert-deftest my-codex-doctor-agent-rows-use-profile-callback ()
+  (let ((my-codex-agent-profiles
+         '((codex :doctor-function my-codex-test--doctor-rows)
+           (antigravity :label "Antigravity"))))
+    (cl-letf (((symbol-function 'my-codex-test--doctor-rows)
+               (lambda () '(("Codex setting" ok "configured")))))
+      (should
+       (equal (my-codex--doctor-agent-rows 'codex)
+              '(("Codex setting" ok "configured"))))
+      (should-not (my-codex--doctor-agent-rows 'antigravity)))))
+
+(ert-deftest my-codex-doctor-agent-rows-support-legacy-codex-profile ()
+  (let ((my-codex-agent-profiles '((codex :label "Codex"))))
+    (cl-letf (((symbol-function 'my-codex--doctor-codex-rows)
+               (lambda () '(("Codex setting" ok "configured")))))
+      (should
+       (equal (my-codex--doctor-agent-rows 'codex)
+              '(("Codex setting" ok "configured")))))))
+
 (ert-deftest my-codex-project-overview-sends-orientation-instructions ()
   (let (prompt)
     (cl-letf (((symbol-function 'my-codex--preview-and-send-prompt)

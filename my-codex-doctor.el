@@ -345,6 +345,21 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
    (my-codex--doctor-codex-integer-setting
     "project_doc_max_bytes" "Codex project_doc_max_bytes" "bytes" file)))
 
+(defun my-codex--doctor-codex-rows ()
+  "Return Codex-specific diagnostic rows."
+  (cons (my-codex--doctor-codex-service-tier)
+        (my-codex--doctor-codex-context-rows)))
+
+(defun my-codex--doctor-agent-rows (agent)
+  "Return backend-specific diagnostic rows for AGENT."
+  (let* ((profile (my-codex--agent-profile agent))
+         (function
+          (if (plist-member profile :doctor-function)
+              (plist-get profile :doctor-function)
+            (and (eq agent 'codex) #'my-codex--doctor-codex-rows))))
+    (when function
+      (funcall function))))
+
 (defun my-codex--doctor-rows ()
   "Return diagnostic rows for `my-codex-doctor'."
   (let* ((root (my-codex-project-root))
@@ -428,9 +443,8 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
                   (mapconcat (lambda (file)
                                (file-relative-name file root))
                              files ", ")
-                (format "No effective files found for %s" my-codex-agent))))
-      (my-codex--doctor-codex-service-tier))
-     (my-codex--doctor-codex-context-rows)
+                (format "No effective files found for %s" my-codex-agent)))))
+     (my-codex--doctor-agent-rows my-codex-agent)
      (list
       (my-codex--doctor-command-status
        (format "agent %s read-only" my-codex-agent)
