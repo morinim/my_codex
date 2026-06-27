@@ -611,6 +611,12 @@ IMPLEMENTATION-RELATIVE and TEST-RELATIVE are project-relative file names."
         symbol
       (user-error "No symbol at point"))))
 
+(defun my-codex--trim-excerpt-whitespace (text)
+  "Trim trailing whitespace and boundary blank lines from TEXT."
+  (setq text (replace-regexp-in-string "[ \t]+$" "" text))
+  (setq text (replace-regexp-in-string "\\`\\(?:\n\\)+" "" text))
+  (replace-regexp-in-string "\\(?:\n\\)+\\'" "" text))
+
 (defun my-codex--line-context-around-point (context-lines)
   "Return text around point spanning CONTEXT-LINES before and after."
   (save-excursion
@@ -626,7 +632,8 @@ IMPLEMENTATION-RELATIVE and TEST-RELATIVE are project-relative file names."
         (goto-char (point-min))
         (forward-line (1- end-line))
         (setq end (line-end-position))
-        (buffer-substring-no-properties start end)))))
+        (my-codex--trim-excerpt-whitespace
+         (buffer-substring-no-properties start end))))))
 
 (defun my-codex--xref-location-marker (xref-item)
   "Return a marker for XREF-ITEM, or nil when its location is unavailable."

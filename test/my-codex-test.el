@@ -2727,6 +2727,14 @@ Do not modify files."))))
     (should (string-match-p "excerpt: |" sent))
     (should (string-match-p "(defun alpha" sent))))
 
+(ert-deftest my-codex-line-context-trims-boundary-whitespace ()
+  (with-temp-buffer
+    (insert "   \n\n  (defun alpha ()  \n\n    42)\t\n\n")
+    (goto-char (point-min))
+    (search-forward "alpha")
+    (should (equal (my-codex--line-context-around-point 5)
+                   "  (defun alpha ()\n\n    42)"))))
+
 (ert-deftest my-codex-xref-items-section-formats-relative-locations ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-xref" t))))
     (unwind-protect
