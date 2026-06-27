@@ -170,9 +170,90 @@ different placement, such as a bottom side window or a dedicated frame."
 
 (defcustom my-codex-project-instruction-files
   '("AGENTS.md" "CODEX.md" "ANTIGRAVITY.md" ".codex/instructions.md" ".antigravity/instructions.md")
-  "Candidate project instruction files for Codex/Antigravity."
+  "Additional candidate project instruction files.
+Prefer the agent-specific options for new configurations."
   :type '(repeat string)
   :group 'my-codex)
+
+(defcustom my-codex-codex-instruction-fallback-files
+  '("CODEX.md" ".codex/instructions.md")
+  "Fallback project instruction filenames used for Codex discovery."
+  :type '(repeat string)
+  :group 'my-codex)
+
+(defcustom my-codex-antigravity-instruction-files
+  '("ANTIGRAVITY.md" ".antigravity/instructions.md")
+  "Project instruction filenames used for Antigravity discovery."
+  :type '(repeat string)
+  :group 'my-codex)
+
+(defun my-codex--instruction-target-directory (root)
+  "Return the instruction discovery directory below ROOT."
+  (let ((directory (file-name-as-directory
+                    (file-truename
+                     (if buffer-file-name
+                         (file-name-directory buffer-file-name)
+                       default-directory))))
+        (root (file-name-as-directory (file-truename root))))
+    (if (file-in-directory-p directory root) directory root)))
+
+(defun my-codex--directories-to (root target)
+  "Return directories from ROOT through TARGET, inclusive."
+  (let* ((root (file-name-as-directory (file-truename root)))
+         (relative (file-relative-name (file-truename target) root))
+         (parts (unless (string= relative ".")
+                  (split-string (directory-file-name relative) "/" t)))
+         (directories (list root))
+         (directory root))
+    (dolist (part parts (nreverse directories))
+      (setq directory (file-name-as-directory
+                       (expand-file-name part directory)))
+      (push directory directories))))
+
+(defun my-codex-project-instruction-files (&optional root target agent)
+  "Return effective instruction files for AGENT.
+ROOT defaults to the current project root and TARGET to the current buffer's
+directory.  Codex selects one file per directory from ROOT through TARGET.
+Antigravity candidates are checked at ROOT only."
+  (let* ((root (or root (my-codex-project-root)))
+         (target (or target (my-codex--instruction-target-directory root)))
+         (agent (or agent (my-codex--active-agent root))))
+    (pcase agent
+      ('codex
+       (let ((names (delete-dups
+                     (append '("AGENTS.override.md" "AGENTS.md")
+                             my-codex-codex-instruction-fallback-files
+                             (seq-remove
+                              (lambda (name)
+                                (member name
+                                        my-codex-antigravity-instruction-files))
+                              my-codex-project-instruction-files)))))
+         (delq nil
+               (mapcar
+                (lambda (directory)
+                  (seq-find #'file-regular-p
+                            (mapcar (lambda (name)
+                                      (expand-file-name name directory))
+                                    names)))
+                (my-codex--directories-to root target)))))
+      ('antigravity
+       (seq-filter
+        #'file-regular-p
+        (mapcar (lambda (name) (expand-file-name name root))
+                (delete-dups
+                 (append
+                  my-codex-antigravity-instruction-files
+                  (seq-remove
+                   (lambda (name)
+                     (or (member name '("AGENTS.override.md" "AGENTS.md"))
+                         (member name
+                                 my-codex-codex-instruction-fallback-files)))
+                   my-codex-project-instruction-files))))))
+      (_
+       (seq-filter
+        #'file-regular-p
+        (mapcar (lambda (name) (expand-file-name name root))
+                my-codex-project-instruction-files))))))
 
 (defcustom my-codex-project-build-command nil
   "Command used to build the current project.

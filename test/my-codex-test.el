@@ -42,6 +42,65 @@
                 (lambda (diagnostic) (plist-get diagnostic :message))))
        ,@body)))
 
+(ert-deftest my-codex-project-instruction-files-follow-codex-scope ()
+  (let* ((root (file-name-as-directory
+                (make-temp-file "my-codex-instructions" t)))
+         (nested (expand-file-name "src/lib" root))
+         (my-codex-codex-instruction-fallback-files '("CODEX.md")))
+    (unwind-protect
+        (progn
+          (make-directory nested t)
+          (write-region "root" nil (expand-file-name "AGENTS.md" root))
+          (write-region "ignored" nil
+                        (expand-file-name "AGENTS.md"
+                                          (expand-file-name "src" root)))
+          (write-region "override" nil
+                        (expand-file-name "AGENTS.override.md"
+                                          (expand-file-name "src" root)))
+          (write-region "fallback" nil (expand-file-name "CODEX.md" nested))
+          (should
+           (equal (my-codex-project-instruction-files
+                   root nested 'codex)
+                  (list (expand-file-name "AGENTS.md" root)
+                        (expand-file-name "AGENTS.override.md"
+                                          (expand-file-name "src" root))
+                        (expand-file-name "CODEX.md" nested)))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-project-instruction-files-separate-antigravity ()
+  (let* ((root (file-name-as-directory
+                (make-temp-file "my-codex-instructions" t)))
+         (my-codex-antigravity-instruction-files
+          '("ANTIGRAVITY.md" ".antigravity/instructions.md")))
+    (unwind-protect
+        (progn
+          (make-directory (expand-file-name ".antigravity" root))
+          (write-region "codex" nil (expand-file-name "AGENTS.md" root))
+          (write-region "antigravity" nil
+                        (expand-file-name "ANTIGRAVITY.md" root))
+          (should
+           (equal (my-codex-project-instruction-files
+                   root root 'antigravity)
+                  (list (expand-file-name "ANTIGRAVITY.md" root)))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-open-project-instructions-prompts-for-multiple-files ()
+  (let ((root "/project/")
+        selected opened)
+    (cl-letf (((symbol-function 'my-codex-project-root) (lambda () root))
+              ((symbol-function 'my-codex-project-instruction-files)
+               (lambda (&rest _args)
+                 '("/project/AGENTS.md" "/project/src/AGENTS.md")))
+              ((symbol-function 'completing-read)
+               (lambda (_prompt candidates &rest _args)
+                 (setq selected candidates)
+                 "src/AGENTS.md"))
+              ((symbol-function 'find-file)
+               (lambda (file) (setq opened file))))
+      (my-codex-open-project-instructions)
+      (should (equal selected '("AGENTS.md" "src/AGENTS.md")))
+      (should (equal opened "/project/src/AGENTS.md")))))
+
 (ert-deftest my-codex-clean-commit-message-body-lines-fills-paragraphs ()
   (let ((my-codex-commit-message-fill-column 34))
     (should

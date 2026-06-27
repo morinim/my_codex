@@ -421,13 +421,14 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
             (if project
                 (format "Project root: %s" (project-root project))
               (format "No project detected; using %s" root)))
-      (list "AGENTS.md"
-            (if (file-exists-p (expand-file-name "AGENTS.md" root))
-                'ok
-              'warn)
-            (if (file-exists-p (expand-file-name "AGENTS.md" root))
-                (expand-file-name "AGENTS.md" root)
-              (format "Not found in %s" root)))
+      (let ((files (my-codex-project-instruction-files root)))
+        (list "Project instructions"
+              (if files 'ok 'info)
+              (if files
+                  (mapconcat (lambda (file)
+                               (file-relative-name file root))
+                             files ", ")
+                (format "No effective files found for %s" my-codex-agent))))
       (my-codex--doctor-codex-service-tier))
      (my-codex--doctor-codex-context-rows)
      (list

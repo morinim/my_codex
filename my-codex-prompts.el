@@ -1294,14 +1294,23 @@ Send only a file and line-range reference, not the selected text."
 
 ;;;###autoload
 (defun my-codex-open-project-instructions ()
-  "Open the project agent instruction file, if present."
+  "Open an effective project agent instruction file, if present."
   (interactive)
   (let* ((root (my-codex-project-root))
-         (file (seq-find (lambda (name)
-                           (file-exists-p (expand-file-name name root)))
-                         my-codex-project-instruction-files)))
+         (files (my-codex-project-instruction-files root))
+         (file (pcase files
+                 ('nil nil)
+                 (`(,only) only)
+                 (_ (expand-file-name
+                     (completing-read
+                      "Project instructions: "
+                      (mapcar (lambda (candidate)
+                                (file-relative-name candidate root))
+                              files)
+                      nil t)
+                     root)))))
     (if file
-        (find-file (expand-file-name file root))
+        (find-file file)
       (user-error "No project instruction file found"))))
 
 (defun my-codex-visible-window ()

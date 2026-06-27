@@ -103,9 +103,10 @@ Configure options via `M-x customize-group RET my-codex RET`.
 ;; Layout & build commands
 (setq my-codex-right-width 80)
 (setq my-codex-project-build-command "./setup_build")
-(setq my-codex-project-instruction-files
-      '("AGENTS.md" "CODEX.md" "ANTIGRAVITY.md"
-        ".codex/instructions.md" ".antigravity/instructions.md"))
+(setq my-codex-codex-instruction-fallback-files
+      '("CODEX.md" ".codex/instructions.md"))
+(setq my-codex-antigravity-instruction-files
+      '("ANTIGRAVITY.md" ".antigravity/instructions.md"))
 
 ;; Prompt & warning thresholds
 (setq my-codex-enable-prompt-preview t)
