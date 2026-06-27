@@ -12,8 +12,6 @@
 
 (require 'my-codex-core)
 
-(defvar my-codex--vterm-copy-mode-lighter :unset
-  "Previous `vterm-copy-mode' lighter before my-codex changed it.")
 (defvar vterm-copy-mode)
 
 (defcustom my-codex-enable-vterm-integration t
@@ -86,59 +84,37 @@ the agent emits verbose output.  When nil, do not adjust vterm scrollback."
                  (fboundp mode))
         (funcall mode -1)))))
 
-(defun my-codex--shorten-vterm-copy-mode-lighter ()
-  "Show `vterm-copy-mode' as a short highlighted mode-line lighter."
-  (let ((entry (assq 'vterm-copy-mode minor-mode-alist)))
-    (when entry
-      (when (eq my-codex--vterm-copy-mode-lighter :unset)
-        (setq my-codex--vterm-copy-mode-lighter (cdr entry)))
-      (setcdr entry '((:propertize " Copy" face warning))))))
-
-(defun my-codex--restore-vterm-copy-mode-lighter ()
-  "Restore the previous `vterm-copy-mode' mode-line lighter."
-  (let ((entry (assq 'vterm-copy-mode minor-mode-alist)))
-    (when (and entry
-               (not (eq my-codex--vterm-copy-mode-lighter :unset)))
-      (setcdr entry my-codex--vterm-copy-mode-lighter)
-      (setq my-codex--vterm-copy-mode-lighter :unset))))
-
 (defun my-codex--enable-vterm-buffer-integration ()
-  "Enable my-codex helpers in the current vterm buffer."
-  (my-codex-vterm-override-mode 1)
-  (my-codex--disable-vterm-editing-minor-modes))
+  "Enable my-codex helpers in the current agent vterm buffer."
+  (when (and my-codex-session-id
+             (eq major-mode 'vterm-mode))
+    (my-codex-vterm-override-mode 1)
+    (my-codex--disable-vterm-editing-minor-modes)
+    (add-hook 'vterm-copy-mode-hook
+              #'my-codex--vterm-copy-mode-header-line nil t)))
 
 (defun my-codex--disable-vterm-buffer-integration ()
   "Disable my-codex helpers in the current vterm buffer."
-  (my-codex-vterm-override-mode -1))
+  (my-codex-vterm-override-mode -1)
+  (remove-hook 'vterm-copy-mode-hook
+               #'my-codex--vterm-copy-mode-header-line t)
+  (unless (eq my-codex--vterm-copy-mode-saved-header-line-format :unset)
+    (setq header-line-format
+          my-codex--vterm-copy-mode-saved-header-line-format)
+    (setq my-codex--vterm-copy-mode-saved-header-line-format :unset)))
 
 (defun my-codex--enable-vterm-integration ()
   "Enable my-codex helpers for vterm."
-  (my-codex--shorten-vterm-copy-mode-lighter)
-  (add-hook 'vterm-mode-hook
-            #'my-codex--enable-vterm-buffer-integration)
   (dolist (buffer (buffer-list))
     (with-current-buffer buffer
-      (when (eq major-mode 'vterm-mode)
-        (my-codex--enable-vterm-buffer-integration))))
-  (add-hook 'after-change-major-mode-hook
-            #'my-codex--disable-vterm-editing-minor-modes
-            100)
-  (add-hook 'vterm-copy-mode-hook
-            #'my-codex--vterm-copy-mode-header-line))
+      (my-codex--enable-vterm-buffer-integration))))
 
 (defun my-codex--disable-vterm-integration ()
   "Disable my-codex helpers for vterm."
-  (remove-hook 'vterm-mode-hook
-               #'my-codex--enable-vterm-buffer-integration)
-  (remove-hook 'after-change-major-mode-hook
-               #'my-codex--disable-vterm-editing-minor-modes)
-  (remove-hook 'vterm-copy-mode-hook
-               #'my-codex--vterm-copy-mode-header-line)
   (dolist (buffer (buffer-list))
     (with-current-buffer buffer
       (when (bound-and-true-p my-codex-vterm-override-mode)
         (my-codex--disable-vterm-buffer-integration))))
-  (my-codex--restore-vterm-copy-mode-lighter)
   (force-mode-line-update t))
 
 ;;;###autoload

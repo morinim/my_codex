@@ -1142,6 +1142,7 @@
     (keymap-set copy-map "<f8>" #'ignore)
     (with-temp-buffer
       (let ((major-mode 'vterm-mode)
+            (my-codex-session-id "test-session")
             (minor-mode-map-alist
              (cons (cons 'vterm-copy-mode copy-map) minor-mode-map-alist)))
         (unwind-protect
@@ -1153,6 +1154,31 @@
               (should (eq (key-binding (kbd "S-<insert>"))
                           #'vterm-yank)))
           (my-codex--disable-vterm-buffer-integration))))))
+
+(ert-deftest my-codex-vterm-integration-ignores-non-agent-vterms ()
+  (with-temp-buffer
+    (let ((major-mode 'vterm-mode)
+          (company-mode t)
+          (flyspell-mode t)
+          (display-line-numbers-mode t)
+          (vterm-copy-mode-hook nil))
+      (my-codex--enable-vterm-buffer-integration)
+      (should-not (bound-and-true-p my-codex-vterm-override-mode))
+      (should company-mode)
+      (should flyspell-mode)
+      (should display-line-numbers-mode)
+      (should-not (local-variable-p 'vterm-copy-mode-hook)))))
+
+(ert-deftest my-codex-vterm-copy-mode-hook-is-buffer-local ()
+  (let ((vterm-copy-mode-hook nil))
+    (with-temp-buffer
+      (let ((major-mode 'vterm-mode)
+            (my-codex-session-id "test-session"))
+        (my-codex--enable-vterm-buffer-integration)
+        (should (local-variable-p 'vterm-copy-mode-hook))
+        (should (memq #'my-codex--vterm-copy-mode-header-line
+                      vterm-copy-mode-hook))))
+    (should-not vterm-copy-mode-hook)))
 
 (ert-deftest my-codex-does-not-prebind-vterm-shell ()
   (let* ((script '(progn

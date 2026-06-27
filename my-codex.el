@@ -121,6 +121,9 @@
          buffer session-name project-root access-mode agent)
       (my-codex--mark-default-session
        buffer project-root access-mode agent))
+    (when (bound-and-true-p my-codex-vterm-integration-mode)
+      (with-current-buffer buffer
+        (my-codex--enable-vterm-buffer-integration)))
     buffer))
 
 (defun my-codex--selected-window-is-codex-p ()
