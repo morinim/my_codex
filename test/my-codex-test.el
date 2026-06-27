@@ -1228,7 +1228,8 @@
                              ((symbol-function 'my-codex-project-root)
                               (lambda () default-directory))
                              ((symbol-function 'my-codex--preview-and-send-prompt)
-                              (lambda (prompt) (princ prompt)))
+                              (lambda (prompt &optional _sent-message)
+                                (princ prompt)))
                              ((symbol-function 'use-region-p)
                               (lambda () nil)))
                      (my-codex-ask-with-preset))
@@ -2044,6 +2045,99 @@
                (string-match-p "@src/example\\.el lines 1-3" prompt)))))
       (delete-directory root t))))
 
+(ert-deftest my-codex-region-review-request-defaults-small-modified-regions-inline ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t)))
+        (my-codex-region-reference-threshold-chars 100)
+        seen-default)
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "src/example.el" root))
+          (insert "small region")
+          (cl-letf (((symbol-function 'my-codex-project-root) (lambda () root))
+                    ((symbol-function 'completing-read)
+                     (lambda (_prompt _collection &rest args)
+                       (setq seen-default (nth 4 args))
+                       seen-default)))
+            (pcase-let ((`(,prompt . ,sent-message)
+                         (my-codex--region-review-request
+                          (point-min) (point-max))))
+              (should (equal seen-default "Send inline"))
+              (should (string-match-p "small region" prompt))
+              (should (string-match-p
+                       "Sent inline: approximately [0-9]+ tokens"
+                       sent-message)))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-region-review-request-defaults-large-modified-regions-to-save ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t)))
+        (my-codex-region-reference-threshold-chars 5)
+        seen-default)
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "src/example.el" root))
+          (insert "first\nsecond\n")
+          (cl-letf (((symbol-function 'my-codex-project-root) (lambda () root))
+                    ((symbol-function 'completing-read)
+                     (lambda (_prompt _collection &rest args)
+                       (setq seen-default (nth 4 args))
+                       seen-default))
+                    ((symbol-function 'save-buffer)
+                     (lambda (&rest _) (set-buffer-modified-p nil)))
+                    ((symbol-function 'verify-visited-file-modtime)
+                     (lambda (_buffer) t)))
+            (pcase-let ((`(,prompt . ,sent-message)
+                         (my-codex--region-review-request
+                          (point-min) (point-max))))
+              (should (equal seen-default "Save and send reference"))
+              (should (string-match-p "@src/example\\.el lines 1-2" prompt))
+              (should (equal sent-message
+                             "Sent by file reference: src/example.el lines 1-2")))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-region-review-request-preserves-bounds-across-save-hooks ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t)))
+        (my-codex-region-reference-threshold-chars 5))
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "src/example.el" root))
+          (insert "first\nsecond\n")
+          (cl-letf (((symbol-function 'my-codex-project-root) (lambda () root))
+                    ((symbol-function 'completing-read)
+                     (lambda (&rest _) "Save and send reference"))
+                    ((symbol-function 'save-buffer)
+                     (lambda (&rest _)
+                       (save-excursion
+                         (goto-char (point-min))
+                         (insert "formatted header\n"))
+                       (set-buffer-modified-p nil)))
+                    ((symbol-function 'verify-visited-file-modtime)
+                     (lambda (_buffer) t)))
+            (pcase-let ((`(,prompt . ,sent-message)
+                         (my-codex--region-review-request
+                          (point-min) (point-max))))
+              (should (string-match-p "@src/example\\.el lines 2-3" prompt))
+              (should (equal sent-message
+                             "Sent by file reference: src/example.el lines 2-3")))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-region-review-request-allows-cancelling-modified-regions ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t))))
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "src/example.el" root))
+          (insert "modified region")
+          (cl-letf (((symbol-function 'my-codex-project-root) (lambda () root))
+                    ((symbol-function 'completing-read)
+                     (lambda (&rest _) "Cancel")))
+            (should-error
+             (my-codex--region-review-request (point-min) (point-max))
+             :type 'user-error)))
+      (delete-directory root t))))
+
 (ert-deftest my-codex-region-review-prompt-pastes-unnamed-large-regions ()
   (let ((my-codex-region-reference-threshold-chars 5))
     (with-temp-buffer
@@ -2194,11 +2288,11 @@
       (goto-char (point-min))
       (cl-letf (((symbol-function 'my-codex--region-review-prompt)
                  (lambda (beg end)
-                   (setq sent-beg beg
-                         sent-end end)
+                   (setq sent-beg (marker-position beg)
+                         sent-end (marker-position end))
                    "review prompt"))
                 ((symbol-function 'my-codex--preview-and-send-prompt)
-                 (lambda (prompt)
+                 (lambda (prompt &optional _sent-message)
                    (setq sent-prompt prompt))))
         (my-codex-review-defun-at-point)
         (should (= sent-beg (point-min)))

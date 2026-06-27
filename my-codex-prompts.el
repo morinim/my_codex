@@ -22,6 +22,10 @@
 (defvar my-codex--prompt-preview-origin-window)
 (defvar-local my-codex--prompt-preview-target-buffer nil
   "Agent session buffer targeted by the current prompt preview.")
+(defvar-local my-codex--prompt-preview-sent-message nil
+  "Message to display after sending the current prompt preview.")
+(defvar my-codex--region-send-override nil
+  "Dynamically override region delivery with `reference' or `inline'.")
 (defvar my-codex-project-instruction-files)
 (defvar flycheck-current-errors)
 (defvar flycheck-mode)
@@ -393,6 +397,8 @@ marker, begin marker and end marker before PROMPT is sent."
       (user-error "Prompt is empty"))
     (let ((default-directory root))
       (my-codex-send-prompt prompt my-codex--prompt-preview-target-buffer))
+    (when my-codex--prompt-preview-sent-message
+      (message "%s" my-codex--prompt-preview-sent-message))
     (when (buffer-live-p buffer)
       (kill-buffer buffer))))
 
@@ -405,8 +411,9 @@ marker, begin marker and end marker before PROMPT is sent."
       (select-window origin-window)))
   (message "Agent prompt cancelled."))
 
-(defun my-codex--preview-and-send-prompt (prompt)
-  "Preview PROMPT before sending it to the agent when enabled."
+(defun my-codex--preview-and-send-prompt (prompt &optional sent-message)
+  "Preview PROMPT before sending it to the agent when enabled.
+Display SENT-MESSAGE after the prompt is sent."
   (let* ((root (my-codex-project-root))
          (origin-window (selected-window))
          (target-buffer (my-codex--prompt-target-buffer origin-window)))
@@ -424,6 +431,7 @@ marker, begin marker and end marker before PROMPT is sent."
           (setq default-directory root)
           (setq-local my-codex--prompt-preview-origin-window origin-window)
           (setq-local my-codex--prompt-preview-target-buffer target-buffer)
+          (setq-local my-codex--prompt-preview-sent-message sent-message)
           (my-codex--update-prompt-preview-header)
           (add-hook 'after-change-functions
                     #'my-codex--update-prompt-preview-header nil t)
@@ -433,7 +441,9 @@ marker, begin marker and end marker before PROMPT is sent."
             (use-local-map map))
           (message "%s prompt preview opened."
                    (my-codex--active-agent-label root)))
-      (my-codex-send-prompt prompt target-buffer))))
+      (my-codex-send-prompt prompt target-buffer)
+      (when sent-message
+        (message "%s" sent-message)))))
 
 ;;;###autoload
 (defun my-codex-send-region (beg end)
@@ -441,8 +451,9 @@ marker, begin marker and end marker before PROMPT is sent."
   (interactive "r")
   (unless (use-region-p)
     (user-error "No active region"))
-  (my-codex--preview-and-send-prompt
-   (my-codex--region-review-prompt beg end)))
+  (pcase-let ((`(,prompt . ,sent-message)
+               (my-codex--region-review-request beg end)))
+    (my-codex--preview-and-send-prompt prompt sent-message)))
 
 (defun my-codex--defun-bounds-at-point ()
   "Return the bounds of the defun at point."
@@ -454,8 +465,9 @@ marker, begin marker and end marker before PROMPT is sent."
   "Ask the agent to review the defun at point."
   (interactive)
   (pcase-let ((`(,beg . ,end) (my-codex--defun-bounds-at-point)))
-    (my-codex--preview-and-send-prompt
-     (my-codex--region-review-prompt beg end))))
+    (pcase-let ((`(,prompt . ,sent-message)
+                 (my-codex--region-review-request beg end)))
+      (my-codex--preview-and-send-prompt prompt sent-message))))
 
 ;;;###autoload
 (defun my-codex-send-current-file ()
@@ -1150,12 +1162,95 @@ When SELECTED is nil, return one diagnostic if even one exceeds the budget."
        (verify-visited-file-modtime (current-buffer))
        (my-codex--project-relative-file buffer-file-name
                                         (my-codex-project-root))
-       (pcase my-codex-region-send-policy
-         ('prefer-reference t)
-         ('automatic
-          (and my-codex-region-reference-threshold-chars
-               (> (- end beg) my-codex-region-reference-threshold-chars)))
-         (_ nil))))
+       (pcase my-codex--region-send-override
+         ('reference t)
+         ('inline nil)
+         (_
+          (pcase my-codex-region-send-policy
+            ('prefer-reference t)
+            ('automatic
+             (and my-codex-region-reference-threshold-chars
+                  (> (- end beg) my-codex-region-reference-threshold-chars)))
+            (_ nil))))))
+
+(defun my-codex--region-prefers-reference-p (beg end)
+  "Return non-nil when policy prefers a reference for BEG to END."
+  (pcase my-codex-region-send-policy
+    ('prefer-reference t)
+    ('automatic
+     (and my-codex-region-reference-threshold-chars
+          (> (- end beg) my-codex-region-reference-threshold-chars)))
+    (_ nil)))
+
+(defun my-codex--modified-region-send-choice (beg end)
+  "Choose how to send a modified region between BEG and END.
+Return `reference', `inline', or nil when no choice is needed."
+  (when (and buffer-file-name
+             (buffer-modified-p)
+             (my-codex--project-relative-file buffer-file-name
+                                              (my-codex-project-root))
+             (my-codex--region-prefers-reference-p beg end))
+    (let* ((large (and my-codex-region-reference-threshold-chars
+                       (> (- end beg)
+                          my-codex-region-reference-threshold-chars)))
+           (default (if large "Save and send reference" "Send inline"))
+           (choice (completing-read
+                    "Modified region delivery: "
+                    '("Save and send reference" "Send inline" "Cancel")
+                    nil t nil nil default)))
+      (pcase choice
+        ("Save and send reference" (save-buffer) 'reference)
+        ("Send inline" 'inline)
+        (_ (user-error "Region send cancelled"))))))
+
+(defun my-codex--region-sent-message (beg end mode)
+  "Return a delivery message for region BEG to END sent using MODE."
+  (if (eq mode 'reference)
+      (let ((file (my-codex--project-relative-file
+                   buffer-file-name (my-codex-project-root))))
+        (format "Sent by file reference: %s lines %d-%d"
+                file
+                (line-number-at-pos beg t)
+                (line-number-at-pos (max beg (1- end)) t)))
+    (format "Sent inline: approximately %s tokens"
+            (my-codex--approx-token-count
+             (buffer-substring-no-properties beg end)))))
+
+(defun my-codex--region-review-request (beg end)
+  "Return review prompt and delivery message for BEG to END."
+  (let ((beg-marker (copy-marker beg t))
+        (end-marker (copy-marker end)))
+    (unwind-protect
+        (let* ((choice (my-codex--modified-region-send-choice
+                        beg-marker end-marker))
+               (my-codex--region-send-override choice)
+               (mode (if (my-codex--region-reference-p
+                          beg-marker end-marker)
+                         'reference
+                       'inline)))
+          (cons (my-codex--region-review-prompt beg-marker end-marker)
+                (my-codex--region-sent-message
+                 beg-marker end-marker mode)))
+      (set-marker beg-marker nil)
+      (set-marker end-marker nil))))
+
+(defun my-codex--region-context-request (beg end)
+  "Return prompt context and delivery message for BEG to END."
+  (let ((beg-marker (copy-marker beg t))
+        (end-marker (copy-marker end)))
+    (unwind-protect
+        (let* ((choice (my-codex--modified-region-send-choice
+                        beg-marker end-marker))
+               (my-codex--region-send-override choice)
+               (mode (if (my-codex--region-reference-p
+                          beg-marker end-marker)
+                         'reference
+                       'inline)))
+          (cons (my-codex--region-prompt-context beg-marker end-marker)
+                (my-codex--region-sent-message
+                 beg-marker end-marker mode)))
+      (set-marker beg-marker nil)
+      (set-marker end-marker nil))))
 
 (defun my-codex--region-review-reference-prompt (beg end)
   "Return a region review prompt that references BEG to END by file range."
@@ -1338,15 +1433,18 @@ after the at-sign with `completion-at-point'."
   "Send PRESET, optionally including extra instructions and the active region."
   (let* ((extra (my-codex--read-additional-instructions))
          (has-region (use-region-p))
+         (region-request
+          (when has-region
+            (my-codex--region-context-request
+             (region-beginning) (region-end))))
          (parts (delq nil
                       (list (cdr preset)
                             (unless (string-blank-p extra)
                               extra)
-                            (when has-region
-                              (let ((beg (region-beginning))
-                                    (end (region-end)))
-                                (my-codex--region-prompt-context beg end)))))))
-    (my-codex--preview-and-send-prompt (string-join parts "\n\n"))))
+                            (car region-request)))))
+    (my-codex--preview-and-send-prompt
+     (string-join parts "\n\n")
+     (cdr region-request))))
 
 ;;;###autoload
 (defun my-codex-ask-with-preset ()
