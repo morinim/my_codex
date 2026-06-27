@@ -425,37 +425,35 @@ AGENT identifies the agent profile used for buffer names and metadata."
         (quit-window nil window)))
     (message "%s window hidden" label)))
 
+(defun my-codex--show-default-session (agent access-mode)
+  "Show AGENT's default session using ACCESS-MODE."
+  (my-codex-two-column-layout-with-command
+   (my-codex--agent-command agent access-mode)
+   nil nil agent access-mode))
+
 ;;;###autoload
 (defun my-codex-read-only ()
   "Show the configured agent, starting it in read-only mode if needed."
   (interactive)
-  (my-codex-two-column-layout-with-command
-   (my-codex--agent-command my-codex-agent 'read-only)
-   nil nil my-codex-agent 'read-only))
+  (my-codex--show-default-session my-codex-agent 'read-only))
 
 ;;;###autoload
 (defun my-codex-workspace ()
   "Show the configured agent with workspace write access if needed."
   (interactive)
-  (my-codex-two-column-layout-with-command
-   (my-codex--agent-command my-codex-agent 'workspace-write)
-   nil nil my-codex-agent 'workspace-write))
+  (my-codex--show-default-session my-codex-agent 'workspace-write))
 
 ;;;###autoload
 (defun my-codex-default-read-only (agent)
   "Show the default AGENT session in read-only mode."
   (interactive (list (my-codex--read-agent)))
-  (my-codex-two-column-layout-with-command
-   (my-codex--agent-command agent 'read-only)
-   nil nil agent 'read-only))
+  (my-codex--show-default-session agent 'read-only))
 
 ;;;###autoload
 (defun my-codex-default-workspace (agent)
   "Show the default AGENT session with workspace write access."
   (interactive (list (my-codex--read-agent)))
-  (my-codex-two-column-layout-with-command
-   (my-codex--agent-command agent 'workspace-write)
-   nil nil agent 'workspace-write))
+  (my-codex--show-default-session agent 'workspace-write))
 
 (defun my-codex--read-session-access-mode ()
   "Read and return an access mode for a new named session."
