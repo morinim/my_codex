@@ -684,18 +684,6 @@ IMPLEMENTATION-RELATIVE and TEST-RELATIVE are project-relative file names."
     (setq text (replace-regexp-in-string "\n" "\\\\n" text t t))
     (format "\"%s\"" text)))
 
-(defun my-codex--yaml-list (values indent)
-  "Return VALUES as a YAML list indented by INDENT spaces."
-  (if values
-      (mapconcat
-       (lambda (value)
-         (format "%s- %s"
-                 (make-string indent ?\s)
-                 (my-codex--yaml-string value)))
-       values
-       "\n")
-    (format "%s[]" (make-string indent ?\s))))
-
 (defun my-codex--yaml-literal-block (text indent)
   "Return TEXT as YAML literal block content indented by INDENT spaces."
   (let ((prefix (make-string indent ?\s)))
@@ -886,8 +874,8 @@ and CONTEXT-LINES controls the excerpt radius for modified xref buffers."
       (let ((key (my-codex--flycheck-diagnostic-key diagnostic root)))
         (unless (gethash key seen)
           (puthash key t seen)
-          (setq unique (append unique (list diagnostic))))))
-    unique))
+          (push diagnostic unique))))
+    (nreverse unique)))
 
 (defun my-codex--flycheck-group-key (diagnostic root)
   "Return a repeated-message grouping key for DIAGNOSTIC under ROOT."

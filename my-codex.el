@@ -17,7 +17,7 @@
 ;;; Commentary:
 
 ;; my-codex.el runs OpenAI Codex CLI or Google Antigravity inside an Emacs
-;; vterm buffer.  It provides a two-column layout, project-specific agent
+;; vterm buffer. It provides a two-column layout, project-specific agent
 ;; sessions, helpers for Git diffs, selected regions, diagnostics, build
 ;; output, and compiler or test errors.
 
