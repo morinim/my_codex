@@ -196,8 +196,8 @@ VTERM-LOADABLE is non-nil when `vterm' can be loaded."
         (match-string 2 line)
         (match-string 3 line))))
 
-(defun my-codex--doctor-codex-effective-service-tier ()
-  "Return the effective Codex CLI service_tier in the current buffer.
+(defun my-codex--doctor-codex-user-service-tier ()
+  "Return the Codex CLI user-level service_tier in the current buffer.
 The result is a cons of (TIER . SOURCE), or nil when unset."
   (let (active-profile top-tier top-source profile-tiers current-profile
                        (current-section 'top))
@@ -233,8 +233,8 @@ The result is a cons of (TIER . SOURCE), or nil when unset."
       (when top-tier
         (cons top-tier top-source)))))
 
-(defun my-codex--doctor-codex-effective-integer-setting (key)
-  "Return the effective Codex CLI integer setting KEY in the current buffer.
+(defun my-codex--doctor-codex-user-integer-setting (key)
+  "Return the Codex CLI user-level integer setting KEY in the current buffer.
 The result is a cons of (VALUE . SOURCE), or nil when unset."
   (let (active-profile top-value top-source profile-values current-profile
                        (current-section 'top))
@@ -282,26 +282,26 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
   (let ((config-file (or file (my-codex--doctor-codex-config-file))))
     (cond
      ((not (file-exists-p config-file))
-      (list "Codex service_tier" 'ok
-            "Not configured; Codex default applies"))
+      (list "Codex user config: service_tier" 'ok
+            "Not found in user-level config; another configuration layer may override it"))
      ((not (file-readable-p config-file))
-      (list "Codex service_tier" 'warn
+      (list "Codex user config: service_tier" 'warn
             (format "Cannot read %s" config-file)))
      (t
       (with-temp-buffer
         (insert-file-contents config-file)
         (if-let ((tier-source
-                  (my-codex--doctor-codex-effective-service-tier)))
+                  (my-codex--doctor-codex-user-service-tier)))
             (let ((tier (car tier-source))
                   (source (cdr tier-source)))
               (if (string= tier "fast")
-                  (list "Codex service_tier" 'warn
+                  (list "Codex user config: service_tier" 'warn
                         (format "fast in %s uses priority processing and increases costs; use it only when lower latency is worth it"
                                 source))
-                (list "Codex service_tier" 'ok
+                (list "Codex user config: service_tier" 'ok
                       (format "Configured as %S in %s" tier source))))
-          (list "Codex service_tier" 'ok
-                "Not configured; Codex default applies")))))))
+          (list "Codex user config: service_tier" 'ok
+                "Not found in user-level config; another configuration layer may override it")))))))
 
 (defun my-codex--doctor-grouped-number (number)
   "Return NUMBER formatted with comma digit grouping."
@@ -318,32 +318,37 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
   (let ((config-file (or file (my-codex--doctor-codex-config-file))))
     (cond
      ((not (file-exists-p config-file))
-      (list label 'ok "default applies"))
+      (list label 'ok
+            "Not found in user-level config; another configuration layer may override it"))
      ((not (file-readable-p config-file))
       (list label 'warn (format "Cannot read %s" config-file)))
      (t
       (with-temp-buffer
         (insert-file-contents config-file)
         (if-let ((value-source
-                  (my-codex--doctor-codex-effective-integer-setting key)))
+                  (my-codex--doctor-codex-user-integer-setting key)))
             (let ((value (my-codex--doctor-grouped-number
                           (car value-source))))
               (list label 'ok
                     (if unit
                         (format "%s %s" value unit)
                       value)))
-          (list label 'ok "default applies")))))))
+          (list label 'ok
+                "Not found in user-level config; another configuration layer may override it")))))))
 
 (defun my-codex--doctor-codex-context-rows (&optional file)
   "Return diagnostic rows for Codex context-related config in FILE."
   (list
    (my-codex--doctor-codex-integer-setting
-    "tool_output_token_limit" "Codex tool_output_token_limit" "tokens" file)
-   (my-codex--doctor-codex-integer-setting
-    "model_auto_compact_token_limit" "Codex model_auto_compact_token_limit"
+    "tool_output_token_limit" "Codex user config: tool_output_token_limit"
     "tokens" file)
    (my-codex--doctor-codex-integer-setting
-    "project_doc_max_bytes" "Codex project_doc_max_bytes" "bytes" file)))
+    "model_auto_compact_token_limit"
+    "Codex user config: model_auto_compact_token_limit"
+    "tokens" file)
+   (my-codex--doctor-codex-integer-setting
+    "project_doc_max_bytes" "Codex user config: project_doc_max_bytes"
+    "bytes" file)))
 
 (defun my-codex--doctor-codex-rows ()
   "Return Codex-specific diagnostic rows."

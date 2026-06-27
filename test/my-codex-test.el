@@ -2527,7 +2527,7 @@
           (should
             (equal
              (my-codex--doctor-codex-service-tier config)
-             '("Codex service_tier" warn
+             '("Codex user config: service_tier" warn
               "fast in top level uses priority processing and increases costs; use it only when lower latency is worth it"))))
       (delete-file config))))
 
@@ -2540,7 +2540,7 @@
           (should
            (equal
             (my-codex--doctor-codex-service-tier config)
-            '("Codex service_tier" ok
+            '("Codex user config: service_tier" ok
               "Configured as \"auto\" in top level"))))
       (delete-file config))))
 
@@ -2556,7 +2556,7 @@
           (should
             (equal
              (my-codex--doctor-codex-service-tier)
-             '("Codex service_tier" warn
+             '("Codex user config: service_tier" warn
               "fast in top level uses priority processing and increases costs; use it only when lower latency is worth it"))))
       (delete-directory codex-home t))))
 
@@ -2575,7 +2575,7 @@
           (should
            (equal
             (my-codex--doctor-codex-service-tier config)
-            '("Codex service_tier" ok
+            '("Codex user config: service_tier" ok
               "Configured as \"auto\" in profile \"default\""))))
       (delete-file config))))
 
@@ -2595,7 +2595,7 @@
           (should
             (equal
              (my-codex--doctor-codex-service-tier config)
-             '("Codex service_tier" warn
+             '("Codex user config: service_tier" warn
               "fast in profile \"fast-profile\" uses priority processing and increases costs; use it only when lower latency is worth it"))))
       (delete-file config))))
 
@@ -2605,8 +2605,8 @@
     (should
      (equal
       (my-codex--doctor-codex-service-tier config)
-      '("Codex service_tier" ok
-        "Not configured; Codex default applies")))))
+      '("Codex user config: service_tier" ok
+        "Not found in user-level config; another configuration layer may override it")))))
 
 (ert-deftest my-codex-doctor-codex-context-rows-report-configured-values ()
   (let ((config (make-temp-file "my-codex-config-" nil ".toml")))
@@ -2618,9 +2618,10 @@
           (should
            (equal
             (my-codex--doctor-codex-context-rows config)
-            '(("Codex tool_output_token_limit" ok "8,000 tokens")
-              ("Codex model_auto_compact_token_limit" ok "120,000 tokens")
-              ("Codex project_doc_max_bytes" ok "default applies")))))
+            '(("Codex user config: tool_output_token_limit" ok "8,000 tokens")
+              ("Codex user config: model_auto_compact_token_limit" ok "120,000 tokens")
+              ("Codex user config: project_doc_max_bytes" ok
+               "Not found in user-level config; another configuration layer may override it")))))
       (delete-file config))))
 
 (ert-deftest my-codex-doctor-codex-context-rows-honour-active-profile ()
@@ -2636,9 +2637,11 @@
           (should
            (equal
             (my-codex--doctor-codex-context-rows config)
-            '(("Codex tool_output_token_limit" ok "4,000 tokens")
-              ("Codex model_auto_compact_token_limit" ok "default applies")
-              ("Codex project_doc_max_bytes" ok "default applies")))))
+            '(("Codex user config: tool_output_token_limit" ok "4,000 tokens")
+              ("Codex user config: model_auto_compact_token_limit" ok
+               "Not found in user-level config; another configuration layer may override it")
+              ("Codex user config: project_doc_max_bytes" ok
+               "Not found in user-level config; another configuration layer may override it")))))
       (delete-file config))))
 
 (ert-deftest my-codex-doctor-agent-rows-use-profile-callback ()
