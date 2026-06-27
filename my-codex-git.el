@@ -53,7 +53,7 @@
   :group 'my-codex)
 
 (defcustom my-codex-commit-message-prompt-template
-  "Inspect the staged Git diff using `git diff --cached -- .` and write a concise conventional commit message.
+  "Inspect the staged Git diff using `git diff -U1 --cached -- .` and write a concise conventional commit message.
 
 Use an imperative subject and a short explanatory body when useful. Limit each line to %d columns. Do not edit files.\n"
   "Prompt template used by `my-codex-commit-message-from-diff'.
