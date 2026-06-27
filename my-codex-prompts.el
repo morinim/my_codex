@@ -39,11 +39,10 @@ Identify missing edge cases, unhandled exceptions, logical flaws and important b
   :type 'natnum
   :group 'my-codex)
 
-(defcustom my-codex-context-token-budget 2000
-  "Approximate token budget for generated prompt context.
-When nil, generated context is not capped by token budget.  Specific
-features may still apply their own item-count limits."
-  :type '(choice (const :tag "No context token budget" nil)
+(defcustom my-codex-diagnostics-token-budget 2000
+  "Approximate token budget for generated diagnostics context.
+When nil, diagnostics context is not capped by token budget."
+  :type '(choice (const :tag "No diagnostics token budget" nil)
                  natnum)
   :group 'my-codex)
 
@@ -1067,7 +1066,7 @@ When SELECTED is nil, return one diagnostic if even one exceeds the budget."
          (groups (my-codex--flycheck-group-diagnostics unique root))
          (selected-groups
           (my-codex--flycheck-select-groups
-           groups limit my-codex-context-token-budget))
+           groups limit my-codex-diagnostics-token-budget))
          (diagnostics-context
           (my-codex--flycheck-groups-context selected-groups))
          (included
@@ -1094,8 +1093,8 @@ When SELECTED is nil, return one diagnostic if even one exceeds the budget."
      unique-total
      included
      omitted
-     (if my-codex-context-token-budget
-         (number-to-string my-codex-context-token-budget)
+     (if my-codex-diagnostics-token-budget
+         (number-to-string my-codex-diagnostics-token-budget)
        "unlimited")
      (my-codex--approx-token-count diagnostics-context)
      (if truncated "true" "false")

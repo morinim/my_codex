@@ -2700,7 +2700,7 @@ Do not modify files."))))
 
 (ert-deftest my-codex-flycheck-diagnostics-prompt-obeys-context-budget ()
   (let ((my-codex-flycheck-diagnostics-limit 100)
-        (my-codex-context-token-budget 80)
+        (my-codex-diagnostics-token-budget 80)
         (diagnostics
          '((:line 1 :column 1 :level error :checker mock :message "short")
            (:line 2 :column 1 :level error :checker mock
@@ -2721,7 +2721,7 @@ Do not modify files."))))
 
 (ert-deftest my-codex-flycheck-diagnostics-prompt-keeps-one-tight-budget ()
   (let ((my-codex-flycheck-diagnostics-limit 100)
-        (my-codex-context-token-budget 1)
+        (my-codex-diagnostics-token-budget 1)
         (diagnostics
          '((:line 1 :column 1 :level error :checker mock
             :message "verbose diagnostic that exceeds the tiny budget")
@@ -2741,7 +2741,7 @@ Do not modify files."))))
 
 (ert-deftest my-codex-flycheck-diagnostics-prompt-caps-first-repeated-group ()
   (let ((my-codex-flycheck-diagnostics-limit 100)
-        (my-codex-context-token-budget 10)
+        (my-codex-diagnostics-token-budget 10)
         (diagnostics
          '((:line 1 :column 1 :level error :checker mock :message "repeat")
            (:line 2 :column 1 :level error :checker mock :message "repeat")
