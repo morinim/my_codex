@@ -30,7 +30,7 @@ It keeps your code on the left and the active agent CLI on the right, providing 
 - **Refactoring & Coverage**: draft low-risk refactoring plans for file ranges and analyze implementation files against tests for missing coverage.
 - **Integration Tools**: export session transcripts, summarize conversations into Markdown notes, and draft commits or GitHub issues directly from Emacs.
 - **Interactive UI**: insert agent output back into your code, and open clickable file references and URLs directly from the terminal.
-- **Diagnostics**: verify Emacs, agent binaries, vterm, and Git configuration using the `my-codex-doctor` health check.
+- **Diagnostics**: verify Emacs, agent binaries, vterm, and Git availability using the `my-codex-doctor` health check.
 
 The package treats token cost as part of the workflow: it limits generated
 project context, warns before oversized prompts, references saved project-file
@@ -65,7 +65,7 @@ Press `F8` to open the agent command menu.
 - `F8 o` / `F8 w` : start/show the default read-only or workspace-write session.
 - `F8 S o` / `F8 S w` : select an agent, then start its default read-only or write session.
 - `F8 S n` : start or show a named session with a selected agent and access mode.
-- `F8 S l` / `F8 S q` / `F8 S r` : list open sessions, hide the selected session window, or resume a previous session.
+- `F8 S l` / `F8 S q` / `F8 S r` : list open sessions, hide the selected session window, or resume the configured agent's previous session.
 - `F8 r` / `F8 q` : resume a previous session, or hide the active agent window.
 
 ### Prompts & Refactoring
