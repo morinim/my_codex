@@ -916,7 +916,7 @@
                              (car started)))))
       (delete-directory root t))))
 
-(ert-deftest my-codex-hide-session-window-hides-associated-session ()
+(ert-deftest my-codex-hide-window-hides-associated-session ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-hide" t)))
         (default-buffer (get-buffer-create "*codex-default-test*"))
         (session-buffer (get-buffer-create "*codex-session-test*"))
@@ -940,7 +940,7 @@
                     ((symbol-function 'quit-window)
                      (lambda (&optional _kill window)
                        (setq hidden (window-buffer window)))))
-            (my-codex-hide-session-window)
+            (my-codex-hide-window)
             (should (eq hidden session-buffer))))
       (set-window-parameter
        (selected-window) 'my-codex-term-buffer nil)

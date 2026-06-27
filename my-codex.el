@@ -425,27 +425,6 @@ AGENT identifies the agent profile used for buffer names and metadata."
         (quit-window nil window)))
     (message "%s window hidden" label)))
 
-(defun my-codex--session-layout-buffer ()
-  "Return the agent buffer associated with the selected session layout."
-  (my-codex-active-session-buffer))
-
-;;;###autoload
-(defun my-codex-hide-session-window ()
-  "Hide visible windows showing the selected agent session buffer."
-  (interactive)
-  (let* ((buffer (my-codex--session-layout-buffer))
-         (label (with-current-buffer buffer
-                  (if my-codex-session-agent
-                      (my-codex--agent-label my-codex-session-agent)
-                    (my-codex--active-agent-label))))
-         (windows (get-buffer-window-list buffer nil t)))
-    (unless windows
-      (user-error "%s window is not visible" label))
-    (dolist (window windows)
-      (when (window-live-p window)
-        (quit-window nil window)))
-    (message "%s window hidden" label)))
-
 ;;;###autoload
 (defun my-codex-read-only ()
   "Show the configured agent, starting it in read-only mode if needed."
@@ -592,7 +571,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (my-codex-top "l" "Dashboard" "Session" :prefix my-codex-session-transient :path "S" :menu "Session dashboard" :help "Display a dashboard of all agent sessions")
       (my-codex-new-session "n" "New named" "Session" :prefix my-codex-session-transient :path "S" :menu "New named session" :help "Start or show a named agent session")
       (my-codex-resume "r" "Resume" "Session" :prefix my-codex-session-transient)
-      (my-codex-hide-session-window "q" "Hide agent" "Session" :prefix my-codex-session-transient :path "S" :menu "Hide selected session window" :help "Hide the agent window associated with the selected session")
+      (my-codex-hide-window "q" "Hide agent" "Session" :prefix my-codex-session-transient :path "S" :menu "Hide selected session window" :help "Hide the agent window associated with the selected session")
       (my-codex-send-project-overview "p" "Project overview" "Tools" :prefix my-codex-tools-transient :path "T" :menu "Project overview" :help "Send the active agent a compact project overview")
       (my-codex-export-session-to-markdown "X" "Export session" "Tools" :prefix my-codex-tools-transient :path "T" :menu "Export session" :help "Export the current agent session transcript to Markdown")
       (my-codex-diagnostics-transient "E" "Diagnostics" "Tools" :prefix my-codex-tools-transient :path "T" :menu "Diagnostics" :help "Open diagnostic explanation commands")
