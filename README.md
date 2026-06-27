@@ -96,9 +96,6 @@ Configure options via `M-x customize-group RET my-codex RET`.
 ;; Set the default agent profile
 (setq my-codex-agent 'antigravity)
 
-;; Ask agents to answer and generate output in a preferred language
-(setq my-codex-language "Italian")
-
 ;; Customize agent launch commands
 (setq my-codex-antigravity-workspace-command "agy --sandbox")
 (setq my-codex-antigravity-resume-command "agy resume")

@@ -115,13 +115,7 @@
         (my-codex--track-process-output-time proc)
         (goto-char (point-max))
         (vterm-send-string (my-codex--shell-command-and-exit command))
-        (vterm-send-return)
-        (when (and my-codex-language (not (string-empty-p my-codex-language)))
-          (vterm-send-string
-           (format "Please answer and generate all output (including commit messages, summaries, reviews, refactorings, etc.) in %s."
-                   my-codex-language)
-           t)
-          (vterm-send-return))))
+        (vterm-send-return)))
     (if session-name
         (my-codex--mark-named-session
          buffer session-name project-root access-mode agent)

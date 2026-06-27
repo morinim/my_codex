@@ -88,15 +88,6 @@ different profile interactively."
   :type 'symbol
   :group 'my-codex)
 
-(defcustom my-codex-language nil
-  "Language in which the agent should answer and generate output.
-When nil, the default language (typically English) is used.
-When set to a string (e.g. \"Italian\", \"French\", \"Spanish\"), the agent
-is instructed at startup to answer and generate output in that language."
-  :type '(choice (const :tag "Default (English)" nil)
-                 string)
-  :group 'my-codex)
-
 (defcustom my-codex-agent-profiles
   '((codex
      :label "Codex"
