@@ -113,7 +113,7 @@ Configure options via `M-x customize-group RET my-codex RET`.
 ;; Prompt & warning thresholds
 (setq my-codex-enable-prompt-preview t)
 (setq my-codex-region-send-policy 'prefer-reference)
-(setq my-codex-large-prompt-warning-chars 12000)
+(setq my-codex-prompt-warning-tokens 4000)
 (setq my-codex-warn-about-unsaved-project-buffers t)
 ```
 

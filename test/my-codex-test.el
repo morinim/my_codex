@@ -1650,25 +1650,25 @@
       (delete-directory root t))))
 
 (ert-deftest my-codex-check-prompt-size-allows-small-prompts ()
-  (let ((my-codex-large-prompt-warning-chars 10)
-        (my-codex-large-prompt-error-chars nil))
+  (let ((my-codex-prompt-warning-tokens 10)
+        (my-codex-prompt-error-tokens nil))
     (should-not (my-codex--check-prompt-size "small"))))
 
 (ert-deftest my-codex-check-prompt-size-can-disable-warning ()
-  (let ((my-codex-large-prompt-warning-chars nil)
-        (my-codex-large-prompt-error-chars nil))
+  (let ((my-codex-prompt-warning-tokens nil)
+        (my-codex-prompt-error-tokens nil))
     (should-not (my-codex--check-prompt-size "this is large"))))
 
 (ert-deftest my-codex-check-prompt-size-confirms-large-prompts ()
-  (let ((my-codex-large-prompt-warning-chars 5)
-        (my-codex-large-prompt-error-chars nil))
+  (let ((my-codex-prompt-warning-tokens 4)
+        (my-codex-prompt-error-tokens nil))
     (cl-letf (((symbol-function 'y-or-n-p)
                (lambda (_prompt) t)))
       (should-not (my-codex--check-prompt-size "this is large")))))
 
 (ert-deftest my-codex-check-prompt-size-cancels-large-prompts ()
-  (let ((my-codex-large-prompt-warning-chars 5)
-        (my-codex-large-prompt-error-chars nil))
+  (let ((my-codex-prompt-warning-tokens 4)
+        (my-codex-prompt-error-tokens nil))
     (cl-letf (((symbol-function 'y-or-n-p)
                (lambda (_prompt) nil)))
       (should-error
@@ -1676,8 +1676,8 @@
        :type 'user-error))))
 
 (ert-deftest my-codex-check-prompt-size-enforces-hard-limit ()
-  (let ((my-codex-large-prompt-warning-chars nil)
-        (my-codex-large-prompt-error-chars 5))
+  (let ((my-codex-prompt-warning-tokens nil)
+        (my-codex-prompt-error-tokens 4))
     (should-error
      (my-codex--check-prompt-size "this is large")
      :type 'user-error)))

@@ -69,15 +69,15 @@ Finish with the smallest safe first edit worth making."
   :type 'boolean
   :group 'my-codex)
 
-(defcustom my-codex-large-prompt-warning-chars 12000
-  "Prompt size in characters that requires confirmation before sending.
+(defcustom my-codex-prompt-warning-tokens 4000
+  "Approximate prompt size in tokens that requires confirmation before sending.
 When nil, do not warn about large prompts."
   :type '(choice (const :tag "Do not warn" nil)
                  natnum)
   :group 'my-codex)
 
-(defcustom my-codex-large-prompt-error-chars nil
-  "Prompt size in characters that is refused before sending.
+(defcustom my-codex-prompt-error-tokens nil
+  "Approximate prompt size in tokens that is refused before sending.
 When nil, do not enforce a hard prompt size limit."
   :type '(choice (const :tag "No hard limit" nil)
                  natnum)
@@ -286,14 +286,14 @@ session is available."
 
 (defun my-codex--check-prompt-size (prompt)
   "Raise or ask for confirmation when PROMPT is unusually large."
-  (let ((size (length prompt)))
-    (when (and my-codex-large-prompt-error-chars
-               (> size my-codex-large-prompt-error-chars))
-      (user-error "Prompt is too large to send (%s; limit is %d chars)"
+  (let ((tokens (my-codex--approx-token-count prompt)))
+    (when (and my-codex-prompt-error-tokens
+               (> tokens my-codex-prompt-error-tokens))
+      (user-error "Prompt is too large to send (%s; limit is approx. %d tokens)"
                   (my-codex--prompt-size-description prompt)
-                  my-codex-large-prompt-error-chars))
-    (when (and my-codex-large-prompt-warning-chars
-               (> size my-codex-large-prompt-warning-chars)
+                  my-codex-prompt-error-tokens))
+    (when (and my-codex-prompt-warning-tokens
+               (> tokens my-codex-prompt-warning-tokens)
                (not (y-or-n-p
                      (format "Send large %s prompt (%s)? "
                              (my-codex--active-agent-label)
