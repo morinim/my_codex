@@ -671,9 +671,9 @@ Clear request state in CODEX-BUFFER after a successful commit when it is live."
                    :noquery t
                    :sentinel
                    (lambda (proc event)
-                     (when (memq (process-status proc) '(exit signal))
-                       (let ((status (process-exit-status proc))
-                             (buffer (process-buffer proc)))
+                     (when-let ((result (my-codex--process-result proc)))
+                       (let ((status (car result))
+                             (buffer (cdr result)))
                          (my-codex--delete-temp-file file)
                          (if (zerop status)
                              (progn
@@ -702,12 +702,6 @@ Clear request state in CODEX-BUFFER after a successful commit when it is live."
       (error
        (my-codex--delete-temp-file file)
        (signal (car err) (cdr err))))))
-
-(defun my-codex--delete-temp-file (file)
-  "Delete temporary FILE, reporting cleanup failures as messages."
-  (when file
-    (with-demoted-errors "Failed to delete temporary file: %S"
-      (delete-file file))))
 
 (defun my-codex--wait-for-commit-message
     (buffer start-point root &optional staged-signature attempts)

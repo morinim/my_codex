@@ -71,9 +71,9 @@ Preserve concrete file names, command names, and technical details. Do not edit 
 
 (defun my-codex--github-issue-list-sentinel (proc _event)
   "Handle completion of open issue list process PROC."
-  (when (memq (process-status proc) '(exit signal))
-    (let ((status (process-exit-status proc))
-          (buffer (process-buffer proc))
+  (when-let ((result (my-codex--process-result proc)))
+    (let ((status (car result))
+          (buffer (cdr result))
           (content-start (process-get proc 'my-codex-content-start)))
       (when (buffer-live-p buffer)
         (with-current-buffer buffer
@@ -176,12 +176,12 @@ Preserve concrete file names, command names, and technical details. Do not edit 
 
 (defun my-codex--github-issue-process-sentinel (proc _event)
   "Handle completion of GitHub issue creation process PROC."
-  (when (memq (process-status proc) '(exit signal))
-    (let ((status (process-exit-status proc))
-          (buffer (process-buffer proc))
+  (when-let ((result (my-codex--process-result proc)))
+    (let ((status (car result))
+          (buffer (cdr result))
           (file (process-get proc 'my-codex-temp-file))
           (draft-buffer (process-get proc 'my-codex-draft-buffer)))
-      (my-codex--github-delete-temp-file file)
+      (my-codex--delete-temp-file file)
       (if (zerop status)
           (progn
             (when (buffer-live-p buffer)
@@ -238,14 +238,8 @@ Preserve concrete file names, command names, and technical details. Do not edit 
               (message "Creating GitHub issue with gh...")
               process)))
       (error
-       (my-codex--github-delete-temp-file file)
+       (my-codex--delete-temp-file file)
        (signal (car err) (cdr err))))))
-
-(defun my-codex--github-delete-temp-file (file)
-  "Delete temporary FILE, reporting cleanup failures as messages."
-  (when file
-    (with-demoted-errors "Failed to delete temporary file: %S"
-      (delete-file file))))
 
 (defun my-codex--github-issue-draft-fields ()
   "Return the edited GitHub issue draft fields in the current buffer."

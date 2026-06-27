@@ -1002,6 +1002,17 @@ the extracted text.  ATTEMPTS tracks polling cycles."
       (replace-match "\n\n\n"))
     (string-trim (buffer-string))))
 
+(defun my-codex--delete-temp-file (file)
+  "Delete temporary FILE, reporting cleanup failures as messages."
+  (when file
+    (with-demoted-errors "Failed to delete temporary file: %S"
+      (delete-file file))))
+
+(defun my-codex--process-result (process)
+  "Return (STATUS . BUFFER) when PROCESS has finished, or nil otherwise."
+  (when (memq (process-status process) '(exit signal))
+    (cons (process-exit-status process) (process-buffer process))))
+
 (defun my-codex-buffer ()
   "Return the current project's agent backend buffer, or raise an error."
   (let* ((backend (my-codex--current-backend))
