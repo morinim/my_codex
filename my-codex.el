@@ -556,108 +556,123 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     (message "Asked %s to summarize the session; waiting to open editor."
              (my-codex--active-agent-label root))))
 
+(eval-and-compile
+  (defconst my-codex-command-catalogue
+    '((my-codex-read-only "o" "Read-only" "Session" :menu "Show/start read-only" :help "Show the configured agent in read-only mode")
+      (my-codex-workspace "w" "Workspace" "Session" :menu "Show/start workspace-write" :help "Show the configured agent with workspace write access")
+      (my-codex-session-transient "S" "Sessions" "Session" :menu "Session commands" :help "Open default and future agent session commands")
+      (my-codex-resume "r" "Resume" "Session" :menu "Resume session" :help "Resume a previous agent session")
+      (my-codex-hide-window "q" "Hide agent" "Session" :menu "Hide agent window" :help "Hide the visible agent window")
+      (my-codex-toggle-focus "<tab>" "Toggle focus" "Session" :menu "Toggle focus" :menu-key "TAB" :help "Toggle focus between the agent and the previous window")
+      (my-codex-toggle-focus "TAB" nil nil)
+      (my-codex-ask "a" "Ask" "Send" :menu "Ask agent..." :help "Prompt for a question and send it to the active agent")
+      (my-codex-ask-preset-transient "A" "Preset menu" "Send" :menu "Preset menu" :help "Open the prompt preset menu")
+      (my-codex-send-region "s" "Region" "Send" :menu "Send selected region" :active (use-region-p) :help "Send the selected region to the active agent")
+      (my-codex-send-region "<right>" "Region" "Send")
+      (my-codex-plan-refactor-region "R" "Refactor plan" "Send" :menu "Plan refactor for selected region" :active (and (use-region-p) buffer-file-name) :help "Ask the active agent for a low-risk refactoring plan")
+      (my-codex-insert-selection-into-code "<left>" "Insert selection" "Send" :menu "Insert selection" :menu-key "Left" :help "Insert the captured agent selection into the code buffer")
+      (my-codex-review-defun-at-point "f" "Current defun" "Send" :menu "Review current defun" :help "Ask the active agent to review the defun at point")
+      (my-codex-send-current-file "F" "Current file" "Send" :menu "Inspect current file" :active buffer-file-name :help "Ask the active agent to inspect the current file directly")
+      (my-codex-analyse-test-coverage "C" "Coverage gaps" "Send" :menu "Analyse test coverage" :active buffer-file-name :help "Ask the active agent to analyse missing test scenarios")
+      (my-codex-explain-symbol-at-point "x" "Explain symbol" "Send" :menu "Explain symbol at point" :active buffer-file-name :help "Ask the active agent to explain the symbol at point")
+      (my-codex-send-git-diff "g" "Review diff" "Git" :menu "Review Git diff" :help "Ask the active agent to review the current Git diff")
+      (my-codex-send-git-staged-diff "G" "Review staged diff" "Git" :menu "Review staged Git diff" :help "Ask the active agent to review the staged Git diff")
+      (my-codex-review-current-file-diff "l" "Review current-file diff" "Git" :menu "Review current-file Git diff" :available my-codex--current-or-left-file-available-p :transient-available my-codex--current-or-left-file-available-p :help "Ask the active agent to review only the current file's Git diff")
+      (my-codex-show-git-diff "v" "View diff" "Git" :menu "View Git diff" :help "Show the current Git diff in a diff-mode buffer")
+      (my-codex-show-git-staged-diff "V" "View staged diff" "Git" :menu "View staged Git diff" :help "Show the staged Git diff in a diff-mode buffer")
+      (my-codex-ediff-current-file-against-head "d" "Ediff current file" "Git" :menu "Ediff current file against HEAD" :available my-codex--current-or-left-file-available-p :help "Review the current file's uncommitted changes against HEAD")
+      (my-codex-ediff-changed-file-against-head "D" "Ediff changed file" "Git" :menu "Ediff changed file against HEAD" :help "Choose a tracked changed file and review it against HEAD")
+      (my-codex-git-commit-with-latest-message "c" "Commit with agent message" "Git" :menu "Edit commit with agent message" :help "Use the latest agent commit message, or ask for one, then edit before committing")
+      (my-codex-explain-region-as-error "e" "Explain error" "Context" :menu "Explain selected error" :active (use-region-p) :help "Ask the active agent to explain the selected compiler/test error")
+      (my-codex-open-project-instructions "i" "Project instructions" "Context" :menu "Open project instructions" :help "Open AGENTS.md, CODEX.md, or .codex/instructions.md")
+      (my-codex-summarize-session-to-markdown "M" "Summarize session" "Context" :menu "Summarize session to Markdown" :help "Ask the active agent to summarize the conversation as Markdown notes")
+      (my-codex-tools-transient "T" "Tools" "Context")
+      (my-codex-default-read-only "o" "Read-only" "Default session" :prefix my-codex-session-transient :path "S" :menu "Show/start default read-only" :help "Show the default agent session in read-only mode")
+      (my-codex-default-workspace "w" "Workspace" "Default session" :prefix my-codex-session-transient :path "S" :menu "Show/start default workspace-write" :help "Show the default agent session with workspace write access")
+      (my-codex-top "l" "Dashboard" "Session" :prefix my-codex-session-transient :path "S" :menu "Session dashboard" :help "Display a dashboard of all agent sessions")
+      (my-codex-new-session "n" "New named" "Session" :prefix my-codex-session-transient :path "S" :menu "New named session" :help "Start or show a named agent session")
+      (my-codex-resume "r" "Resume" "Session" :prefix my-codex-session-transient)
+      (my-codex-hide-session-window "q" "Hide agent" "Session" :prefix my-codex-session-transient :path "S" :menu "Hide selected session window" :help "Hide the agent window associated with the selected session")
+      (my-codex-send-project-overview "p" "Project overview" "Tools" :prefix my-codex-tools-transient :path "T" :menu "Project overview" :help "Send the active agent a compact project overview")
+      (my-codex-export-session-to-markdown "X" "Export session" "Tools" :prefix my-codex-tools-transient :path "T" :menu "Export session" :help "Export the current agent session transcript to Markdown")
+      (my-codex-diagnostics-transient "E" "Diagnostics" "Tools" :prefix my-codex-tools-transient :path "T" :menu "Diagnostics" :help "Open diagnostic explanation commands")
+      (my-codex-doctor "!" "Doctor" "Tools" :prefix my-codex-tools-transient :path "T" :menu "Doctor" :help "Check Emacs, agent, vterm, Git, gh, project, configuration, and terminal startup")
+      (my-codex-list-open-issues "t" "List issues" "GitHub" :menu "List issues" :help "List open GitHub issues for the current repository in a buffer")
+      (my-codex-summarize-session-to-github-issue "I" "Draft issue" "GitHub" :menu "Draft issue" :help "Ask the active agent to draft a GitHub issue, then edit it before creating it with gh")
+      (my-codex-explain-diagnostic-at-point "p" "At point" "Diagnostics" :prefix my-codex-diagnostics-transient)
+      (my-codex-explain-buffer-diagnostics "a" "All" "Diagnostics" :prefix my-codex-diagnostics-transient))
+    "Commands used to generate the prefix keymap and command menus.")
+
+  (defun my-codex--catalogue-transient-layout (prefix)
+    "Return the transient layout for PREFIX from the command catalogue."
+    (let (groups)
+      (dolist (entry my-codex-command-catalogue)
+        (when (and (eq (or (plist-get (nthcdr 4 entry) :prefix)
+                           'my-codex-transient)
+                       prefix)
+                   (nth 2 entry))
+          (let* ((group (nth 3 entry))
+                 (cell (assoc group groups))
+                 (suffix (append (list (nth 1 entry) (nth 2 entry) (car entry))
+                                 (when-let ((predicate
+                                             (plist-get (nthcdr 4 entry)
+                                                        :transient-available)))
+                                   (list :inapt-if-not predicate)))))
+            (if cell
+                (setcdr cell (append (cdr cell) (list suffix)))
+              (setq groups (append groups (list (list group suffix))))))))
+      (mapcar (lambda (group) (vconcat (list (car group)) (cdr group))) groups)))
+
+  (defmacro my-codex--define-catalogue-transient (name doc)
+    "Define transient NAME with DOC from `my-codex-command-catalogue'."
+    `(transient-define-prefix ,name () ,doc
+       ,@(my-codex--catalogue-transient-layout name))))
+
+(defun my-codex--catalogue-prefix-keymap ()
+  "Return the prefix keymap described by the command catalogue."
+  (let ((map (make-sparse-keymap)))
+    (dolist (entry my-codex-command-catalogue map)
+      (unless (plist-get (nthcdr 4 entry) :prefix)
+        (keymap-set map (nth 1 entry) (car entry))))))
+
+(defun my-codex--validate-command-catalogue ()
+  "Signal an error when the command catalogue is inconsistent."
+  (let ((bindings (make-hash-table :test #'equal)))
+    (dolist (entry my-codex-command-catalogue t)
+      (let* ((command (car entry))
+             (properties (nthcdr 4 entry))
+             (prefix (or (plist-get properties :prefix)
+                         'my-codex-transient))
+             (binding (cons prefix (key-description (kbd (nth 1 entry)))))
+             (existing (gethash binding bindings)))
+        (unless (fboundp command)
+          (error "Unknown catalogue command: %s" command))
+        (when (and existing (not (eq existing command)))
+          (error "Duplicate catalogue key %s in %s" (cdr binding) prefix))
+        (puthash binding command bindings)
+        (when (and (plist-get properties :menu)
+                   (not (plist-get properties :help)))
+          (error "Catalogue menu command lacks help: %s" command))))))
+
 ;; Prefix keymap for agent commands.
-(defvar-keymap my-codex-map
-  :doc "Prefix keymap for agent commands."
-  "o"       #'my-codex-read-only
-  "w"       #'my-codex-workspace
-  "S"       #'my-codex-session-transient
-  "r"       #'my-codex-resume
-  "q"       #'my-codex-hide-window
-  "a"       #'my-codex-ask
-  "A"       #'my-codex-ask-preset-transient
-  "s"       #'my-codex-send-region
-  "<right>" #'my-codex-send-region
-  "R"       #'my-codex-plan-refactor-region
-  "<left>"  #'my-codex-insert-selection-into-code
-  "f"       #'my-codex-review-defun-at-point
-  "F"       #'my-codex-send-current-file
-  "C"       #'my-codex-analyse-test-coverage
-  "x"       #'my-codex-explain-symbol-at-point
-  "g"       #'my-codex-send-git-diff
-  "G"       #'my-codex-send-git-staged-diff
-  "l"       #'my-codex-review-current-file-diff
-  "v"       #'my-codex-show-git-diff
-  "V"       #'my-codex-show-git-staged-diff
-  "d"       #'my-codex-ediff-current-file-against-head
-  "D"       #'my-codex-ediff-changed-file-against-head
-  "c"       #'my-codex-git-commit-with-latest-message
-  "e"       #'my-codex-explain-region-as-error
-  "i"       #'my-codex-open-project-instructions
-  "I"       #'my-codex-summarize-session-to-github-issue
-  "M"       #'my-codex-summarize-session-to-markdown
-  "t"       #'my-codex-list-open-issues
-  "T"       #'my-codex-tools-transient
-  "TAB"     #'my-codex-toggle-focus
-  "<tab>"   #'my-codex-toggle-focus)
+(defvar my-codex-map (my-codex--catalogue-prefix-keymap)
+  "Prefix keymap for agent commands.")
 
-;;;###autoload
-(transient-define-prefix my-codex-session-transient ()
-  "Show agent session commands."
-  [["Default session"
-    ("o" "Read-only" my-codex-default-read-only)
-    ("w" "Workspace" my-codex-default-workspace)]
-   ["Session"
-    ("l" "Dashboard" my-codex-top)
-    ("n" "New named" my-codex-new-session)
-    ("r" "Resume" my-codex-resume)
-    ("q" "Hide agent" my-codex-hide-session-window)]])
+;;;###autoload (autoload 'my-codex-session-transient "my-codex" nil t)
+(my-codex--define-catalogue-transient my-codex-session-transient
+  "Show agent session commands.")
 
-;;;###autoload
-(transient-define-prefix my-codex-diagnostics-transient ()
-  "Show diagnostic explanation commands."
-  [["Diagnostics"
-    ("p" "At point" my-codex-explain-diagnostic-at-point)
-    ("a" "All" my-codex-explain-buffer-diagnostics)]])
+;;;###autoload (autoload 'my-codex-diagnostics-transient "my-codex" nil t)
+(my-codex--define-catalogue-transient my-codex-diagnostics-transient
+  "Show diagnostic explanation commands.")
 
-;;;###autoload
-(transient-define-prefix my-codex-tools-transient ()
-  "Show infrequent agent tools."
-  [["Tools"
-    ("p" "Project overview" my-codex-send-project-overview)
-    ("X" "Export session" my-codex-export-session-to-markdown)
-    ("E" "Diagnostics" my-codex-diagnostics-transient)
-    ("!" "Doctor" my-codex-doctor)]])
+;;;###autoload (autoload 'my-codex-tools-transient "my-codex" nil t)
+(my-codex--define-catalogue-transient my-codex-tools-transient
+  "Show infrequent agent tools.")
 
-;;;###autoload
-(transient-define-prefix my-codex-transient ()
-  "Show agent commands."
-  [["Session"
-    ("o" "Read-only" my-codex-read-only)
-    ("w" "Workspace" my-codex-workspace)
-    ("S" "Sessions" my-codex-session-transient)
-    ("r" "Resume" my-codex-resume)
-    ("q" "Hide agent" my-codex-hide-window)
-    ("<tab>" "Toggle focus" my-codex-toggle-focus)]
-   ["Send"
-    ("a" "Ask" my-codex-ask)
-    ("A" "Preset menu" my-codex-ask-preset-transient)
-    ("s" "Region" my-codex-send-region)
-    ("<right>" "Region" my-codex-send-region)
-    ("R" "Refactor plan" my-codex-plan-refactor-region)
-    ("<left>" "Insert selection" my-codex-insert-selection-into-code)
-    ("f" "Current defun" my-codex-review-defun-at-point)
-    ("F" "Current file" my-codex-send-current-file)
-    ("C" "Coverage gaps" my-codex-analyse-test-coverage)
-    ("x" "Explain symbol" my-codex-explain-symbol-at-point)]
-   ["Git"
-    ("g" "Review diff" my-codex-send-git-diff)
-    ("G" "Review staged diff" my-codex-send-git-staged-diff)
-    ("l" "Review current-file diff" my-codex-review-current-file-diff
-     :inapt-if-not my-codex--current-or-left-file-available-p)
-    ("v" "View diff" my-codex-show-git-diff)
-    ("V" "View staged diff" my-codex-show-git-staged-diff)
-    ("d" "Ediff current file" my-codex-ediff-current-file-against-head)
-    ("D" "Ediff changed file" my-codex-ediff-changed-file-against-head)
-    ("c" "Commit with agent message" my-codex-git-commit-with-latest-message)]
-   ["Context"
-    ("e" "Explain error" my-codex-explain-region-as-error)
-    ("i" "Project instructions" my-codex-open-project-instructions)
-    ("M" "Summarize session" my-codex-summarize-session-to-markdown)
-    ("T" "Tools" my-codex-tools-transient)]
-   ["GitHub"
-    ("t" "List issues" my-codex-list-open-issues)
-    ("I" "Draft issue" my-codex-summarize-session-to-github-issue)]])
+;;;###autoload (autoload 'my-codex-transient "my-codex" nil t)
+(my-codex--define-catalogue-transient my-codex-transient
+  "Show agent commands.")
 
 ;;;###autoload
 (defun my-codex-transient-preserve-selection ()
@@ -714,138 +729,43 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     (setq my-codex--saved-column-number-mode nil)
     (setq my-codex--display-defaults-enabled-by-mode nil)))
 
+(defun my-codex--catalogue-easy-menu ()
+  "Return an Easy Menu specification from the command catalogue."
+  (let (groups)
+    (dolist (entry my-codex-command-catalogue)
+      (when-let ((label (plist-get (nthcdr 4 entry) :menu)))
+        (let* ((group-name
+                (if (member (nth 3 entry) '("Default session" "Session"))
+                    "Session"
+                  (nth 3 entry)))
+               (group (assoc group-name groups))
+               (properties (nthcdr 4 entry))
+               (path (plist-get properties :path))
+               (key (or (plist-get properties :menu-key) (nth 1 entry)))
+               (item (vector label (car entry)
+                             :keys (string-join
+                                    (delq nil (list "F8" path key)) " ")
+                             :active (or (plist-get properties :active)
+                                         (when-let ((predicate
+                                                     (plist-get properties
+                                                                :available)))
+                                           (list predicate))
+                                         t)
+                             :help (plist-get properties :help))))
+          (if group
+              (setcdr group (append (cdr group) (list item)))
+            (setq groups
+                  (append groups (list (list group-name item))))))))
+    (append (list "Agent")
+            groups
+            (list "---"
+                  ["Compile project" my-codex-project-build
+                   :keys "F7"
+                   :help "Run the project build command"]))))
+
 (easy-menu-define my-codex-menu my-codex-global-mode-map
   "Menu for agent commands."
-  '("Agent"
-    ("Session"
-     ["Show/start read-only" my-codex-read-only
-      :keys "F8 o"
-      :help "Show the configured agent in read-only mode"]
-     ["Show/start workspace-write" my-codex-workspace
-      :keys "F8 w"
-      :help "Show the configured agent with workspace write access"]
-     ["Session commands" my-codex-session-transient
-      :keys "F8 S"
-      :help "Open default and future agent session commands"]
-     ["Resume session" my-codex-resume
-      :keys "F8 r"
-      :help "Resume a previous agent session"]
-     ["Show/start default read-only" my-codex-default-read-only
-      :keys "F8 S o"
-      :help "Show the default agent session in read-only mode"]
-     ["Show/start default workspace-write" my-codex-default-workspace
-      :keys "F8 S w"
-      :help "Show the default agent session with workspace write access"]
-     ["Session dashboard" my-codex-top
-      :keys "F8 S l"
-      :help "Display a dashboard of all agent sessions"]
-     ["New named session" my-codex-new-session
-      :keys "F8 S n"
-      :help "Start or show a named agent session"]
-     ["Hide selected session window" my-codex-hide-session-window
-      :keys "F8 S q"
-      :help "Hide the agent window associated with the selected session"]
-     ["Hide agent window" my-codex-hide-window
-      :keys "F8 q"
-      :help "Hide the visible agent window"]
-     ["Toggle focus" my-codex-toggle-focus
-      :keys "F8 TAB"
-      :help "Toggle focus between the agent and the previous window"])
-    ("Send"
-     ["Ask agent..." my-codex-ask
-      :keys "F8 a"
-      :help "Prompt for a question and send it to the active agent"]
-     ["Preset menu" my-codex-ask-preset-transient
-      :keys "F8 A"
-      :help "Open the prompt preset menu"]
-     ["Send selected region" my-codex-send-region
-      :keys "F8 s"
-      :active (use-region-p)
-      :help "Send the selected region to the active agent"]
-     ["Plan refactor for selected region" my-codex-plan-refactor-region
-      :keys "F8 R"
-      :active (and (use-region-p) buffer-file-name)
-      :help "Ask the active agent for a low-risk refactoring plan"]
-     ["Insert selection" my-codex-insert-selection-into-code
-      :keys "F8 Left"
-      :help "Insert the captured agent selection into the code buffer"]
-     ["Review current defun" my-codex-review-defun-at-point
-      :keys "F8 f"
-      :help "Ask the active agent to review the defun at point"]
-     ["Inspect current file" my-codex-send-current-file
-      :keys "F8 F"
-      :active buffer-file-name
-      :help "Ask the active agent to inspect the current file directly"]
-     ["Analyse test coverage" my-codex-analyse-test-coverage
-      :keys "F8 C"
-      :active buffer-file-name
-      :help "Ask the active agent to analyse missing test scenarios"]
-     ["Explain symbol at point" my-codex-explain-symbol-at-point
-      :keys "F8 x"
-      :active buffer-file-name
-      :help "Ask the active agent to explain the symbol at point"])
-    ("Git"
-     ["Review Git diff" my-codex-send-git-diff
-      :keys "F8 g"
-      :help "Ask the active agent to review the current Git diff"]
-     ["Review staged Git diff" my-codex-send-git-staged-diff
-      :keys "F8 G"
-      :help "Ask the active agent to review the staged Git diff"]
-     ["Review current-file Git diff" my-codex-review-current-file-diff
-      :keys "F8 l"
-      :active (my-codex--current-or-left-file-available-p)
-      :help "Ask the active agent to review only the current file's Git diff"]
-     ["View Git diff" my-codex-show-git-diff
-      :keys "F8 v"
-      :help "Show the current Git diff in a diff-mode buffer"]
-     ["View staged Git diff" my-codex-show-git-staged-diff
-      :keys "F8 V"
-      :help "Show the staged Git diff in a diff-mode buffer"]
-     ["Ediff current file against HEAD" my-codex-ediff-current-file-against-head
-      :keys "F8 d"
-      :active (my-codex--current-or-left-file-available-p)
-      :help "Review the current file's uncommitted changes against HEAD"]
-     ["Ediff changed file against HEAD" my-codex-ediff-changed-file-against-head
-      :keys "F8 D"
-      :help "Choose a tracked changed file and review it against HEAD"]
-     ["Edit commit with agent message" my-codex-git-commit-with-latest-message
-      :keys "F8 c"
-      :help "Use the latest agent commit message, or ask for one, then edit before committing"])
-    ("Context"
-     ["Explain selected error" my-codex-explain-region-as-error
-      :keys "F8 e"
-      :active (use-region-p)
-      :help "Ask the active agent to explain the selected compiler/test error"]
-     ["Open project instructions" my-codex-open-project-instructions
-      :keys "F8 i"
-      :help "Open AGENTS.md, CODEX.md, or .codex/instructions.md"]
-     ["Summarize session to Markdown" my-codex-summarize-session-to-markdown
-      :keys "F8 M"
-      :help "Ask the active agent to summarize the conversation as Markdown notes"])
-    ("Tools"
-     ["Project overview" my-codex-send-project-overview
-      :keys "F8 T p"
-      :help "Send the active agent a compact project overview"]
-     ["Export session" my-codex-export-session-to-markdown
-      :keys "F8 T X"
-      :help "Export the current agent session transcript to Markdown"]
-     ["Diagnostics" my-codex-diagnostics-transient
-      :keys "F8 T E"
-      :help "Open diagnostic explanation commands"]
-     ["Doctor" my-codex-doctor
-      :keys "F8 T !"
-      :help "Check Emacs, agent, vterm, Git, gh, project, configuration, and terminal startup"])
-    ("GitHub"
-     ["List issues" my-codex-list-open-issues
-      :keys "F8 t"
-      :help "List open GitHub issues for the current repository in a buffer"]
-     ["Draft issue" my-codex-summarize-session-to-github-issue
-      :keys "F8 I"
-      :help "Ask the active agent to draft a GitHub issue, then edit it before creating it with gh"])
-    "---"
-    ["Compile project" my-codex-project-build
-     :keys "F7"
-     :help "Run the project build command"]))
+  (my-codex--catalogue-easy-menu))
 
 ;;;###autoload
 (define-minor-mode my-codex-global-mode
