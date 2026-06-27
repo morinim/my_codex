@@ -814,6 +814,20 @@ process."
     (when (eq 0 (apply #'process-file program nil t nil args))
       (split-string (string-trim-right (buffer-string)) "\n" t))))
 
+(defun my-codex--process-output-result (program &rest args)
+  "Run PROGRAM with ARGS and return (STATUS . LINES).
+
+STATUS is an integer exit status, a signal description string, or the
+symbol `file-error' when the process cannot be started.  LINES contains
+all non-empty output lines."
+  (with-temp-buffer
+    (condition-case nil
+        (let ((status (apply #'process-file program nil t nil args)))
+          (cons status
+                (split-string (string-trim-right (buffer-string)) "\n" t)))
+      (file-error
+       (cons 'file-error nil)))))
+
 
 (defun my-codex--session-export-buffer-name (root)
   "Return the session export buffer name for ROOT."

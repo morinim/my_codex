@@ -227,15 +227,36 @@
   (setq tabulated-list-entries (my-codex-top--make-entries))
   (tabulated-list-print t))
 
+(defun my-codex-top--git-info (root)
+  "Return Git information for ROOT as (BRANCH . STATE).
+
+STATE is one of the strings `clean', `dirty', or `error'."
+  (let* ((default-directory root)
+         (branch-result
+          (my-codex--process-output-result
+           "git" "branch" "--show-current"))
+         (status-result
+          (my-codex--process-output-result
+           "git" "status" "--porcelain"))
+         (branch (if (eq (car branch-result) 0)
+                     (or (cadr branch-result) "—")
+                   "—"))
+         (state (cond
+                 ((not (eq (car status-result) 0)) "error")
+                 ((cdr status-result) "dirty")
+                 (t "clean"))))
+    (cons branch state)))
+
 (defun my-codex-top--make-entries ()
   "Build tabulated list entries for all agent sessions."
-  (mapcar
-   (lambda (buffer)
-     (let (project session access state pid branch git prompts lines age last-act)
-       (with-current-buffer buffer
-         (let ((root my-codex-session-project-root)
-               (now (current-time)))
-           (setq project (if root (file-name-nondirectory (directory-file-name root)) "")
+  (let ((git-cache (make-hash-table :test #'equal)))
+    (mapcar
+     (lambda (buffer)
+       (let (project session access state pid branch git-state prompts lines age last-act)
+         (with-current-buffer buffer
+           (let ((root my-codex-session-project-root)
+                 (now (current-time)))
+             (setq project (if root (file-name-nondirectory (directory-file-name root)) "")
                  session (or my-codex-session-name "")
                  access (my-codex--access-mode-label my-codex-session-access-mode)
                  state (if-let ((proc (get-buffer-process buffer)))
@@ -251,17 +272,18 @@
                  age (my-codex--format-duration my-codex-session-start-time now)
                  last-act (my-codex--format-duration my-codex-session-last-activity now))
            (if (and root (file-directory-p root))
-               (let ((default-directory root))
-                 (setq branch (or (car (my-codex--process-output-lines "git" "branch" "--show-current"))
-                                  "—")
-                       git (if (my-codex--process-output-lines "git" "status" "--porcelain")
-                               "dirty"
-                             "clean")))
-             (setq branch "—"
-                   git "—"))))
-       (list (buffer-name buffer)
-             (vector project session (buffer-name buffer) access state pid branch git prompts lines age last-act))))
-   (my-codex--all-session-buffers)))
+               (pcase-let ((`(,cached-branch . ,cached-state)
+                            (or (gethash root git-cache)
+                                (puthash root
+                                         (my-codex-top--git-info root)
+                                         git-cache))))
+                 (setq branch cached-branch
+                       git-state cached-state))
+               (setq branch "—"
+                     git-state "—"))))
+         (list (buffer-name buffer)
+               (vector project session (buffer-name buffer) access state pid branch git-state prompts lines age last-act))))
+     (my-codex--all-session-buffers))))
 
 (defun my-codex-top-kill-session ()
   "Kill the agent session process and buffer at point."
