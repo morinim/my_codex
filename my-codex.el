@@ -576,6 +576,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
   "x"       #'my-codex-explain-symbol-at-point
   "g"       #'my-codex-send-git-diff
   "G"       #'my-codex-send-git-staged-diff
+  "l"       #'my-codex-review-current-file-diff
   "v"       #'my-codex-show-git-diff
   "V"       #'my-codex-show-git-staged-diff
   "d"       #'my-codex-ediff-current-file-against-head
@@ -643,6 +644,8 @@ Open the generated notes in an editable Markdown buffer when they are ready."
    ["Git"
     ("g" "Review diff" my-codex-send-git-diff)
     ("G" "Review staged diff" my-codex-send-git-staged-diff)
+    ("l" "Review current-file diff" my-codex-review-current-file-diff
+     :inapt-if-not my-codex--current-or-left-file-available-p)
     ("v" "View diff" my-codex-show-git-diff)
     ("V" "View staged diff" my-codex-show-git-staged-diff)
     ("d" "Ediff current file" my-codex-ediff-current-file-against-head)
@@ -789,6 +792,10 @@ Open the generated notes in an editable Markdown buffer when they are ready."
      ["Review staged Git diff" my-codex-send-git-staged-diff
       :keys "F8 G"
       :help "Ask the active agent to review the staged Git diff"]
+     ["Review current-file Git diff" my-codex-review-current-file-diff
+      :keys "F8 l"
+      :active (my-codex--current-or-left-file-available-p)
+      :help "Ask the active agent to review only the current file's Git diff"]
      ["View Git diff" my-codex-show-git-diff
       :keys "F8 v"
       :help "Show the current Git diff in a diff-mode buffer"]

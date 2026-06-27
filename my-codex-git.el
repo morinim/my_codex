@@ -52,6 +52,13 @@
   :type 'string
   :group 'my-codex)
 
+(defcustom my-codex-git-current-file-diff-review-prompt-template
+  "Review only the current file's changes using:\n%s\n\nFocus on correctness, regressions and maintainability.\nDo not edit unless asked.\n"
+  "Prompt template for reviewing the current file's Git diff.
+The literal substring `%s' is replaced with the Git command."
+  :type 'string
+  :group 'my-codex)
+
 (defcustom my-codex-commit-message-prompt-template
   "Inspect the staged Git diff using `git diff -U1 --cached -- .` and write a concise conventional commit message.
 
@@ -373,6 +380,26 @@ When STAGED is non-nil, show the staged diff."
   "Ask the agent to review the staged Git diff."
   (interactive)
   (my-codex--send-git-prompt my-codex-git-staged-diff-review-prompt))
+
+;;;###autoload
+(defun my-codex-review-current-file-diff (&optional staged)
+  "Ask the agent to review the current file's Git diff.
+With prefix argument STAGED, review the staged diff.  When invoked from
+the agent vterm, use the file in the window to its left."
+  (interactive "P")
+  (let* ((file (my-codex--current-or-left-file-name))
+         (root (my-codex-project-root))
+         (default-directory root))
+    (my-codex--ensure-git-repository)
+    (my-codex--git-relative-file-name file (my-codex--git-toplevel))
+    (let* ((relative-file (file-relative-name file root))
+           (command (format "git diff%s -- %s"
+                            (if staged " --cached" "")
+                            (shell-quote-argument relative-file))))
+      (my-codex--send-git-prompt
+       (replace-regexp-in-string
+        "%s" command my-codex-git-current-file-diff-review-prompt-template
+        t t)))))
 
 ;;;###autoload
 (defun my-codex-show-git-diff ()

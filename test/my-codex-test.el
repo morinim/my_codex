@@ -1208,6 +1208,52 @@
           (should-not (string-match-p "void-function" output)))
       (delete-directory root t))))
 
+(ert-deftest my-codex-review-current-file-diff-builds-focused-prompt ()
+  (let ((root "/project/") captured)
+    (with-temp-buffer
+      (setq buffer-file-name "/project/src/file name.el")
+      (cl-letf (((symbol-function 'my-codex-project-root) (lambda () root))
+                ((symbol-function 'my-codex--ensure-git-repository) #'ignore)
+                ((symbol-function 'my-codex--git-toplevel) (lambda () root))
+                ((symbol-function 'my-codex--git-relative-file-name) #'ignore)
+                ((symbol-function 'my-codex--send-git-prompt)
+                 (lambda (prompt) (setq captured prompt))))
+        (my-codex-review-current-file-diff)
+        (should (string-match-p
+                 (regexp-quote "git diff -- src/file\\ name.el") captured))
+        (should (string-match-p "Do not edit unless asked" captured))))))
+
+(ert-deftest my-codex-review-current-file-diff-prefix-selects-staged-diff ()
+  (let ((root "/project/") captured)
+    (with-temp-buffer
+      (setq buffer-file-name "/project/example.el")
+      (cl-letf (((symbol-function 'my-codex-project-root) (lambda () root))
+                ((symbol-function 'my-codex--ensure-git-repository) #'ignore)
+                ((symbol-function 'my-codex--git-toplevel) (lambda () root))
+                ((symbol-function 'my-codex--git-relative-file-name) #'ignore)
+                ((symbol-function 'my-codex--send-git-prompt)
+                 (lambda (prompt) (setq captured prompt))))
+        (my-codex-review-current-file-diff t)
+        (should (string-match-p
+                 (regexp-quote "git diff --cached -- example.el") captured))))))
+
+(ert-deftest my-codex-review-current-file-diff-preserves-literal-percent-signs ()
+  (let ((root "/project/")
+        (my-codex-git-current-file-diff-review-prompt-template
+         "Review 100% of changes using %s")
+        captured)
+    (with-temp-buffer
+      (setq buffer-file-name "/project/example.el")
+      (cl-letf (((symbol-function 'my-codex-project-root) (lambda () root))
+                ((symbol-function 'my-codex--ensure-git-repository) #'ignore)
+                ((symbol-function 'my-codex--git-toplevel) (lambda () root))
+                ((symbol-function 'my-codex--git-relative-file-name) #'ignore)
+                ((symbol-function 'my-codex--send-git-prompt)
+                 (lambda (prompt) (setq captured prompt))))
+        (my-codex-review-current-file-diff)
+        (should (equal captured
+                       "Review 100% of changes using git diff -- example.el"))))))
+
 (ert-deftest my-codex-preset-command-loads-git-helpers-without-main-package ()
   (let ((load-path-root default-directory)
         (root (file-name-as-directory (make-temp-file "my-codex-preset" t))))
