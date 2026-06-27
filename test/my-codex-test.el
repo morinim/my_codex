@@ -12,6 +12,15 @@
 (defvar vterm-copy-mode-hook)
 (defvar vterm-mode-hook)
 
+(ert-deftest my-codex-transient-groups-use-columns ()
+  (let* ((expansion
+          (macroexpand-1
+           '(my-codex--define-catalogue-transient my-codex-transient
+              "Show agent commands.")))
+         (layout (nth 4 expansion)))
+    (should (vectorp layout))
+    (should (seq-every-p #'vectorp layout))))
+
 (defmacro my-codex-test--with-mock-flycheck (diagnostics &rest body)
   "Run BODY with mocked Flycheck DIAGNOSTICS."
   (declare (indent 1))
