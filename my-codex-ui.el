@@ -139,6 +139,16 @@
      (eq (window-parameter window 'my-codex-term-buffer) buffer))
    (window-list nil 'no-minibuf)))
 
+(defun my-codex--edit-window-for-session-buffer-any-frame (buffer)
+  "Return an edit window associated with session BUFFER on any frame."
+  (seq-some
+   (lambda (frame)
+     (seq-find
+      (lambda (window)
+        (eq (window-parameter window 'my-codex-term-buffer) buffer))
+      (window-list frame 'no-minibuf)))
+   (frame-list)))
+
 (defun my-codex--switch-active-session-buffer (buffer)
   "Switch the active agent session window to BUFFER."
   (let* ((source-window (selected-window))
@@ -254,6 +264,7 @@
 (defvar-keymap my-codex-top-mode-map
   :parent tabulated-list-mode-map
   "RET" #'my-codex-sessions-visit
+  "e"   #'my-codex-top-visit-edit-window
   "k"   #'my-codex-top-kill-session
   "d"   #'my-codex-top-project-diff
   "D"   #'my-codex-top-dired-project
@@ -280,7 +291,7 @@
   (setq tabulated-list-padding 1)
   (setq revert-buffer-function #'my-codex-top-refresh)
   (setq-local mode-line-format
-              '("  *Agents Top*  [D:Dired  b:Build  R:Rename  d:Diff  k:Kill  RET:Visit  g:Refresh]"))
+              '("  *Agents Top*  [D:Dired  b:Build  R:Rename  d:Diff  e:Edit  k:Kill  RET:Visit  g:Refresh]"))
   (tabulated-list-init-header)
   (my-codex--sync-header-hscroll))
 
@@ -339,6 +350,20 @@
             (kill-process proc))))
       (kill-buffer buffer)
       (revert-buffer))))
+
+(defun my-codex-top-visit-edit-window ()
+  "Select the edit window associated with the session at point."
+  (interactive)
+  (let* ((buffer-name (tabulated-list-get-id))
+         (buffer (and buffer-name (get-buffer buffer-name)))
+         (window (and buffer
+                      (my-codex--edit-window-for-session-buffer-any-frame
+                       buffer))))
+    (unless buffer
+      (user-error "No agent session on this line"))
+    (unless (window-live-p window)
+      (user-error "No edit window associated with %s" buffer-name))
+    (select-window window)))
 
 (defun my-codex-top-project-diff ()
   "Show git diff for the selected session's project."

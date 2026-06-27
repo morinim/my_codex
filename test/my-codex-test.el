@@ -605,6 +605,96 @@
       (when-let ((buffer (get-buffer "*Agents Top*")))
         (kill-buffer buffer)))))
 
+(ert-deftest my-codex-top-visit-edit-window-selects-associated-window ()
+  (let ((session-buffer (get-buffer-create "*codex-top-edit*"))
+        dashboard-window)
+    (unwind-protect
+        (let ((edit-window (selected-window)))
+          (setq dashboard-window (split-window-right))
+          (set-window-parameter
+           edit-window 'my-codex-term-buffer session-buffer)
+          (set-window-buffer dashboard-window (get-buffer-create "*Agents Top*"))
+          (with-current-buffer "*Agents Top*"
+            (my-codex-top-mode)
+            (setq tabulated-list-entries
+                  `((,(buffer-name session-buffer)
+                     ["project" "session" ,(buffer-name session-buffer)
+                      "" "" "" "" "" "" "" "" ""])))
+            (tabulated-list-print)
+            (goto-char (point-min))
+            (search-forward (buffer-name session-buffer))
+            (beginning-of-line))
+          (select-window dashboard-window)
+          (my-codex-top-visit-edit-window)
+          (should (eq (selected-window) edit-window)))
+      (when (window-live-p dashboard-window)
+        (delete-window dashboard-window))
+      (when (buffer-live-p session-buffer)
+        (kill-buffer session-buffer))
+      (when-let ((buffer (get-buffer "*Agents Top*")))
+        (kill-buffer buffer)))))
+
+(ert-deftest my-codex-top-visit-edit-window-searches-all-frames ()
+  (let ((session-buffer (get-buffer-create "*codex-top-other-frame*"))
+        (edit-window (selected-window)))
+    (unwind-protect
+        (progn
+          (set-window-parameter
+           edit-window 'my-codex-term-buffer session-buffer)
+          (with-temp-buffer
+            (my-codex-top-mode)
+            (setq tabulated-list-entries
+                  `((,(buffer-name session-buffer)
+                     ["project" "session" ,(buffer-name session-buffer)
+                      "" "" "" "" "" "" "" "" ""])))
+            (tabulated-list-print)
+            (goto-char (point-min))
+            (search-forward (buffer-name session-buffer))
+            (beginning-of-line)
+            (cl-letf (((symbol-function 'frame-list)
+                       (lambda () '(dashboard-frame edit-frame)))
+                      ((symbol-function 'window-list)
+                       (lambda (frame &rest _)
+                         (and (eq frame 'edit-frame)
+                              (list edit-window)))))
+              (my-codex-top-visit-edit-window)
+              (should (eq (selected-window) edit-window)))))
+      (set-window-parameter edit-window 'my-codex-term-buffer nil)
+      (kill-buffer session-buffer))))
+
+(ert-deftest my-codex-edit-windows-for-session-buffer-stays-frame-local ()
+  (let ((session-buffer (get-buffer-create "*codex-frame-local*"))
+        (edit-window (selected-window)))
+    (unwind-protect
+        (progn
+          (set-window-parameter
+           edit-window 'my-codex-term-buffer session-buffer)
+          (cl-letf (((symbol-function 'window-list)
+                     (lambda (frame &rest _)
+                       (and (eq frame 'other-frame)
+                            (list edit-window)))))
+            (should-not
+             (my-codex--edit-windows-for-session-buffer session-buffer))))
+      (set-window-parameter edit-window 'my-codex-term-buffer nil)
+      (kill-buffer session-buffer))))
+
+(ert-deftest my-codex-top-visit-edit-window-requires-association ()
+  (let ((session-buffer (get-buffer-create "*codex-top-no-edit*")))
+    (unwind-protect
+        (with-temp-buffer
+          (my-codex-top-mode)
+          (setq tabulated-list-entries
+                `((,(buffer-name session-buffer)
+                   ["project" "session" ,(buffer-name session-buffer)
+                    "" "" "" "" "" "" "" "" ""])))
+          (tabulated-list-print)
+          (goto-char (point-min))
+          (search-forward (buffer-name session-buffer))
+          (beginning-of-line)
+          (should-error (my-codex-top-visit-edit-window)
+                        :type 'user-error))
+      (kill-buffer session-buffer))))
+
 (ert-deftest my-codex-sessions-visit-switches-session-window ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-sessions" t)))
         (old-buffer (get-buffer-create "*codex-sessions-old*"))
