@@ -3,7 +3,7 @@
 ![Platform](https://img.shields.io/badge/platform-cross--platform-lightgrey)
 [![License](https://img.shields.io/badge/license-MPLv2-blue.svg)][mpl2]
 
-[[file:./my_codex.jpg]]
+![my-codex](./my_codex.jpg)
 
 # my-codex.el
 
