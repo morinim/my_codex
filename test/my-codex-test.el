@@ -452,75 +452,6 @@
                      (mapcar #'my-codex--safe-session-name names)))
             (length names)))))
 
-(ert-deftest my-codex-session-buffers-returns-open-session-buffers ()
-  (let ((root (file-name-as-directory (make-temp-file "my-codex-sessions" t)))
-        (default-buffer (get-buffer-create "*codex-sessions-default*"))
-        (named-buffer (get-buffer-create "*codex-sessions-named*"))
-        (old-buffer (get-buffer-create "*codex-sessions-named*<old>"))
-        (other-buffer (get-buffer-create "*codex-sessions-other*")))
-    (unwind-protect
-        (progn
-          (my-codex--mark-default-session
-           default-buffer root 'workspace-write)
-          (my-codex--mark-named-session
-           named-buffer "plan" root 'read-only)
-          (my-codex--mark-named-session
-           old-buffer "plan" root 'read-only)
-          (with-current-buffer other-buffer
-            (setq-local my-codex-session-name "not a session"))
-          (cl-letf (((symbol-function 'get-buffer-process)
-                     (lambda (buffer)
-                       (memq buffer (list default-buffer named-buffer))))
-                    ((symbol-function 'process-live-p)
-                     (lambda (process) process)))
-            (should
-             (equal (mapcar #'buffer-name (my-codex--session-buffers))
-                    '("*codex-sessions-default*"
-                      "*codex-sessions-named*")))))
-      (delete-directory root t)
-      (mapc (lambda (buffer)
-              (when (buffer-live-p buffer)
-                (kill-buffer buffer)))
-            (list default-buffer named-buffer old-buffer other-buffer)))))
-
-(ert-deftest my-codex-list-sessions-renders-session-buffer ()
-  (let ((root (file-name-as-directory (make-temp-file "my-codex-sessions" t)))
-        (session-buffer (get-buffer-create "*codex-sessions-render*")))
-    (unwind-protect
-        (progn
-          (my-codex--mark-named-session
-           session-buffer "plan" root 'read-only)
-          (cl-letf (((symbol-function 'get-buffer-process)
-                     (lambda (buffer)
-                       (eq buffer session-buffer)))
-                    ((symbol-function 'process-live-p)
-                     (lambda (process) process))
-                    ((symbol-function 'pop-to-buffer) #'ignore))
-            (my-codex-list-sessions))
-          (with-current-buffer my-codex-sessions-buffer-name
-            (should (derived-mode-p 'my-codex-sessions-mode))
-            (should (string-match-p "\\*codex-sessions-render\\*"
-                                    (buffer-string)))
-            (should (string-match-p "codex" (buffer-string)))
-            (should (string-match-p "plan" (buffer-string)))
-            (should (string-match-p "read-only \\[lock\\]" (buffer-string)))
-            (setq-local header-line-format nil)
-            (tabulated-list-init-header)
-            (should (equal header-line-format
-                           '("" header-line-indent
-                             (:eval
-                              (let ((hscroll (window-hscroll)))
-                                (if (< hscroll
-                                       (length my-codex--header-string))
-                                    (substring my-codex--header-string
-                                               hscroll)
-                                  ""))))))))
-      (delete-directory root t)
-      (when (buffer-live-p session-buffer)
-        (kill-buffer session-buffer))
-      (when-let ((buffer (get-buffer my-codex-sessions-buffer-name)))
-        (kill-buffer buffer)))))
-
 (ert-deftest my-codex-top-renders-dashboard-buffer ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-top" t)))
         (session-buffer (get-buffer-create "*codex-top-render*")))
@@ -694,7 +625,7 @@
                         :type 'user-error))
       (kill-buffer session-buffer))))
 
-(ert-deftest my-codex-sessions-visit-switches-session-window ()
+(ert-deftest my-codex-top-visit-switches-session-window ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-sessions" t)))
         (old-buffer (get-buffer-create "*codex-sessions-old*"))
         (session-buffer (get-buffer-create "*codex-sessions-select*"))
@@ -714,18 +645,21 @@
                        (memq buffer (list old-buffer session-buffer))))
                     ((symbol-function 'process-live-p)
                      (lambda (process) process))
+                    ((symbol-function 'process-id) (lambda (_) 9999))
+                    ((symbol-function 'my-codex--process-output-lines)
+                     (lambda (&rest _) nil))
                     ((symbol-function 'pop-to-buffer)
                      (lambda (buffer-or-name &rest _args)
                        (set-window-buffer
                         (selected-window)
                         (get-buffer buffer-or-name))
                        (selected-window))))
-            (my-codex-list-sessions)
-            (with-current-buffer my-codex-sessions-buffer-name
+            (my-codex-top)
+            (with-current-buffer "*Agents Top*"
               (goto-char (point-min))
               (search-forward "*codex-sessions-select*")
               (beginning-of-line)
-              (my-codex-sessions-visit))
+              (my-codex-top-visit))
             (should (eq (window-buffer term-window) session-buffer))
             (should (eq (selected-window) term-window))
             (should
@@ -738,10 +672,10 @@
         (kill-buffer old-buffer))
       (when (buffer-live-p session-buffer)
         (kill-buffer session-buffer))
-      (when-let ((buffer (get-buffer my-codex-sessions-buffer-name)))
+      (when-let ((buffer (get-buffer "*Agents Top*")))
         (kill-buffer buffer)))))
 
-(ert-deftest my-codex-sessions-visit-from-terminal-updates-edit-window ()
+(ert-deftest my-codex-top-visit-from-terminal-updates-edit-window ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-sessions" t)))
         (old-buffer (get-buffer-create "*codex-sessions-terminal-old*"))
         (session-buffer (get-buffer-create "*codex-sessions-terminal-new*"))
@@ -762,13 +696,16 @@
                        (memq buffer (list old-buffer session-buffer))))
                     ((symbol-function 'process-live-p)
                      (lambda (process) process))
+                    ((symbol-function 'process-id) (lambda (_) 9999))
+                    ((symbol-function 'my-codex--process-output-lines)
+                     (lambda (&rest _) nil))
                     ((symbol-function 'pop-to-buffer) #'ignore))
-            (my-codex-list-sessions)
-            (with-current-buffer my-codex-sessions-buffer-name
+            (my-codex-top)
+            (with-current-buffer "*Agents Top*"
               (goto-char (point-min))
               (search-forward "*codex-sessions-terminal-new*")
               (beginning-of-line)
-              (my-codex-sessions-visit))
+              (my-codex-top-visit))
             (should (eq (window-buffer term-window) session-buffer))
             (should
              (eq (window-parameter edit-window 'my-codex-term-buffer)
@@ -783,7 +720,7 @@
         (kill-buffer old-buffer))
       (when (buffer-live-p session-buffer)
         (kill-buffer session-buffer))
-      (when-let ((buffer (get-buffer my-codex-sessions-buffer-name)))
+      (when-let ((buffer (get-buffer "*Agents Top*")))
         (kill-buffer buffer)))))
 
 (ert-deftest my-codex-default-session-commands-use-selected-agent ()

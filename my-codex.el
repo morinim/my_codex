@@ -598,7 +598,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     ("o" "Read-only" my-codex-default-read-only)
     ("w" "Workspace" my-codex-default-workspace)]
    ["Session"
-    ("l" "List" my-codex-list-sessions)
+    ("l" "Dashboard" my-codex-top)
     ("n" "New named" my-codex-new-session)
     ("r" "Resume" my-codex-resume)
     ("q" "Hide agent" my-codex-hide-session-window)]])
@@ -616,7 +616,6 @@ Open the generated notes in an editable Markdown buffer when they are ready."
   [["Tools"
     ("p" "Project overview" my-codex-send-project-overview)
     ("X" "Export session" my-codex-export-session-to-markdown)
-    ("t" "Session dashboard" my-codex-top)
     ("E" "Diagnostics" my-codex-diagnostics-transient)
     ("!" "Doctor" my-codex-doctor)]])
 
@@ -737,9 +736,9 @@ Open the generated notes in an editable Markdown buffer when they are ready."
      ["Show/start default workspace-write" my-codex-default-workspace
       :keys "F8 S w"
       :help "Show the default agent session with workspace write access"]
-     ["List open sessions" my-codex-list-sessions
+     ["Session dashboard" my-codex-top
       :keys "F8 S l"
-      :help "List open agent session buffers"]
+      :help "Display a dashboard of all agent sessions"]
      ["New named session" my-codex-new-session
       :keys "F8 S n"
       :help "Start or show a named agent session"]
@@ -830,9 +829,6 @@ Open the generated notes in an editable Markdown buffer when they are ready."
      ["Export session" my-codex-export-session-to-markdown
       :keys "F8 T X"
       :help "Export the current agent session transcript to Markdown"]
-     ["Session dashboard" my-codex-top
-      :keys "F8 T t"
-      :help "Display a dashboard of all agent sessions"]
      ["Diagnostics" my-codex-diagnostics-transient
       :keys "F8 T E"
       :help "Open diagnostic explanation commands"]

@@ -14,7 +14,7 @@
 
 ;;; Commentary:
 
-;; Session list and dashboard buffers for my-codex.
+;; Session dashboard buffer for my-codex.
 
 ;;; Code:
 
@@ -23,9 +23,6 @@
 (require 'seq)
 (require 'subr-x)
 (require 'tabulated-list)
-
-(defconst my-codex-sessions-buffer-name "*Agent sessions*"
-  "Buffer name used to display open agent sessions.")
 
 (defvar-local my-codex--header-string nil
   "Cached space-padded header string for horizontal scrolling.")
@@ -88,7 +85,7 @@
 
 (defun my-codex--sync-header-hscroll ()
   "Configure the buffer-local `header-line-format` to align with `window-hscroll`."
-  (when (memq major-mode '(my-codex-sessions-mode my-codex-top-mode))
+  (when (derived-mode-p 'my-codex-top-mode)
     (setq-local my-codex--header-string (my-codex--build-header-string))
     (setq-local header-line-format
                 '("" header-line-indent
@@ -100,24 +97,6 @@
     (add-hook 'post-command-hook #'force-mode-line-update nil t)))
 
 (advice-add 'tabulated-list-init-header :after #'my-codex--sync-header-hscroll)
-
-(defvar-keymap my-codex-sessions-mode-map
-  :parent tabulated-list-mode-map
-  "RET" #'my-codex-sessions-visit
-  "<mouse-1>" #'my-codex-sessions-mouse-visit)
-
-(define-derived-mode my-codex-sessions-mode tabulated-list-mode
-  "Agent sessions"
-  "Major mode for selecting open agent sessions."
-  (setq tabulated-list-format
-        [("Buffer" 32 t)
-         ("Agent" 12 t)
-         ("Name" 18 t)
-         ("Access" 16 t)
-         ("Project" 0 t)])
-  (setq tabulated-list-padding 2)
-  (tabulated-list-init-header)
-  (my-codex--sync-header-hscroll))
 
 (defun my-codex--visible-session-window (&optional source-window)
   "Return the visible agent session window for SOURCE-WINDOW."
@@ -167,7 +146,7 @@
        (or (display-buffer buffer my-codex-display-buffer-action)
            (user-error "Failed to display %s" (buffer-name buffer)))))))
 
-(defun my-codex-sessions-visit ()
+(defun my-codex-top-visit ()
   "Visit the agent session at point."
   (interactive)
   (let* ((buffer-name (tabulated-list-get-id))
@@ -175,58 +154,6 @@
     (unless buffer
       (user-error "No agent session on this line"))
     (my-codex--switch-active-session-buffer buffer)))
-
-(defun my-codex-sessions-mouse-visit (event)
-  "Visit the agent session clicked in EVENT."
-  (interactive "e")
-  (let* ((end (event-end event))
-         (window (posn-window end))
-         (point (posn-point end)))
-    (when (and (windowp window) (integer-or-marker-p point))
-      (select-window window)
-      (goto-char point)
-      (my-codex-sessions-visit))))
-
-(defun my-codex--session-buffers ()
-  "Return open agent session buffers."
-  (seq-sort-by
-   #'buffer-name #'string<
-   (seq-filter
-    (lambda (buffer)
-      (with-current-buffer buffer
-        (and (bound-and-true-p my-codex-session-id)
-             (when-let ((process (get-buffer-process buffer)))
-               (process-live-p process)))))
-    (buffer-list))))
-
-;;;###autoload
-(defun my-codex-list-sessions ()
-  "List open agent session buffers."
-  (interactive)
-  (let ((buffers (my-codex--session-buffers)))
-    (if (null buffers)
-        (message "No open agent sessions.")
-      (with-current-buffer (get-buffer-create my-codex-sessions-buffer-name)
-        (my-codex-sessions-mode)
-        (setq tabulated-list-entries
-              (mapcar
-               (lambda (buffer)
-                 (let (agent name access root)
-                   (with-current-buffer buffer
-                     (setq agent my-codex-session-agent
-                           name my-codex-session-name
-                           access my-codex-session-access-mode
-                           root my-codex-session-project-root))
-                   (list (buffer-name buffer)
-                         (vector
-                          (buffer-name buffer)
-                          (if agent (symbol-name agent) "")
-                          (or name "")
-                          (my-codex--access-mode-label access)
-                          (or root "")))))
-               buffers))
-        (tabulated-list-print t)
-        (pop-to-buffer (current-buffer))))))
 
 (defun my-codex--all-session-buffers ()
   "Return all agent session buffers, including dead ones."
@@ -263,7 +190,7 @@
 
 (defvar-keymap my-codex-top-mode-map
   :parent tabulated-list-mode-map
-  "RET" #'my-codex-sessions-visit
+  "RET" #'my-codex-top-visit
   "e"   #'my-codex-top-visit-edit-window
   "k"   #'my-codex-top-kill-session
   "d"   #'my-codex-top-project-diff
