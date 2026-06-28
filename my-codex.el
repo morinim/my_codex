@@ -615,25 +615,6 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (unless (plist-get (nthcdr 4 entry) :prefix)
         (keymap-set map (nth 1 entry) (car entry))))))
 
-(defun my-codex--validate-command-catalogue ()
-  "Signal an error when the command catalogue is inconsistent."
-  (let ((bindings (make-hash-table :test #'equal)))
-    (dolist (entry my-codex-command-catalogue t)
-      (let* ((command (car entry))
-             (properties (nthcdr 4 entry))
-             (prefix (or (plist-get properties :prefix)
-                         'my-codex-transient))
-             (binding (cons prefix (key-description (kbd (nth 1 entry)))))
-             (existing (gethash binding bindings)))
-        (unless (fboundp command)
-          (error "Unknown catalogue command: %s" command))
-        (when (and existing (not (eq existing command)))
-          (error "Duplicate catalogue key %s in %s" (cdr binding) prefix))
-        (puthash binding command bindings)
-        (when (and (plist-get properties :menu)
-                   (not (plist-get properties :help)))
-          (error "Catalogue menu command lacks help: %s" command))))))
-
 ;; Prefix keymap for agent commands.
 (defvar my-codex-map (my-codex--catalogue-prefix-keymap)
   "Prefix keymap for agent commands.")

@@ -12,6 +12,28 @@
 (defvar vterm-copy-mode-hook)
 (defvar vterm-mode-hook)
 
+(ert-deftest my-codex-command-catalogue-commands-exist ()
+  (dolist (entry my-codex-command-catalogue)
+    (should (fboundp (car entry)))))
+
+(ert-deftest my-codex-command-catalogue-bindings-do-not-conflict ()
+  (let ((bindings (make-hash-table :test #'equal)))
+    (dolist (entry my-codex-command-catalogue)
+      (let* ((command (car entry))
+             (properties (nthcdr 4 entry))
+             (prefix (or (plist-get properties :prefix)
+                         'my-codex-transient))
+             (binding (cons prefix (key-description (kbd (nth 1 entry)))))
+             (existing (gethash binding bindings)))
+        (should (or (not existing) (eq existing command)))
+        (puthash binding command bindings)))))
+
+(ert-deftest my-codex-command-catalogue-menu-entries-have-help ()
+  (dolist (entry my-codex-command-catalogue)
+    (let ((properties (nthcdr 4 entry)))
+      (when (plist-get properties :menu)
+        (should (plist-get properties :help))))))
+
 (ert-deftest my-codex-transient-groups-use-columns ()
   (let* ((expansion
           (macroexpand-1
