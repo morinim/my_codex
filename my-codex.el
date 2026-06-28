@@ -604,7 +604,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (my-codex-ask-preset-transient "A" "Preset menu" "Send" :menu "Preset menu" :help "Open the prompt preset menu")
       (my-codex-send-region "s" "Region" "Send" :menu "Send selected region" :active (use-region-p) :help "Send the selected region to the active agent")
       (my-codex-send-region "<right>" "Region" "Send")
-      (my-codex-plan-refactor-region "R" "Refactor plan" "Send" :menu "Plan refactor for selected region" :active (and (use-region-p) buffer-file-name) :help "Ask the active agent for a low-risk refactoring plan")
+      (my-codex-plan-refactor-region "R" "Refactor plan" "Send" :menu "Plan refactor for selected region" :active (use-region-p) :help "Ask the active agent for a low-risk refactoring plan")
       (my-codex-insert-selection-into-code "<left>" "Insert selection" "Send" :menu "Insert selection" :menu-key "Left" :help "Insert the captured agent selection into the code buffer")
       (my-codex-review-defun-at-point "f" "Current defun" "Send" :menu "Review current defun" :help "Ask the active agent to review the defun at point")
       (my-codex-send-current-file "F" "Current file" "Send" :menu "Inspect current file" :active buffer-file-name :help "Ask the active agent to inspect the current file directly")

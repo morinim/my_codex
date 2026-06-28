@@ -1270,15 +1270,15 @@ Return `reference', `inline', or nil when no choice is needed."
 
 ;;;###autoload
 (defun my-codex-plan-refactor-region (beg end)
-  "Ask the agent for a safe refactoring plan for the active region.
-Send only a file and line-range reference, not the selected text."
+  "Ask the agent for a safe refactoring plan for the active region."
   (interactive "r")
   (unless (use-region-p)
     (user-error "No active region"))
-  (my-codex--preview-and-send-prompt
-   (format "%s\n\n%s"
-           my-codex-refactor-plan-prompt
-           (my-codex--region-file-reference beg end))))
+  (pcase-let ((`(,context . ,sent-message)
+               (my-codex--region-context-request beg end)))
+    (my-codex--preview-and-send-prompt
+     (format "%s\n\n%s" my-codex-refactor-plan-prompt context)
+     sent-message)))
 
 ;;;###autoload
 (defun my-codex-open-project-instructions ()

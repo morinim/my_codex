@@ -2471,6 +2471,22 @@
              :type 'user-error)))
       (delete-directory root t))))
 
+(ert-deftest my-codex-plan-refactor-region-uses-region-context-delivery ()
+  (let (sent-prompt sent-message)
+    (cl-letf (((symbol-function 'use-region-p) (lambda () t))
+              ((symbol-function 'my-codex--region-context-request)
+               (lambda (_beg _end)
+                 '("Selected region:\n\ninline context" . "Sent inline")))
+              ((symbol-function 'my-codex--preview-and-send-prompt)
+               (lambda (prompt &optional message)
+                 (setq sent-prompt prompt
+                       sent-message message))))
+      (my-codex-plan-refactor-region 1 2)
+      (should (equal sent-prompt
+                     (format "%s\n\nSelected region:\n\ninline context"
+                             my-codex-refactor-plan-prompt)))
+      (should (equal sent-message "Sent inline")))))
+
 (ert-deftest my-codex-region-review-prompt-pastes-unnamed-large-regions ()
   (let ((my-codex-region-reference-threshold-chars 5))
     (with-temp-buffer
