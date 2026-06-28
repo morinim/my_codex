@@ -18,12 +18,6 @@
 
 (defvar my-codex-agent)
 (defvar my-codex-project-build-command)
-(defvar my-codex-read-only-command)
-(defvar my-codex-resume-command)
-(defvar my-codex-workspace-command)
-(defvar my-codex-antigravity-read-only-command)
-(defvar my-codex-antigravity-workspace-command)
-(defvar my-codex-antigravity-resume-command)
 (defvar vterm-max-scrollback)
 
 (defcustom my-codex-doctor-terminal-timeout 3
@@ -405,10 +399,7 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
 (defun my-codex--doctor-agent-rows (agent)
   "Return backend-specific diagnostic rows for AGENT."
   (let* ((profile (my-codex--agent-profile agent))
-         (function
-          (if (plist-member profile :doctor-function)
-              (plist-get profile :doctor-function)
-            (and (eq agent 'codex) #'my-codex--doctor-codex-rows))))
+         (function (plist-get profile :doctor-function)))
     (when function
       (funcall function))))
 

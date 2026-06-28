@@ -41,45 +41,6 @@
   :type 'string
   :group 'my-codex)
 
-(defcustom my-codex-read-only-command
-  "codex --sandbox read-only --ask-for-approval on-request"
-  "Command used to start Codex in read-only mode."
-  :type 'string
-  :group 'my-codex)
-
-(defcustom my-codex-workspace-command
-  "codex --sandbox workspace-write --ask-for-approval on-request"
-  "Command used to start Codex with workspace write access."
-  :type 'string
-  :group 'my-codex)
-
-(defcustom my-codex-resume-command
-  "codex resume"
-  "Command used to resume a previous Codex session."
-  :type 'string
-  :group 'my-codex)
-
-(defcustom my-codex-antigravity-read-only-command
-  (concat "agy --sandbox -i \"System policy: "
-          "This is a read-only session. "
-          "Do not write/edit files or execute commands "
-          "that alter the codebase.\"")
-  "Command used to start Antigravity in read-only mode."
-  :type 'string
-  :group 'my-codex)
-
-(defcustom my-codex-antigravity-workspace-command
-  "agy"
-  "Command used to start Antigravity with workspace write access."
-  :type 'string
-  :group 'my-codex)
-
-(defcustom my-codex-antigravity-resume-command
-  "agy resume"
-  "Command used to resume a previous Antigravity session."
-  :type 'string
-  :group 'my-codex)
-
 (defcustom my-codex-agent 'codex
   "Agent profile used by default agent commands.
 Commands such as `my-codex-read-only', `my-codex-workspace', and
@@ -92,32 +53,43 @@ different profile interactively."
   '((codex
      :label "Codex"
      :buffer-prefix "codex"
-     :read-only-command my-codex-read-only-command
-     :workspace-command my-codex-workspace-command
-     :resume-command my-codex-resume-command
+     :commands
+     ((read-only . "codex --sandbox read-only --ask-for-approval on-request")
+      (workspace . "codex --sandbox workspace-write --ask-for-approval on-request")
+      (resume . "codex resume"))
+     :instruction-files
+     ("AGENTS.override.md" "AGENTS.md" "CODEX.md" ".codex/instructions.md")
+     :instruction-strategy hierarchical-first
      :doctor-function my-codex--doctor-codex-rows)
     (antigravity
      :label "Antigravity"
      :buffer-prefix "agy"
-     :read-only-command my-codex-antigravity-read-only-command
-     :workspace-command my-codex-antigravity-workspace-command
-     :resume-command my-codex-antigravity-resume-command
+     :commands
+     ((read-only . "agy --sandbox -i \"System policy: This is a read-only session. Do not write/edit files or execute commands that alter the codebase.\"")
+      (workspace . "agy")
+      (resume . "agy resume"))
+     :instruction-files
+     ("ANTIGRAVITY.md" ".antigravity/instructions.md")
+     :instruction-strategy root-all
      :doctor-function nil))
   "Agent profiles available to my-codex.
 Each entry has the form:
 
   (ID :label LABEL
       :buffer-prefix PREFIX
-      :read-only-command COMMAND
-      :workspace-command COMMAND
-      :resume-command COMMAND
+      :commands ((read-only . COMMAND)
+                 (workspace . COMMAND)
+                 (resume . COMMAND))
+      :instruction-files (FILE ...)
+      :instruction-strategy STRATEGY
       :doctor-function FUNCTION)
 
 ID is a symbol used for configuration and session metadata.  PREFIX is
 used in buffer names, so different agents can have sessions with the
-same project and session name without colliding.  COMMAND may be either
-a string or a symbol whose value is a string.  FUNCTION may be nil or a
-function returning backend-specific doctor rows."
+same project and session name without colliding.  STRATEGY is either
+`hierarchical-first' (select the first matching file in each directory)
+or `root-all' (select every matching file at the project root).  FUNCTION
+may be nil or a function returning backend-specific doctor rows."
   :type '(repeat
           (list :tag "Agent profile"
                 (symbol :tag "Identifier")
@@ -125,18 +97,18 @@ function returning backend-specific doctor rows."
                 (string :tag "Display label")
                 (const :format "" :value :buffer-prefix)
                 (string :tag "Buffer prefix")
-                (const :format "" :value :read-only-command)
-                (choice :tag "Read-only command"
-                        (string :tag "Command")
-                        (symbol :tag "Variable"))
-                (const :format "" :value :workspace-command)
-                (choice :tag "Workspace command"
-                        (string :tag "Command")
-                        (symbol :tag "Variable"))
-                (const :format "" :value :resume-command)
-                (choice :tag "Resume command"
-                        (string :tag "Command")
-                        (symbol :tag "Variable"))
+                (const :format "" :value :commands)
+                (alist :tag "Commands"
+                       :key-type (choice (const read-only)
+                                         (const workspace)
+                                         (const resume))
+                       :value-type string)
+                (const :format "" :value :instruction-files)
+                (repeat :tag "Instruction files" string)
+                (const :format "" :value :instruction-strategy)
+                (choice :tag "Instruction strategy"
+                        (const hierarchical-first)
+                        (const root-all))
                 (const :format "" :value :doctor-function)
                 (choice :tag "Doctor function"
                         (const :tag "None" nil)
@@ -176,25 +148,6 @@ different placement, such as a bottom side window or a dedicated frame."
   :type 'sexp
   :group 'my-codex)
 
-(defcustom my-codex-project-instruction-files
-  '("AGENTS.md" "CODEX.md" "ANTIGRAVITY.md" ".codex/instructions.md" ".antigravity/instructions.md")
-  "Additional candidate project instruction files.
-Prefer the agent-specific options for new configurations."
-  :type '(repeat string)
-  :group 'my-codex)
-
-(defcustom my-codex-codex-instruction-fallback-files
-  '("CODEX.md" ".codex/instructions.md")
-  "Fallback project instruction filenames used for Codex discovery."
-  :type '(repeat string)
-  :group 'my-codex)
-
-(defcustom my-codex-antigravity-instruction-files
-  '("ANTIGRAVITY.md" ".antigravity/instructions.md")
-  "Project instruction filenames used for Antigravity discovery."
-  :type '(repeat string)
-  :group 'my-codex)
-
 (defun my-codex--instruction-target-directory (root)
   "Return the instruction discovery directory below ROOT."
   (let ((directory (file-name-as-directory
@@ -221,21 +174,14 @@ Prefer the agent-specific options for new configurations."
 (defun my-codex-project-instruction-files (&optional root target agent)
   "Return effective instruction files for AGENT.
 ROOT defaults to the current project root and TARGET to the current buffer's
-directory.  Codex selects one file per directory from ROOT through TARGET.
-Antigravity candidates are checked at ROOT only."
+directory.  Discovery follows the agent profile's instruction strategy."
   (let* ((root (or root (my-codex-project-root)))
          (target (or target (my-codex--instruction-target-directory root)))
          (agent (or agent (my-codex--active-agent root))))
-    (pcase agent
-      ('codex
-       (let ((names (delete-dups
-                     (append '("AGENTS.override.md" "AGENTS.md")
-                             my-codex-codex-instruction-fallback-files
-                             (seq-remove
-                              (lambda (name)
-                                (member name
-                                        my-codex-antigravity-instruction-files))
-                              my-codex-project-instruction-files)))))
+    (let* ((profile (my-codex--agent-profile agent))
+           (names (plist-get profile :instruction-files)))
+      (pcase (plist-get profile :instruction-strategy)
+        ('hierarchical-first
          (delq nil
                (mapcar
                 (lambda (directory)
@@ -243,25 +189,13 @@ Antigravity candidates are checked at ROOT only."
                             (mapcar (lambda (name)
                                       (expand-file-name name directory))
                                     names)))
-                (my-codex--directories-to root target)))))
-      ('antigravity
-       (seq-filter
-        #'file-regular-p
-        (mapcar (lambda (name) (expand-file-name name root))
-                (delete-dups
-                 (append
-                  my-codex-antigravity-instruction-files
-                  (seq-remove
-                   (lambda (name)
-                     (or (member name '("AGENTS.override.md" "AGENTS.md"))
-                         (member name
-                                 my-codex-codex-instruction-fallback-files)))
-                   my-codex-project-instruction-files))))))
-      (_
-       (seq-filter
-        #'file-regular-p
-        (mapcar (lambda (name) (expand-file-name name root))
-                my-codex-project-instruction-files))))))
+                (my-codex--directories-to root target))))
+        ('root-all
+         (seq-filter
+          #'file-regular-p
+          (mapcar (lambda (name) (expand-file-name name root)) names)))
+        (_
+         (user-error "Agent %s has an invalid instruction strategy" agent))))))
 
 (defcustom my-codex-project-build-command nil
   "Command used to build the current project.
@@ -570,23 +504,14 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
   "Return AGENT's command string for ACCESS-MODE."
   (let* ((profile (my-codex--agent-profile agent))
          (key (pcase access-mode
-                ('read-only :read-only-command)
-                ('workspace-write :workspace-command)
-                ('resume :resume-command)
+                ('read-only 'read-only)
+                ('workspace-write 'workspace)
+                ('resume 'resume)
                 (_ (user-error "Unknown access mode: %s" access-mode))))
-         (command (plist-get profile key)))
-    (cond
-     ((and (stringp command) (not (string-empty-p command))) command)
-     ((and (symbolp command)
-           (boundp command)
-           (stringp (symbol-value command))
-           (not (string-empty-p (symbol-value command))))
-      (symbol-value command))
-     ((symbolp command)
-      (user-error "Agent %s command %s is not a non-empty string"
-                  agent command))
-     (t
-      (user-error "Agent %s has no %s command" agent access-mode)))))
+         (command (alist-get key (plist-get profile :commands))))
+    (if (and (stringp command) (not (string-empty-p command)))
+        command
+      (user-error "Agent %s has no %s command" agent access-mode))))
 
 (defun my-codex--read-agent ()
   "Read and return an agent profile identifier."

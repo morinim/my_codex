@@ -26,7 +26,6 @@
   "Message to display after sending the current prompt preview.")
 (defvar my-codex--region-send-override nil
   "Dynamically override region delivery with `reference' or `inline'.")
-(defvar my-codex-project-instruction-files)
 (defvar flycheck-current-errors)
 (defvar flycheck-mode)
 

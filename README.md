@@ -99,17 +99,15 @@ Configure options via `M-x customize-group RET my-codex RET`.
 ;; Set the default agent profile
 (setq my-codex-agent 'antigravity)
 
-;; Customize agent launch commands
-(setq my-codex-antigravity-workspace-command "agy --sandbox")
-(setq my-codex-antigravity-resume-command "agy resume")
+;; Customise an agent profile
+(setf (alist-get 'workspace
+                 (plist-get (alist-get 'antigravity my-codex-agent-profiles)
+                            :commands))
+      "agy --sandbox")
 
 ;; Layout & build commands
 (setq my-codex-right-width 80)
 (setq my-codex-project-build-command "./setup_build")
-(setq my-codex-codex-instruction-fallback-files
-      '("CODEX.md" ".codex/instructions.md"))
-(setq my-codex-antigravity-instruction-files
-      '("ANTIGRAVITY.md" ".antigravity/instructions.md"))
 
 ;; Prompt & warning thresholds
 (setq my-codex-enable-prompt-preview t)

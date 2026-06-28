@@ -185,7 +185,11 @@
   (let* ((root (file-name-as-directory
                 (make-temp-file "my-codex-instructions" t)))
          (nested (expand-file-name "src/lib" root))
-         (my-codex-codex-instruction-fallback-files '("CODEX.md")))
+         (my-codex-agent-profiles
+          '((codex
+             :instruction-files
+             ("AGENTS.override.md" "AGENTS.md" "CODEX.md")
+             :instruction-strategy hierarchical-first))))
     (unwind-protect
         (progn
           (make-directory nested t)
@@ -209,8 +213,11 @@
 (ert-deftest my-codex-project-instruction-files-separate-antigravity ()
   (let* ((root (file-name-as-directory
                 (make-temp-file "my-codex-instructions" t)))
-         (my-codex-antigravity-instruction-files
-          '("ANTIGRAVITY.md" ".antigravity/instructions.md")))
+         (my-codex-agent-profiles
+          '((antigravity
+             :instruction-files
+             ("ANTIGRAVITY.md" ".antigravity/instructions.md")
+             :instruction-strategy root-all))))
     (unwind-protect
         (progn
           (make-directory (expand-file-name ".antigravity" root))
@@ -439,13 +446,16 @@
 
 (ert-deftest my-codex-session-access-mode-recognizes-default-commands ()
   (should
-   (eq (my-codex--session-access-mode my-codex-read-only-command)
+   (eq (my-codex--session-access-mode
+        (my-codex--agent-command 'codex 'read-only))
        'read-only))
   (should
-   (eq (my-codex--session-access-mode my-codex-workspace-command)
+   (eq (my-codex--session-access-mode
+        (my-codex--agent-command 'codex 'workspace-write))
        'workspace-write))
   (should
-   (eq (my-codex--session-access-mode my-codex-resume-command)
+   (eq (my-codex--session-access-mode
+        (my-codex--agent-command 'codex 'resume))
        'resume))
   (should
    (eq (my-codex--session-access-mode "codex --custom")
@@ -457,13 +467,16 @@
   (should (equal (my-codex--access-mode-label 'read-only t)
                  "read-only [lock]")))
 
-(ert-deftest my-codex-agent-command-resolves-symbol-backed-commands ()
-  (let ((my-codex-read-only-command "codex-ro")
-        (my-codex-workspace-command "codex-ww")
-        (my-codex-resume-command "codex-resume")
-        (my-codex-antigravity-read-only-command "agy-ro")
-        (my-codex-antigravity-workspace-command "agy-ww")
-        (my-codex-antigravity-resume-command "agy-resume"))
+(ert-deftest my-codex-agent-command-reads-profile-commands ()
+  (let ((my-codex-agent-profiles
+         '((codex :commands
+                  ((read-only . "codex-ro")
+                   (workspace . "codex-ww")
+                   (resume . "codex-resume")))
+           (antigravity :commands
+                        ((read-only . "agy-ro")
+                         (workspace . "agy-ww")
+                         (resume . "agy-resume"))))))
     (should
      (equal (my-codex--agent-command 'codex 'read-only)
             "codex-ro"))
@@ -1124,7 +1137,7 @@
       (my-codex-default-read-only 'antigravity)
       (should
        (equal called
-              (list my-codex-antigravity-read-only-command
+              (list (my-codex--agent-command 'antigravity 'read-only)
                     nil nil 'antigravity 'read-only))))
     (cl-letf (((symbol-function 'my-codex-two-column-layout-with-command)
                (lambda (command focus-term session-name agent access-mode)
@@ -1134,7 +1147,8 @@
       (my-codex-default-workspace 'antigravity)
       (should
        (equal called
-              (list my-codex-antigravity-workspace-command
+              (list (my-codex--agent-command
+                     'antigravity 'workspace-write)
                     nil nil 'antigravity 'workspace-write))))))
 
 (ert-deftest my-codex-default-session-layout-records-active-agent ()
@@ -1196,9 +1210,11 @@
                        (set-window-buffer (selected-window) buf)
                        (selected-window))))
             (my-codex-two-column-layout-with-command
-             my-codex-read-only-command nil "plan")
+             (my-codex--agent-command 'codex 'read-only) nil "plan")
             (should (equal (nth 1 started) root))
-            (should (equal (nth 2 started) my-codex-read-only-command))
+            (should
+             (equal (nth 2 started)
+                    (my-codex--agent-command 'codex 'read-only)))
             (should (equal (nth 3 started) "plan"))
             (should (eq (nth 4 started) 'codex))
             (should-not (nth 5 started))
@@ -1428,7 +1444,7 @@
                            (set-window-buffer (selected-window) buf)
                            (selected-window))))
                 (my-codex-two-column-layout-with-command
-                 my-codex-workspace-command)))
+                 (my-codex--agent-command 'codex 'workspace-write))))
             (with-current-buffer buffer
               (should (equal my-codex-session-id expected-id))
               (should (equal my-codex-session-project-root expected-root))
@@ -3166,14 +3182,6 @@
                     '("Project instructions" warn
                       "27.0 KiB across 1 file; allowance 32.0 KiB: AGENTS.md")))))
       (delete-directory root t))))
-
-(ert-deftest my-codex-doctor-agent-rows-support-legacy-codex-profile ()
-  (let ((my-codex-agent-profiles '((codex :label "Codex"))))
-    (cl-letf (((symbol-function 'my-codex--doctor-codex-rows)
-               (lambda () '(("Codex setting" ok "configured")))))
-      (should
-       (equal (my-codex--doctor-agent-rows 'codex)
-              '(("Codex setting" ok "configured")))))))
 
 (ert-deftest my-codex-project-overview-sends-orientation-instructions ()
   (let (prompt)
