@@ -689,6 +689,63 @@
       (when-let ((buffer (get-buffer "*Agents Top*")))
         (kill-buffer buffer)))))
 
+(ert-deftest my-codex-top-header-scrolls-horizontally ()
+  (with-temp-buffer
+    (my-codex-top-mode)
+    (let ((my-codex--header-string "Project Session"))
+      (cl-letf (((symbol-function 'window-hscroll) (lambda (&rest _) 8)))
+        (should (equal (eval (cadr (nth 2 header-line-format)) t)
+                       "Session"))))))
+
+(ert-deftest my-codex-top-sort-refreshes-custom-header ()
+  (with-temp-buffer
+    (my-codex-top-mode)
+    (setq tabulated-list-entries '((one ["b" "" "" "" "" "" "" "" "" "" "" ""])
+                                   (two ["a" "" "" "" "" "" "" "" "" "" "" ""])))
+    (tabulated-list-print)
+    (should (eq (command-remapping 'tabulated-list-sort)
+                #'my-codex-top-sort))
+    (my-codex-top-sort 0)
+    (should (eq (caar tabulated-list-entries) 'two))
+    (should (eq (car header-line-format) ""))
+    (should (memq 'header-line-indent header-line-format))))
+
+(ert-deftest my-codex-top-mouse-sort-refreshes-custom-header ()
+  (with-temp-buffer
+    (my-codex-top-mode)
+    (save-window-excursion
+      (let ((window (selected-window)))
+        (set-window-buffer window (current-buffer))
+        (cl-letf (((symbol-function 'event-start) (lambda (_) 'position))
+                  ((symbol-function 'posn-window) (lambda (_) window))
+                  ((symbol-function 'tabulated-list-col-sort)
+                   (lambda (_) (tabulated-list-init-header))))
+          (my-codex-top-col-sort 'event))))
+    (should (eq (lookup-key my-codex-top-sort-button-map
+                            [header-line mouse-1])
+                #'my-codex-top-col-sort))
+    (should (eq (car header-line-format) ""))
+    (should (memq 'header-line-indent header-line-format))))
+
+(ert-deftest my-codex-top-column-resizing-refreshes-custom-header ()
+  (with-temp-buffer
+    (my-codex-top-mode)
+    (setq tabulated-list-entries
+          '((one ["project" "" "" "" "" "" "" "" "" "" "" ""])))
+    (tabulated-list-print)
+    (goto-char (point-min))
+    (should (eq (command-remapping 'tabulated-list-widen-current-column)
+                #'my-codex-top-widen-current-column))
+    (should (eq (command-remapping 'tabulated-list-narrow-current-column)
+                #'my-codex-top-narrow-current-column))
+    (my-codex-top-widen-current-column 2)
+    (should (= (cadr (aref tabulated-list-format 0)) 14))
+    (should (eq (car header-line-format) ""))
+    (my-codex-top-narrow-current-column 1)
+    (should (= (cadr (aref tabulated-list-format 0)) 13))
+    (should (eq (car header-line-format) ""))
+    (should (memq 'header-line-indent header-line-format))))
+
 (ert-deftest my-codex-top-git-info-reports-status-failure ()
   (cl-letf (((symbol-function 'my-codex--process-output-result)
              (lambda (_program &rest args)

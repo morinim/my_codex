@@ -27,12 +27,19 @@
 (defvar-local my-codex--header-string nil
   "Cached space-padded header string for horizontal scrolling.")
 
+(defvar-keymap my-codex-top-sort-button-map
+  :parent tabulated-list-sort-button-map
+  "<header-line> <mouse-1>" #'my-codex-top-col-sort
+  "<header-line> <mouse-2>" #'my-codex-top-col-sort
+  "<mouse-1>" #'my-codex-top-col-sort
+  "<mouse-2>" #'my-codex-top-col-sort)
+
 (defun my-codex--build-header-string ()
   "Build a space-padded propertized string of column headers."
   (let* ((x (max tabulated-list-padding 0))
          (button-props `(help-echo "Click to sort by column"
                          mouse-face header-line-highlight
-                         keymap ,tabulated-list-sort-button-map))
+                         keymap ,my-codex-top-sort-button-map))
          (len (length tabulated-list-format))
          (cols nil))
     (push (make-string x ?\s) cols)
@@ -85,18 +92,40 @@
 
 (defun my-codex--sync-header-hscroll ()
   "Configure the buffer-local `header-line-format` to align with `window-hscroll`."
-  (when (derived-mode-p 'my-codex-top-mode)
-    (setq-local my-codex--header-string (my-codex--build-header-string))
-    (setq-local header-line-format
-                '("" header-line-indent
-                  (:eval
-                   (let ((hscroll (window-hscroll)))
-                     (if (< hscroll (length my-codex--header-string))
-                         (substring my-codex--header-string hscroll)
-                       "")))))
-    (add-hook 'post-command-hook #'force-mode-line-update nil t)))
+  (setq-local my-codex--header-string (my-codex--build-header-string))
+  (setq-local header-line-format
+              '("" header-line-indent
+                (:eval
+                 (let ((hscroll (window-hscroll)))
+                   (if (< hscroll (length my-codex--header-string))
+                       (substring my-codex--header-string hscroll)
+                     ""))))))
 
-(advice-add 'tabulated-list-init-header :after #'my-codex--sync-header-hscroll)
+(defun my-codex-top-sort (&optional column)
+  "Sort dashboard entries by COLUMN and refresh its scrolling header."
+  (interactive "P")
+  (tabulated-list-sort column)
+  (my-codex--sync-header-hscroll))
+
+(defun my-codex-top-col-sort (event)
+  "Sort by the dashboard column clicked in EVENT and refresh its header."
+  (interactive "e")
+  (let ((buffer (window-buffer (posn-window (event-start event)))))
+    (tabulated-list-col-sort event)
+    (with-current-buffer buffer
+      (my-codex--sync-header-hscroll))))
+
+(defun my-codex-top-widen-current-column (&optional width)
+  "Widen the current dashboard column by WIDTH and refresh its header."
+  (interactive "p")
+  (tabulated-list-widen-current-column (or width 1))
+  (my-codex--sync-header-hscroll))
+
+(defun my-codex-top-narrow-current-column (&optional width)
+  "Narrow the current dashboard column by WIDTH and refresh its header."
+  (interactive "p")
+  (tabulated-list-narrow-current-column (or width 1))
+  (my-codex--sync-header-hscroll))
 
 (defun my-codex--visible-session-window (&optional source-window)
   "Return the visible agent session window for SOURCE-WINDOW."
@@ -190,6 +219,11 @@
 
 (defvar-keymap my-codex-top-mode-map
   :parent tabulated-list-mode-map
+  "<remap> <tabulated-list-sort>" #'my-codex-top-sort
+  "<remap> <tabulated-list-widen-current-column>"
+  #'my-codex-top-widen-current-column
+  "<remap> <tabulated-list-narrow-current-column>"
+  #'my-codex-top-narrow-current-column
   "RET" #'my-codex-top-visit
   "e"   #'my-codex-top-visit-edit-window
   "k"   #'my-codex-top-kill-session
