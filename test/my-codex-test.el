@@ -2727,6 +2727,55 @@
               '(("Codex setting" ok "configured"))))
       (should-not (my-codex--doctor-agent-rows 'antigravity)))))
 
+(ert-deftest my-codex-doctor-project-instructions-reports-total-size ()
+  (let ((root (make-temp-file "my-codex-project-" t))
+        (my-codex-agent 'codex))
+    (unwind-protect
+        (let ((first (expand-file-name "AGENTS.md" root))
+              (second (expand-file-name "CODEX.md" root)))
+          (with-temp-file first (insert (make-string 1024 ?a)))
+          (with-temp-file second (insert (make-string 512 ?b)))
+          (cl-letf (((symbol-function
+                      'my-codex--doctor-codex-integer-setting-value)
+                     (lambda (&rest _) 2048)))
+            (should
+             (equal (my-codex--doctor-project-instructions-row
+                     root (list first second))
+                    '("Project instructions" ok
+                      "1.5 KiB across 2 files; allowance 2.0 KiB: AGENTS.md, CODEX.md")))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-doctor-project-instructions-warns-near-allowance ()
+  (let ((root (make-temp-file "my-codex-project-" t))
+        (my-codex-agent 'codex))
+    (unwind-protect
+        (let ((file (expand-file-name "AGENTS.md" root)))
+          (with-temp-file file (insert (make-string 820 ?a)))
+          (cl-letf (((symbol-function
+                      'my-codex--doctor-codex-integer-setting-value)
+                     (lambda (&rest _) 1024)))
+            (should
+             (eq (cadr (my-codex--doctor-project-instructions-row
+                        root (list file)))
+                 'warn))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-doctor-project-instructions-uses-codex-default-allowance ()
+  (let ((root (make-temp-file "my-codex-project-" t))
+        (my-codex-agent 'codex))
+    (unwind-protect
+        (let ((file (expand-file-name "AGENTS.md" root)))
+          (with-temp-file file (insert (make-string (* 27 1024) ?a)))
+          (cl-letf (((symbol-function
+                      'my-codex--doctor-codex-integer-setting-value)
+                     (lambda (&rest _) nil)))
+            (should
+             (equal (my-codex--doctor-project-instructions-row
+                     root (list file))
+                    '("Project instructions" warn
+                      "27.0 KiB across 1 file; allowance 32.0 KiB: AGENTS.md")))))
+      (delete-directory root t))))
+
 (ert-deftest my-codex-doctor-agent-rows-support-legacy-codex-profile ()
   (let ((my-codex-agent-profiles '((codex :label "Codex"))))
     (cl-letf (((symbol-function 'my-codex--doctor-codex-rows)

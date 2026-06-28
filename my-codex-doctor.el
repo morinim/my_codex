@@ -31,6 +31,9 @@
   :type 'number
   :group 'my-codex)
 
+(defconst my-codex--doctor-codex-project-doc-default-bytes (* 32 1024)
+  "Codex's default maximum size for project instruction files.")
+
 (declare-function my-codex--agent-command "my-codex-core" (agent access-mode))
 (declare-function my-codex-project-root "my-codex-core" ())
 (declare-function vterm-mode "vterm" ())
@@ -276,6 +279,14 @@ The result is a cons of (VALUE . SOURCE), or nil when unset."
          (unless (string-empty-p home) home))
        (expand-file-name ".codex" "~"))))
 
+(defun my-codex--doctor-codex-integer-setting-value (key &optional file)
+  "Return Codex user-level integer setting KEY from FILE, or nil."
+  (let ((config-file (or file (my-codex--doctor-codex-config-file))))
+    (when (file-readable-p config-file)
+      (with-temp-buffer
+        (insert-file-contents config-file)
+        (car (my-codex--doctor-codex-user-integer-setting key))))))
+
 (defun my-codex--doctor-codex-service-tier (&optional file)
   "Return a diagnostic row for the Codex CLI service tier in FILE.
 When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
@@ -309,6 +320,44 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
     (while (string-match "\\([0-9]+\\)\\([0-9][0-9][0-9]\\)" text)
       (setq text (replace-match "\\1,\\2" nil nil text)))
     text))
+
+(defun my-codex--doctor-byte-size (bytes)
+  "Return BYTES formatted as bytes or KiB."
+  (if (< bytes 1024)
+      (format "%d bytes" bytes)
+    (format "%.1f KiB" (/ bytes 1024.0))))
+
+(defun my-codex--doctor-project-instructions-row (root files)
+  "Return the project instruction diagnostic row for FILES under ROOT."
+  (if (null files)
+      (list "Project instructions" 'info
+            (format "No effective files found for %s" my-codex-agent))
+    (let* ((bytes (apply #'+
+                         (mapcar (lambda (file)
+                                   (file-attribute-size
+                                    (file-attributes file)))
+                                 files)))
+           (allowance
+            (and (eq my-codex-agent 'codex)
+                 (or (my-codex--doctor-codex-integer-setting-value
+                      "project_doc_max_bytes")
+                     my-codex--doctor-codex-project-doc-default-bytes)))
+           (status (if (and allowance (>= bytes (* allowance 0.8)))
+                       'warn
+                     'ok)))
+      (list
+       "Project instructions" status
+       (concat
+        (format "%s across %d %s"
+                (my-codex--doctor-byte-size bytes)
+                (length files)
+                (if (= (length files) 1) "file" "files"))
+        (when allowance
+          (format "; allowance %s"
+                  (my-codex--doctor-byte-size allowance)))
+        ": "
+        (mapconcat (lambda (file) (file-relative-name file root))
+                   files ", "))))))
 
 (defun my-codex--doctor-codex-integer-setting
     (key label &optional unit file)
@@ -441,14 +490,8 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
             (if project
                 (format "Project root: %s" (project-root project))
               (format "No project detected; using %s" root)))
-      (let ((files (my-codex-project-instruction-files root)))
-        (list "Project instructions"
-              (if files 'ok 'info)
-              (if files
-                  (mapconcat (lambda (file)
-                               (file-relative-name file root))
-                             files ", ")
-                (format "No effective files found for %s" my-codex-agent)))))
+      (my-codex--doctor-project-instructions-row
+       root (my-codex-project-instruction-files root)))
      (my-codex--doctor-agent-rows my-codex-agent)
      (list
       (my-codex--doctor-command-status
