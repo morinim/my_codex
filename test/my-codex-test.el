@@ -6,15 +6,83 @@
 
 (require 'ert)
 (require 'my-codex)
+(require 'my-codex-prompts)
+(require 'my-codex-git)
+(require 'my-codex-github)
+(require 'my-codex-links)
+(require 'my-codex-doctor)
+(require 'my-codex-vterm)
 
 (defvar flycheck-current-errors)
 (defvar flycheck-mode)
 (defvar vterm-copy-mode-hook)
 (defvar vterm-mode-hook)
 
+(ert-deftest my-codex-require-keeps-optional-modules-lazy ()
+  (let* ((script '(progn
+                    (setq load-prefer-newer t)
+                    (require 'my-codex)
+                    (prin1
+                     (mapcar #'featurep
+                             '(my-codex-prompts my-codex-git
+                               my-codex-github my-codex-links
+                               my-codex-doctor my-codex-vterm)))))
+         (output
+          (with-temp-buffer
+            (let ((exit-code
+                   (call-process invocation-name nil t nil
+                                 "--batch" "-Q" "-L" default-directory
+                                 "--eval" (prin1-to-string script))))
+              (unless (zerop exit-code)
+                (error "Nested Emacs failed: %s" (buffer-string)))
+              (buffer-string)))))
+    (should (equal output "(nil nil nil nil nil nil)"))))
+
+(ert-deftest my-codex-require-autoloads-main-prompt-dependencies ()
+  (let* ((script '(progn
+                    (setq load-prefer-newer t)
+                    (require 'my-codex)
+                    (prin1
+                     (mapcar
+                      (lambda (function)
+                        (and (autoloadp (symbol-function function))
+                             (nth 1 (symbol-function function))))
+                      '(my-codex--request-marked-output
+                        my-codex-send-prompt
+                        my-codex-visible-window)))))
+         (output
+          (with-temp-buffer
+            (let ((exit-code
+                   (call-process invocation-name nil t nil
+                                 "--batch" "-Q" "-L" default-directory
+                                 "--eval" (prin1-to-string script))))
+              (unless (zerop exit-code)
+                (error "Nested Emacs failed: %s" (buffer-string)))
+              (buffer-string)))))
+    (should (equal output
+                   "(\"my-codex-prompts\" \"my-codex-prompts\" \"my-codex-prompts\")"))))
+
 (ert-deftest my-codex-command-catalogue-commands-exist ()
   (dolist (entry my-codex-command-catalogue)
     (should (fboundp (car entry)))))
+
+(ert-deftest my-codex-command-catalogue-commands-exist-after-clean-require ()
+  (let* ((script '(progn
+                    (setq load-prefer-newer t)
+                    (require 'my-codex)
+                    (prin1
+                     (cl-every (lambda (entry) (fboundp (car entry)))
+                               my-codex-command-catalogue))))
+         (output
+          (with-temp-buffer
+            (let ((exit-code
+                   (call-process invocation-name nil t nil
+                                 "--batch" "-Q" "-L" default-directory
+                                 "--eval" (prin1-to-string script))))
+              (unless (zerop exit-code)
+                (error "Nested Emacs failed: %s" (buffer-string)))
+              (buffer-string)))))
+    (should (equal output "t"))))
 
 (ert-deftest my-codex-command-catalogue-bindings-do-not-conflict ()
   (let ((bindings (make-hash-table :test #'equal)))

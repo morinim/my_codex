@@ -294,6 +294,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
                      'file
                      resolved-target)))))))))))
 
+;;;###autoload
 (define-minor-mode my-codex-session-links-mode
   "Make URLs and in-repository file references clickable in agent buffers."
   :lighter " Links"

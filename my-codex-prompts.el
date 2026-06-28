@@ -143,6 +143,21 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
   :type '(alist :key-type string :value-type string)
   :group 'my-codex)
 
+(defcustom my-codex-session-summary-prompt
+  "Summarise our conversation so far into useful project notes.
+
+Focus on:
+- decisions made
+- open questions
+- action items
+- proposed implementation details
+- risks or constraints
+
+Preserve concrete file names, command names, and technical details. Do not edit files."
+  "Prompt used by `my-codex-summarize-session-to-markdown'."
+  :type 'string
+  :group 'my-codex)
+
 (declare-function my-codex--project-files "my-codex-git" (root))
 (declare-function my-codex--active-agent "my-codex-core" (&optional root))
 (declare-function my-codex--active-agent-label "my-codex-core" (&optional root))
@@ -171,6 +186,20 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
 (defface my-codex-prompt-preview-embedded-face
   '((t :inherit font-lock-doc-face))
   "Face used for embedded text in prompt preview buffers.")
+
+(defun my-codex-edit-session-summary (summary root)
+  "Open an editable Markdown buffer with agent session SUMMARY from ROOT."
+  (let ((buffer (get-buffer-create (my-codex--session-summary-buffer-name root))))
+    (pop-to-buffer buffer)
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (insert (string-trim summary))
+      (goto-char (point-min)))
+    (setq default-directory root)
+    (my-codex--session-export-mode)
+    (setq-local header-line-format "Edit agent session summary Markdown.")
+    (message "%s session summary is ready for editing."
+             (my-codex--active-agent-label root))))
 
 (defun my-codex--approx-token-count (text)
   "Estimate tokens in TEXT from its byte size."
@@ -794,6 +823,7 @@ and CONTEXT-LINES controls the excerpt radius for modified xref buffers."
              "Inspect the file directly if needed. Do not edit files."))
       "\n\n"))))
 
+;;;###autoload
 (defun my-codex-explain-region-as-error ()
   "Ask the agent to explain the selected compiler or test error."
   (interactive)

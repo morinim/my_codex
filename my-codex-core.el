@@ -311,6 +311,19 @@ When nil, use `compile-command'."
   :type 'boolean
   :group 'my-codex)
 
+(defcustom my-codex-enable-vterm-integration t
+  "When non-nil, enable vterm helpers with `my-codex-global-mode'."
+  :type 'boolean
+  :group 'my-codex)
+
+(defcustom my-codex-vterm-min-scrollback 10000
+  "Minimum `vterm-max-scrollback' used in agent vterm buffers.
+This protects marked-output extraction from losing markers when
+the agent emits verbose output.  When nil, do not adjust vterm scrollback."
+  :type '(choice (const :tag "Do not adjust" nil)
+                 natnum)
+  :group 'my-codex)
+
 (defvar my-codex--auto-revert-enabled-by-mode nil
   "Non-nil when `my-codex-global-mode' enabled `global-auto-revert-mode'.")
 

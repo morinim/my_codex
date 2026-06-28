@@ -14,19 +14,6 @@
 
 (defvar vterm-copy-mode)
 
-(defcustom my-codex-enable-vterm-integration t
-  "When non-nil, enable vterm helpers with `my-codex-global-mode'."
-  :type 'boolean
-  :group 'my-codex)
-
-(defcustom my-codex-vterm-min-scrollback 10000
-  "Minimum `vterm-max-scrollback' used in agent vterm buffers.
-This protects marked-output extraction from losing markers when
-the agent emits verbose output.  When nil, do not adjust vterm scrollback."
-  :type '(choice (const :tag "Do not adjust" nil)
-                 natnum)
-  :group 'my-codex)
-
 (autoload 'my-codex-transient-preserve-selection "my-codex" nil t)
 (declare-function my-codex--agent-label "my-codex-core" (agent))
 (declare-function vterm-yank "vterm" ())
