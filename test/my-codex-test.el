@@ -1560,7 +1560,8 @@
    (equal
     (my-codex--prompt-preview-header "abcde")
     (concat "Target: Codex / default. "
-            "Size: 5 chars, approx. 2 tokens. Edit if needed; "
+            "Size: 5 chars; outbound prompt text: approximately 2 tokens. "
+            "Edit if needed; "
             "C-c C-c sends to agent, C-c C-k cancels."))))
 
 (ert-deftest my-codex-prompt-preview-header-shows-target-session ()
@@ -1574,7 +1575,8 @@
            (equal
             (my-codex--prompt-preview-header "abcde" buffer)
             (concat "Target: Antigravity / plan / WORKSPACE WRITE. "
-                    "Size: 5 chars, approx. 2 tokens. Edit if needed; "
+                    "Size: 5 chars; outbound prompt text: approximately 2 tokens. "
+                    "Edit if needed; "
                     "C-c C-c sends to agent, C-c C-k cancels."))))
       (when (buffer-live-p buffer)
         (kill-buffer buffer))
@@ -1598,7 +1600,8 @@
              (equal
               header-line-format
               (concat "Target: Codex / default / read-only [lock]. "
-                      "Size: 9 chars, approx. 3 tokens. Edit if needed; "
+                      "Size: 9 chars; outbound prompt text: approximately 3 tokens. "
+                      "Edit if needed; "
                       "C-c C-c sends to agent, C-c C-k cancels.")))))
       (when (buffer-live-p target)
         (kill-buffer target))
@@ -2239,7 +2242,8 @@
               (should (equal seen-default "Send inline"))
               (should (string-match-p "small region" prompt))
               (should (string-match-p
-                       "Sent inline: approximately [0-9]+ tokens"
+                       (concat "Sent inline; outbound prompt text: "
+                               "approximately [0-9]+ tokens")
                        sent-message)))))
       (delete-directory root t))))
 

@@ -173,12 +173,12 @@ Each entry is a cons cell of the form (NAME . PROMPT)."
   "Face used for embedded text in prompt preview buffers.")
 
 (defun my-codex--approx-token-count (text)
-  "Return a conservative token count estimate for TEXT."
+  "Estimate tokens in TEXT from its byte size."
   (ceiling (/ (float (string-bytes text)) 3.2)))
 
 (defun my-codex--prompt-size-description (prompt)
   "Return a short human-readable size description for PROMPT."
-  (format "%d chars, approx. %d tokens"
+  (format "%d chars; outbound prompt text: approximately %d tokens"
           (length prompt)
           (my-codex--approx-token-count prompt)))
 
@@ -1200,7 +1200,7 @@ Return `reference', `inline', or nil when no choice is needed."
                 file
                 (line-number-at-pos beg t)
                 (line-number-at-pos (max beg (1- end)) t)))
-    (format "Sent inline: approximately %s tokens"
+    (format "Sent inline; outbound prompt text: approximately %s tokens"
             (my-codex--approx-token-count
              (buffer-substring-no-properties beg end)))))
 
