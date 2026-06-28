@@ -43,6 +43,46 @@
     (should (vectorp layout))
     (should (seq-every-p #'vectorp layout))))
 
+(ert-deftest my-codex-transient-target-description-uses-session-buffer ()
+  (let ((root (file-name-as-directory (file-truename default-directory)))
+        (buffer (generate-new-buffer " *my-codex-target*")))
+    (unwind-protect
+        (progn
+          (my-codex--mark-named-session
+           buffer "feature-x" root 'workspace-write 'codex)
+          (cl-letf (((symbol-function 'transient-scope) (lambda () buffer)))
+            (should
+             (equal (my-codex--transient-target-description)
+                    "Target: Codex · feature-x · workspace-write"))))
+      (kill-buffer buffer))))
+
+(ert-deftest my-codex-active-session-buffer-prefers-transient-target ()
+  (let ((root (file-name-as-directory (file-truename default-directory)))
+        (target (generate-new-buffer " *my-codex-captured-target*"))
+        (other (generate-new-buffer " *my-codex-other-target*")))
+    (unwind-protect
+        (progn
+          (my-codex--mark-named-session
+           target "feature-x" root 'workspace-write 'codex)
+          (my-codex--mark-default-session other root 'read-only 'codex)
+          (cl-letf (((symbol-function 'transient-scope) (lambda () target))
+                    ((symbol-function 'my-codex--session-buffer-for-window)
+                     (lambda (&rest _) other)))
+            (should (eq (my-codex-active-session-buffer) target))))
+      (kill-buffer target)
+      (kill-buffer other))))
+
+(ert-deftest my-codex-session-transient-opens-without-session-buffer ()
+  (let (setup-arguments)
+    (cl-letf (((symbol-function 'my-codex-active-session-buffer)
+               (lambda (&rest _) (user-error "No session")))
+              ((symbol-function 'transient-setup)
+               (lambda (&rest arguments)
+                 (setq setup-arguments arguments))))
+      (my-codex-session-transient)
+      (should (equal setup-arguments
+                     '(my-codex-session-transient nil nil :scope nil))))))
+
 (defmacro my-codex-test--with-mock-flycheck (diagnostics &rest body)
   "Run BODY with mocked Flycheck DIAGNOSTICS."
   (declare (indent 1))

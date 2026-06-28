@@ -662,7 +662,13 @@ Open the generated notes in an editable Markdown buffer when they are ready."
   (defmacro my-codex--define-catalogue-transient (name doc)
     "Define transient NAME with DOC from `my-codex-command-catalogue'."
     `(transient-define-prefix ,name () ,doc
-       ,(vconcat (my-codex--catalogue-transient-layout name)))))
+       ,(vconcat
+         (list [:description my-codex--transient-target-description])
+         (my-codex--catalogue-transient-layout name))
+       (interactive)
+       (transient-setup ',name nil nil
+                        :scope (ignore-errors
+                                 (my-codex-active-session-buffer))))))
 
 (defun my-codex--catalogue-prefix-keymap ()
   "Return the prefix keymap described by the command catalogue."

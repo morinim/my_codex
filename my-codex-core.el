@@ -794,13 +794,22 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
      (my-codex--project-session-buffer-p (window-buffer window) root))
    (window-list (selected-frame) 'no-minibuf)))
 
+(defun my-codex--transient-session-buffer (root)
+  "Return the current transient's captured session buffer for ROOT."
+  (when (fboundp 'transient-scope)
+    (let ((buffer (ignore-errors (transient-scope))))
+      (when (and (bufferp buffer)
+                 (my-codex--project-session-buffer-p buffer root))
+        buffer))))
+
 (defun my-codex-active-session-buffer (&optional require-live)
   "Return the active agent session buffer.
 When REQUIRE-LIVE is non-nil, require the returned buffer to have a live
 process."
   (let* ((root (my-codex-project-root))
          (buffer
-          (or (my-codex--session-buffer-for-window (selected-window) root)
+          (or (my-codex--transient-session-buffer root)
+              (my-codex--session-buffer-for-window (selected-window) root)
               (when (my-codex--project-session-buffer-p (current-buffer) root)
                 (current-buffer))
               (when-let ((window (my-codex--project-visible-session-window root)))
@@ -810,6 +819,18 @@ process."
                (not (my-codex--session-buffer-live-p buffer)))
       (user-error "No running agent process in %s" (buffer-name buffer)))
     buffer))
+
+(defun my-codex--transient-target-description ()
+  "Return the target heading for the current transient."
+  (let ((buffer (ignore-errors (my-codex-active-session-buffer))))
+    (if (buffer-live-p buffer)
+        (with-current-buffer buffer
+          (format "Target: %s · %s · %s"
+                  (my-codex--agent-label
+                   (or my-codex-session-agent (my-codex--active-agent)))
+                  (or my-codex-session-name "default")
+                  (or my-codex-session-access-mode 'unknown)))
+      "Target: unavailable")))
 
 (defun my-codex-active-session-window ()
   "Return the visible window for the active agent session."

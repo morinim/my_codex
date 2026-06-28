@@ -1505,9 +1505,14 @@ When a region is active, include exact file and line context for it."
 ;;;###autoload
 (transient-define-prefix my-codex-ask-preset-transient ()
   "Ask the agent using a prompt preset."
+  [:description my-codex--transient-target-description]
   [:class transient-column
    :setup-children my-codex--prompt-preset-transient-suffixes
-   ""])
+   ""]
+  (interactive)
+  (transient-setup 'my-codex-ask-preset-transient nil nil
+                   :scope (ignore-errors
+                            (my-codex-active-session-buffer))))
 
 (provide 'my-codex-prompts)
 
