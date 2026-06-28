@@ -779,7 +779,6 @@
 (ert-deftest my-codex-top-rename-session-refreshes-session-title ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-top" t)))
         (session-buffer (get-buffer-create "*codex-top-rename*"))
-        (my-codex--backends (make-hash-table :test #'equal))
         collision-buffer)
     (unwind-protect
         (progn
@@ -790,9 +789,7 @@
                  (with-current-buffer session-buffer
                    (my-codex-session-buffer-name
                     "after" my-codex-session-agent))))
-          (let ((backend (my-codex--backend-for-buffer-name
-                          (buffer-name session-buffer))))
-            (cl-letf (((symbol-function 'get-buffer-process)
+          (cl-letf (((symbol-function 'get-buffer-process)
                        (lambda (buffer)
                          (eq buffer session-buffer)))
                       ((symbol-function 'process-live-p)
@@ -810,13 +807,7 @@
                 (search-forward "*codex-top-rename*")
                 (beginning-of-line)
                 (my-codex-top-rename-session)))
-            (should-not (gethash "*codex-top-rename*" my-codex--backends))
-            (should (eq backend
-                        (gethash (buffer-name session-buffer)
-                                 my-codex--backends)))
-            (should (equal (my-codex--backend-buffer-name backend)
-                           (buffer-name session-buffer)))
-            (should (string-suffix-p "<2>" (buffer-name session-buffer))))
+          (should (string-suffix-p "<2>" (buffer-name session-buffer)))
           (with-current-buffer session-buffer
             (should (equal my-codex-session-name "after"))
             (should (string-match-p "Codex · WORKSPACE WRITE · after"
@@ -836,20 +827,6 @@
       (when (buffer-live-p collision-buffer)
         (kill-buffer collision-buffer))
       (when-let ((buffer (get-buffer "*Agents Top*")))
-        (kill-buffer buffer)))))
-
-(ert-deftest my-codex-session-kill-removes-backend ()
-  (let ((buffer (get-buffer-create "*codex-kill-backend*"))
-        (root (file-name-as-directory (make-temp-file "my-codex-kill" t)))
-        (my-codex--backends (make-hash-table :test #'equal)))
-    (unwind-protect
-        (progn
-          (my-codex--mark-named-session buffer "kill" root 'read-only)
-          (my-codex--backend-for-buffer-name (buffer-name buffer))
-          (kill-buffer buffer)
-          (should-not (gethash "*codex-kill-backend*" my-codex--backends)))
-      (delete-directory root t)
-      (when (buffer-live-p buffer)
         (kill-buffer buffer)))))
 
 (ert-deftest my-codex-top-rejects-renaming-default-session ()
@@ -1082,7 +1059,6 @@
     (unwind-protect
         (let ((default-directory root)
               (my-codex-agent 'codex)
-              (my-codex--backends (make-hash-table :test #'equal))
               (my-codex--project-active-agents
                (make-hash-table :test #'equal)))
           (cl-letf (((symbol-function 'my-codex--fit-frame-to-right-layout)
@@ -1113,8 +1089,7 @@
   (let ((root (file-name-as-directory (make-temp-file "my-codex-named" t)))
         started)
     (unwind-protect
-        (let ((default-directory root)
-              (my-codex--backends (make-hash-table :test #'equal)))
+        (let ((default-directory root))
           (cl-letf (((symbol-function 'my-codex--fit-frame-to-right-layout)
                      #'ignore)
                     ((symbol-function 'my-codex--apply-display-window-width)
@@ -1153,8 +1128,7 @@
   (let ((root (file-name-as-directory (make-temp-file "my-codex-named" t)))
         started)
     (unwind-protect
-        (let ((default-directory root)
-              (my-codex--backends (make-hash-table :test #'equal)))
+        (let ((default-directory root))
           (cl-letf (((symbol-function 'my-codex--fit-frame-to-right-layout)
                      #'ignore)
                     ((symbol-function 'my-codex--apply-display-window-width)
@@ -1343,8 +1317,7 @@
         (buffer-name "*codex-shared-test*"))
     (unwind-protect
         (let ((buffer (get-buffer-create buffer-name))
-              (my-codex-buffer-name buffer-name)
-              (my-codex--backend nil))
+              (my-codex-buffer-name buffer-name))
           (my-codex--mark-default-session buffer root-a 'read-only)
           (let ((expected-id (with-current-buffer buffer my-codex-session-id))
                 (expected-root

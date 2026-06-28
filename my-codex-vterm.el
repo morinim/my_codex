@@ -15,7 +15,6 @@
 (defvar vterm-copy-mode)
 
 (autoload 'my-codex-transient-preserve-selection "my-codex" nil t)
-(declare-function my-codex--agent-label "my-codex-core" (agent))
 (declare-function vterm-yank "vterm" ())
 
 (defvar-keymap my-codex-vterm-override-mode-map

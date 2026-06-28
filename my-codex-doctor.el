@@ -34,8 +34,6 @@
 (defconst my-codex--doctor-codex-project-doc-default-bytes (* 32 1024)
   "Codex's default maximum size for project instruction files.")
 
-(declare-function my-codex--agent-command "my-codex-core" (agent access-mode))
-(declare-function my-codex-project-root "my-codex-core" ())
 (declare-function vterm-mode "vterm" ())
 
 (defface my-codex-doctor-info-face

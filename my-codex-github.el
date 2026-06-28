@@ -42,15 +42,6 @@ Preserve concrete file names, command names, and technical details. Do not edit 
   :type 'string
   :group 'my-codex)
 
-(declare-function my-codex--active-agent "my-codex-core" (&optional root))
-(declare-function my-codex--active-agent-label "my-codex-core" (&optional root))
-(declare-function my-codex--agent-label "my-codex-core" (agent))
-(declare-function my-codex--safe-root-name "my-codex-core" (root))
-(declare-function my-codex--session-export-mode "my-codex-core" ())
-(declare-function my-codex-active-session-buffer "my-codex-core" (&optional require-live))
-(declare-function my-codex-project-root "my-codex-core" ())
-(declare-function my-codex--request-marked-output "my-codex-prompts" (&rest args))
-
 (defun my-codex--github-issue-output-buffer-name (root)
   "Return the GitHub issue process buffer name for ROOT."
   (let* ((agent (my-codex--active-agent root))

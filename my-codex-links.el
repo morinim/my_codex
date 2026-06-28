@@ -14,8 +14,6 @@
 (require 'subr-x)
 (require 'my-codex-core)
 
-(declare-function my-codex-project-root "my-codex-core" ())
-
 (defvar my-codex-session-link-map
   (let ((map (make-sparse-keymap)))
     (define-key map [mouse-1] #'my-codex-open-session-link-at-event)

@@ -508,16 +508,6 @@ When PLAIN is non-nil, do not apply text properties."
   "Backend implementation that runs an agent in a vterm buffer."
   buffer-name)
 
-(defvar my-codex--backend nil
-  "Current backend instance for the active project agent session.")
-
-(defvar my-codex--backends (make-hash-table :test #'equal)
-  "Backend instances keyed by agent buffer name.")
-
-(defun my-codex--remove-current-buffer-backend ()
-  "Remove the backend associated with the current buffer."
-  (remhash (buffer-name) my-codex--backends))
-
 (defvar my-codex--project-active-agents (make-hash-table :test #'equal)
   "Agent profile identifiers keyed by project root.")
 
@@ -545,12 +535,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
 
 (defun my-codex--backend-for-buffer-name (buffer-name)
   "Return the backend for BUFFER-NAME."
-  (let ((backend (gethash buffer-name my-codex--backends)))
-    (unless (my-codex-vterm-backend-p backend)
-      (setq backend (my-codex--make-vterm-backend buffer-name))
-      (puthash buffer-name backend my-codex--backends))
-    (setq my-codex--backend backend)
-    backend))
+  (my-codex--make-vterm-backend buffer-name))
 
 (defun my-codex--current-backend ()
   "Return the backend for the current project default agent session."
@@ -667,8 +652,6 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
     (setq-local my-codex-session-last-activity (current-time))
     (setq-local my-codex-session-last-output-time nil)
     (setq-local my-codex-session-prompt-count 0)
-    (add-hook 'kill-buffer-hook
-              #'my-codex--remove-current-buffer-backend nil t)
     (my-codex--refresh-session-title)))
 
 (defun my-codex--mark-default-session

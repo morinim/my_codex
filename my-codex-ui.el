@@ -408,20 +408,14 @@ STATE is one of the strings `clean', `dirty', or `error'."
                                   current-name)))
       (with-current-buffer buffer
         (let* ((new-name (my-codex--normalise-session-name new-name))
-               (old-buffer-name (buffer-name))
                (agent my-codex-session-agent)
                (root my-codex-session-project-root)
                (new-id (my-codex--session-id root new-name agent))
-               (new-buf-name (my-codex-session-buffer-name new-name agent))
-               (backend (gethash old-buffer-name my-codex--backends)))
+               (new-buf-name (my-codex-session-buffer-name new-name agent)))
           (setq-local my-codex-session-name new-name)
           (setq-local my-codex-session-id new-id)
           (my-codex--refresh-session-title)
-          (setq new-buf-name (rename-buffer new-buf-name t))
-          (when backend
-            (remhash old-buffer-name my-codex--backends)
-            (setf (my-codex-vterm-backend-buffer-name backend) new-buf-name)
-            (puthash new-buf-name backend my-codex--backends))))
+          (rename-buffer new-buf-name t)))
       (revert-buffer))))
 
 ;;;###autoload

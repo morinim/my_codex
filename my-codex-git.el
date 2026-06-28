@@ -80,18 +80,6 @@ are appended for each request."
   :type 'natnum
   :group 'my-codex)
 
-(declare-function my-codex--preview-and-send-prompt "my-codex-prompts" (prompt))
-(declare-function my-codex--request-marked-output "my-codex-prompts" (&rest args))
-(declare-function my-codex-send-prompt "my-codex-prompts" (prompt &optional target-buffer))
-(declare-function my-codex--active-agent-label "my-codex-core" (&optional root))
-(declare-function my-codex--process-output-lines "my-codex-core" (program &rest args))
-(declare-function my-codex--safe-root-name "my-codex-core" (root))
-(declare-function my-codex--session-export-mode "my-codex-core" ())
-(declare-function my-codex--session-summary-buffer-name "my-codex-core" (root))
-(declare-function my-codex-active-session-buffer "my-codex-core" (&optional require-live))
-(declare-function my-codex-current-buffer-name "my-codex-core" ())
-(declare-function my-codex-project-root "my-codex-core" ())
-
 (defun my-codex--commit-message-trailer-line-p (line)
   "Return non-nil if LINE looks like a Git commit message trailer."
   (string-match-p "\\`[[:alnum:]-]+: .+" line))
