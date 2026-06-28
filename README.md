@@ -88,7 +88,7 @@ Press `F8` to open the agent command menu.
 
 ### Diagnostics, Build & Instructions
 - `F8 i` : open project instruction files (e.g., `AGENTS.md`, `CODEX.md`, `.codex/instructions.md`).
-- `F8 T` : open infrequent tools, including project overview, diagnostics, session export, session dashboard, and doctor.
+- `F8 T` : open infrequent tools, including project overview, diagnostics, session export, and doctor.
 - `F7` : run the project build command.
 
 ## Customisation
