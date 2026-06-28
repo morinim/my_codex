@@ -1023,6 +1023,121 @@
                              (car started)))))
       (delete-directory root t))))
 
+(ert-deftest my-codex-new-session-from-handoff-starts-fresh-session ()
+  (let* ((root (file-name-as-directory (make-temp-file "my-codex-handoff" t)))
+         (source (get-buffer-create "*codex-handoff-source*"))
+         requested started sent)
+    (unwind-protect
+        (let ((default-directory root))
+          (my-codex--mark-default-session source root 'read-only)
+          (cl-letf (((symbol-function 'my-codex-active-session-buffer)
+                     (lambda (&optional _require-live) source))
+                    ((symbol-function 'my-codex--request-marked-output)
+                     (lambda (&rest args)
+                       (setq requested args)
+                       (funcall (plist-get args :callback) "# Handoff\n\nNext step.")))
+                    ((symbol-function 'my-codex-new-session)
+                     (lambda (name agent access-mode)
+                       (setq started (list name agent access-mode))
+                       (get-buffer-create
+                        (my-codex-session-buffer-name name agent))))
+                    ((symbol-function 'my-codex-send-prompt)
+                     (lambda (prompt buffer)
+                       (setq sent (list prompt (buffer-name buffer))))))
+            (my-codex-new-session-from-handoff
+             "follow-up" 'antigravity 'workspace-write)
+            (should (equal (plist-get requested :name) "SESSION_HANDOFF"))
+            (should (eq (plist-get requested :timer-var)
+                        'my-codex--handoff-wait-timer))
+            (should (equal started
+                           '("follow-up" antigravity workspace-write)))
+            (should (equal (car sent) "# Handoff\n\nNext step."))
+            (should (equal (cadr sent)
+                           (my-codex-session-buffer-name
+                            "follow-up" 'antigravity)))))
+      (when (buffer-live-p source)
+        (kill-buffer source))
+      (when-let ((target (get-buffer
+                          (let ((default-directory root))
+                            (my-codex-session-buffer-name
+                             "follow-up" 'antigravity)))))
+        (kill-buffer target))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-new-session-from-handoff-rechecks-freshness ()
+  (let* ((root (file-name-as-directory (make-temp-file "my-codex-handoff" t)))
+         (source (get-buffer-create "*codex-handoff-source*"))
+         callback target started sent)
+    (unwind-protect
+        (let ((default-directory root))
+          (my-codex--mark-default-session source root 'read-only)
+          (cl-letf (((symbol-function 'my-codex-active-session-buffer)
+                     (lambda (&optional _require-live) source))
+                    ((symbol-function 'my-codex--request-marked-output)
+                     (lambda (&rest args)
+                       (setq callback (plist-get args :callback))))
+                    ((symbol-function 'my-codex-new-session)
+                     (lambda (&rest _) (setq started t)))
+                    ((symbol-function 'my-codex-send-prompt)
+                     (lambda (&rest _) (setq sent t))))
+            (my-codex-new-session-from-handoff
+             "raced" 'codex 'read-only)
+            (setq target
+                  (get-buffer-create
+                   (my-codex-session-buffer-name "raced" 'codex)))
+            (should-error (funcall callback "# Handoff") :type 'user-error)
+            (should-not started)
+            (should-not sent)))
+      (when (buffer-live-p source)
+        (kill-buffer source))
+      (when (buffer-live-p target)
+        (kill-buffer target))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-new-session-from-handoff-rejects-existing-session ()
+  (let* ((root (file-name-as-directory (make-temp-file "my-codex-handoff" t)))
+         (source (get-buffer-create "*codex-handoff-source*"))
+         target)
+    (unwind-protect
+        (let ((default-directory root))
+          (my-codex--mark-default-session source root 'read-only)
+          (setq target
+                (get-buffer-create
+                 (my-codex-session-buffer-name "existing" 'codex)))
+          (cl-letf (((symbol-function 'my-codex-active-session-buffer)
+                     (lambda (&optional _require-live) source)))
+            (should-error
+             (my-codex-new-session-from-handoff
+              "existing" 'codex 'read-only)
+             :type 'user-error)))
+      (when (buffer-live-p source)
+        (kill-buffer source))
+      (when (buffer-live-p target)
+        (kill-buffer target))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-new-session-from-handoff-rejects-concurrent-handoff ()
+  (let* ((root (file-name-as-directory (make-temp-file "my-codex-handoff" t)))
+         (source (get-buffer-create "*codex-handoff-source*"))
+         timer)
+    (unwind-protect
+        (let ((default-directory root))
+          (my-codex--mark-default-session source root 'read-only)
+          (setq timer (run-with-timer 60 nil #'ignore))
+          (with-current-buffer source
+            (setq-local my-codex--handoff-wait-timer timer))
+          (cl-letf (((symbol-function 'my-codex-active-session-buffer)
+                     (lambda (&optional _require-live) source)))
+            (should-error
+             (my-codex-new-session-from-handoff
+              "second" 'codex 'read-only)
+             :type 'user-error)))
+      (when (timerp timer)
+        (cancel-timer timer))
+      (when (buffer-live-p source)
+        (kill-buffer source))
+      (delete-directory root t))))
+
 (ert-deftest my-codex-hide-window-hides-associated-session ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-hide" t)))
         (default-buffer (get-buffer-create "*codex-default-test*"))

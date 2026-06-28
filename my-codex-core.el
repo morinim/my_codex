@@ -354,6 +354,9 @@ When nil, use `compile-command'."
 (defvar-local my-codex--generated-artifact-wait-timer nil
   "Active timer waiting for a generated session artefact.")
 
+(defvar-local my-codex--handoff-wait-timer nil
+  "Active timer waiting for a generated session handoff.")
+
 (defvar-local my-codex-session-id nil
   "Identifier for the agent session owned by the current buffer.")
 

@@ -467,6 +467,18 @@ AGENT identifies the agent profile used for buffer names and metadata."
     ("read-only" 'read-only)
     ("workspace-write" 'workspace-write)))
 
+(defcustom my-codex-session-handoff-prompt
+  "Create a concise Markdown handoff for a fresh agent session.
+
+Include the objective, relevant decisions, constraints, required files or
+references, completed work, and unresolved questions.  Do not duplicate
+content already captured in project artefacts; reference those artefacts by
+path or URL instead.  Redact secrets and personal information.  Do not edit
+files."
+  "Prompt used by `my-codex-new-session-from-handoff'."
+  :type 'string
+  :group 'my-codex)
+
 ;;;###autoload
 (defun my-codex-new-session (name agent &optional access-mode)
   "Start or show a named agent session NAME using AGENT and ACCESS-MODE."
@@ -479,6 +491,49 @@ AGENT identifies the agent profile used for buffer names and metadata."
     (my-codex-two-column-layout-with-command
      (my-codex--agent-command agent access-mode)
      nil session-name agent access-mode)))
+
+;;;###autoload
+(defun my-codex-new-session-from-handoff (name agent access-mode)
+  "Create named session NAME using AGENT and ACCESS-MODE from a handoff.
+Ask the active session for compact context, then send only that context to
+the new session."
+  (interactive
+   (list
+    (read-string "New session name: ")
+    (my-codex--read-agent)
+    (my-codex--read-session-access-mode)))
+  (let* ((source-buffer (my-codex-active-session-buffer t))
+         (root (with-current-buffer source-buffer
+                 (or my-codex-session-project-root
+                     (my-codex-project-root))))
+         (session-name (my-codex--normalise-session-name name))
+         (default-directory root)
+         (target-name (my-codex-session-buffer-name session-name agent)))
+    (with-current-buffer source-buffer
+      (when (timerp my-codex--handoff-wait-timer)
+        (user-error "A session handoff is already pending")))
+    (when (get-buffer target-name)
+      (user-error "Session %s already exists" session-name))
+    (my-codex--request-marked-output
+     :name "SESSION_HANDOFF"
+     :buffer source-buffer
+     :prompt my-codex-session-handoff-prompt
+     :placeholder "<Markdown handoff here>"
+     :callback
+     (lambda (handoff)
+       (let ((default-directory root))
+         (when (get-buffer target-name)
+           (user-error "Session %s was created while waiting for its handoff"
+                       session-name))
+         (my-codex-new-session session-name agent access-mode)
+         (my-codex-send-prompt handoff (get-buffer target-name))))
+     :timeout-message "Timed out waiting for agent session handoff."
+     :ready-message (format "Started session %s from handoff." session-name)
+     :poll-interval my-codex-generated-output-poll-interval
+     :poll-attempts my-codex-generated-output-poll-attempts
+     :timer-var 'my-codex--handoff-wait-timer)
+    (message "Asked the active agent for a handoff; waiting to start %s."
+             session-name)))
 
 ;;;###autoload
 (defun my-codex-resume ()
@@ -571,6 +626,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (my-codex-default-workspace "w" "Workspace" "Default session" :prefix my-codex-session-transient :path "S" :menu "Show/start default workspace-write" :help "Show the default agent session with workspace write access")
       (my-codex-top "l" "Dashboard" "Session" :prefix my-codex-session-transient :path "S" :menu "Session dashboard" :help "Display a dashboard of all agent sessions")
       (my-codex-new-session "n" "New named" "Session" :prefix my-codex-session-transient :path "S" :menu "New named session" :help "Start or show a named agent session")
+      (my-codex-new-session-from-handoff "h" "From handoff" "Session" :prefix my-codex-session-transient :path "S" :menu "Start fresh with handoff" :help "Create a named session containing only a compact handoff")
       (my-codex-resume "r" "Resume" "Session" :prefix my-codex-session-transient)
       (my-codex-hide-window "q" "Hide agent" "Session" :prefix my-codex-session-transient :path "S" :menu "Hide selected session window" :help "Hide the agent window associated with the selected session")
       (my-codex-send-project-overview "p" "Project overview" "Tools" :prefix my-codex-tools-transient :path "T" :menu "Project overview" :help "Send the active agent a compact project overview")
