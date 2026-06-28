@@ -677,6 +677,7 @@
           (with-current-buffer "*Agents Top*"
             (should (derived-mode-p 'my-codex-top-mode))
             (should (string-match-p "review" (buffer-string)))
+            (should (string-match-p "Codex" (buffer-string)))
             (should (string-match-p "\\*codex-top-render\\*" (buffer-string)))
             (should (string-match-p "WORKSPACE WRITE" (buffer-string)))
             (should (string-match-p "feature-x" (buffer-string)))
@@ -700,8 +701,9 @@
 (ert-deftest my-codex-top-sort-refreshes-custom-header ()
   (with-temp-buffer
     (my-codex-top-mode)
-    (setq tabulated-list-entries '((one ["b" "" "" "" "" "" "" "" "" "" "" ""])
-                                   (two ["a" "" "" "" "" "" "" "" "" "" "" ""])))
+    (setq tabulated-list-entries
+          '((one ["b" "" "" "" "" "" "" "" "" "" "" "" "" ""])
+            (two ["a" "" "" "" "" "" "" "" "" "" "" "" "" ""])))
     (tabulated-list-print)
     (should (eq (command-remapping 'tabulated-list-sort)
                 #'my-codex-top-sort))
@@ -731,7 +733,7 @@
   (with-temp-buffer
     (my-codex-top-mode)
     (setq tabulated-list-entries
-          '((one ["project" "" "" "" "" "" "" "" "" "" "" ""])))
+          '((one ["project" "" "" "" "" "" "" "" "" "" "" "" "" ""])))
     (tabulated-list-print)
     (goto-char (point-min))
     (should (eq (command-remapping 'tabulated-list-widen-current-column)
@@ -739,10 +741,10 @@
     (should (eq (command-remapping 'tabulated-list-narrow-current-column)
                 #'my-codex-top-narrow-current-column))
     (my-codex-top-widen-current-column 2)
-    (should (= (cadr (aref tabulated-list-format 0)) 14))
+    (should (= (cadr (aref tabulated-list-format 0)) 8))
     (should (eq (car header-line-format) ""))
     (my-codex-top-narrow-current-column 1)
-    (should (= (cadr (aref tabulated-list-format 0)) 13))
+    (should (= (cadr (aref tabulated-list-format 0)) 7))
     (should (eq (car header-line-format) ""))
     (should (memq 'header-line-indent header-line-format))))
 
@@ -775,6 +777,87 @@
       (delete-directory root t)
       (kill-buffer first)
       (kill-buffer second))))
+
+(ert-deftest my-codex-top-marks-the-project-active-session ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-top" t)))
+        (session (get-buffer-create "*codex-top-active*"))
+        (my-codex--project-active-sessions
+         (make-hash-table :test #'equal)))
+    (unwind-protect
+        (progn
+          (my-codex--mark-named-session session "active" root 'read-only)
+          (my-codex--set-active-session session)
+          (cl-letf (((symbol-function 'my-codex--all-session-buffers)
+                     (lambda () (list session)))
+                    ((symbol-function 'my-codex-top--cached-git-info)
+                     (lambda (_root) '("main" . "clean"))))
+            (should (equal (aref (cadar (my-codex-top--make-entries)) 0)
+                           "*"))))
+      (delete-directory root t)
+      (when (buffer-live-p session) (kill-buffer session)))))
+
+(ert-deftest my-codex-top-labels-session-with-removed-agent-profile ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-top" t)))
+        (session (get-buffer-create "*codex-top-removed-agent*")))
+    (unwind-protect
+        (progn
+          (my-codex--mark-named-session session "legacy" root 'read-only)
+          (with-current-buffer session
+            (setq-local my-codex-session-agent 'legacy-agent))
+          (let ((my-codex-agent-profiles nil))
+            (cl-letf (((symbol-function 'my-codex--all-session-buffers)
+                       (lambda () (list session)))
+                      ((symbol-function 'my-codex-top--cached-git-info)
+                       (lambda (_root) '("main" . "clean"))))
+              (should
+               (equal (aref (cadar (my-codex-top--make-entries)) 1)
+                      "legacy-agent")))))
+      (delete-directory root t)
+      (when (buffer-live-p session) (kill-buffer session)))))
+
+(ert-deftest my-codex-top-reuses-git-info-across-refreshes ()
+  (let ((my-codex-top--git-cache (make-hash-table :test #'equal))
+        (my-codex-top-git-cache-ttl 5)
+        (calls 0))
+    (cl-letf (((symbol-function 'float-time) (lambda (&optional _) 10.0))
+              ((symbol-function 'my-codex-top--git-info)
+               (lambda (_root)
+                 (setq calls (1+ calls))
+                 '("main" . "clean"))))
+      (my-codex-top--cached-git-info "/project/")
+      (my-codex-top--cached-git-info "/project/")
+      (should (= calls 1)))))
+
+(ert-deftest my-codex-top-git-cache-expires ()
+  (let ((my-codex-top--git-cache (make-hash-table :test #'equal))
+        (my-codex-top-git-cache-ttl 5)
+        (now 10.0)
+        (calls 0))
+    (cl-letf (((symbol-function 'float-time) (lambda (&optional _) now))
+              ((symbol-function 'my-codex-top--git-info)
+               (lambda (_root)
+                 (setq calls (1+ calls))
+                 (cons (number-to-string calls) "clean"))))
+      (my-codex-top--cached-git-info "/project/")
+      (setq now 15.0)
+      (should (equal (my-codex-top--cached-git-info "/project/")
+                     '("2" . "clean"))))))
+
+(ert-deftest my-codex-top-kill-dead-sessions-preserves-live-buffers ()
+  (let ((live (get-buffer-create "*codex-top-live*"))
+        (dead (get-buffer-create "*codex-top-dead*")))
+    (unwind-protect
+        (cl-letf (((symbol-function 'my-codex--all-session-buffers)
+                   (lambda () (list live dead)))
+                  ((symbol-function 'my-codex--session-buffer-live-p)
+                   (lambda (buffer) (eq buffer live)))
+                  ((symbol-function 'yes-or-no-p) (lambda (&rest _) t))
+                  ((symbol-function 'revert-buffer) #'ignore))
+          (my-codex-top-kill-dead-sessions)
+          (should (buffer-live-p live))
+          (should-not (buffer-live-p dead)))
+      (when (buffer-live-p live) (kill-buffer live))
+      (when (buffer-live-p dead) (kill-buffer dead)))))
 
 (ert-deftest my-codex-top-rename-session-refreshes-session-title ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-top" t)))
@@ -856,7 +939,7 @@
             (my-codex-top-mode)
             (setq tabulated-list-entries
                   `((,(buffer-name session-buffer)
-                     ["project" "session" ,(buffer-name session-buffer)
+                     ["" "" "project" "session" ,(buffer-name session-buffer)
                       "" "" "" "" "" "" "" "" ""])))
             (tabulated-list-print)
             (goto-char (point-min))
@@ -883,7 +966,7 @@
             (my-codex-top-mode)
             (setq tabulated-list-entries
                   `((,(buffer-name session-buffer)
-                     ["project" "session" ,(buffer-name session-buffer)
+                     ["" "" "project" "session" ,(buffer-name session-buffer)
                       "" "" "" "" "" "" "" "" ""])))
             (tabulated-list-print)
             (goto-char (point-min))
@@ -923,7 +1006,7 @@
           (my-codex-top-mode)
           (setq tabulated-list-entries
                 `((,(buffer-name session-buffer)
-                   ["project" "session" ,(buffer-name session-buffer)
+                   ["" "" "project" "session" ,(buffer-name session-buffer)
                     "" "" "" "" "" "" "" "" ""])))
           (tabulated-list-print)
           (goto-char (point-min))

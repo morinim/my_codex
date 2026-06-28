@@ -27,6 +27,14 @@
 (defvar-local my-codex--header-string nil
   "Cached space-padded header string for horizontal scrolling.")
 
+(defcustom my-codex-top-git-cache-ttl 5
+  "Seconds for which dashboard Git information remains valid."
+  :type 'number
+  :group 'my-codex)
+
+(defvar my-codex-top--git-cache (make-hash-table :test #'equal)
+  "Git dashboard information keyed by project root.")
+
 (defvar-keymap my-codex-top-sort-button-map
   :parent tabulated-list-sort-button-map
   "<header-line> <mouse-1>" #'my-codex-top-col-sort
@@ -228,17 +236,20 @@
   "RET" #'my-codex-top-visit
   "e"   #'my-codex-top-visit-edit-window
   "k"   #'my-codex-top-kill-session
+  "K"   #'my-codex-top-kill-dead-sessions
   "d"   #'my-codex-top-project-diff
   "D"   #'my-codex-top-dired-project
   "b"   #'my-codex-top-build-project
   "R"   #'my-codex-top-rename-session
-  "g"   #'revert-buffer)
+  "g"   #'my-codex-top-refresh-git)
 
 (define-derived-mode my-codex-top-mode tabulated-list-mode
   "Agents Top"
   "Major mode for monitoring agent sessions."
   (setq tabulated-list-format
-        [("Project" 12 t)
+        [("Active" 6 t)
+         ("Agent" 12 t)
+         ("Project" 12 t)
          ("Session" 10 t)
          ("Buffer" 28 t)
          ("Access" 16 t)
@@ -253,7 +264,7 @@
   (setq tabulated-list-padding 1)
   (setq revert-buffer-function #'my-codex-top-refresh)
   (setq-local mode-line-format
-              '("  *Agents Top*  [D:Dired  b:Build  R:Rename  d:Diff  e:Edit  k:Kill  RET:Visit  g:Refresh]"))
+              '("  *Agents Top*  [D:Dired  b:Build  R:Rename  d:Diff  e:Edit  k:Kill  K:Kill dead  RET:Visit  g:Refresh]"))
   (tabulated-list-init-header)
   (my-codex--sync-header-hscroll))
 
@@ -261,6 +272,12 @@
   "Refresh the agent dashboard entries."
   (setq tabulated-list-entries (my-codex-top--make-entries))
   (tabulated-list-print t))
+
+(defun my-codex-top-refresh-git ()
+  "Refresh the dashboard, discarding cached Git information."
+  (interactive)
+  (clrhash my-codex-top--git-cache)
+  (revert-buffer))
 
 (defun my-codex-top--git-info (root)
   "Return Git information for ROOT as (BRANCH . STATE).
@@ -282,16 +299,40 @@ STATE is one of the strings `clean', `dirty', or `error'."
                  (t "clean"))))
     (cons branch state)))
 
+(defun my-codex-top--cached-git-info (root)
+  "Return recently cached Git information for ROOT, or compute it."
+  (let* ((now (float-time))
+         (cached (gethash root my-codex-top--git-cache)))
+    (if (and cached
+             (< (- now (car cached)) my-codex-top-git-cache-ttl))
+        (cdr cached)
+      (let ((info (my-codex-top--git-info root)))
+        (puthash root (cons now info) my-codex-top--git-cache)
+        info))))
+
+(defun my-codex-top--agent-label (agent)
+  "Return a dashboard label for AGENT, including removed profiles."
+  (if-let ((profile (alist-get agent my-codex-agent-profiles)))
+      (or (plist-get profile :label) (symbol-name agent))
+    (if agent (format "%s" agent) "—")))
+
 (defun my-codex-top--make-entries ()
   "Build tabulated list entries for all agent sessions."
   (let ((git-cache (make-hash-table :test #'equal)))
     (mapcar
      (lambda (buffer)
-       (let (project session access state pid branch git-state prompts lines age last-act)
+       (let (active agent project session access state pid branch git-state prompts lines age last-act)
          (with-current-buffer buffer
            (let ((root my-codex-session-project-root)
                  (now (current-time)))
-             (setq project (if root (file-name-nondirectory (directory-file-name root)) "")
+             (setq active (if (and root
+                                    (eq buffer
+                                        (gethash (my-codex--project-key root)
+                                                 my-codex--project-active-sessions)))
+                               "*"
+                             "")
+                 agent (my-codex-top--agent-label my-codex-session-agent)
+                 project (if root (file-name-nondirectory (directory-file-name root)) "")
                  session (or my-codex-session-name "")
                  access (my-codex--access-mode-label my-codex-session-access-mode)
                  state (if-let ((proc (get-buffer-process buffer)))
@@ -310,14 +351,14 @@ STATE is one of the strings `clean', `dirty', or `error'."
                (pcase-let ((`(,cached-branch . ,cached-state)
                             (or (gethash root git-cache)
                                 (puthash root
-                                         (my-codex-top--git-info root)
+                                         (my-codex-top--cached-git-info root)
                                          git-cache))))
                  (setq branch cached-branch
                        git-state cached-state))
                (setq branch "—"
                      git-state "—"))))
          (list (buffer-name buffer)
-               (vector project session (buffer-name buffer) access state pid branch git-state prompts lines age last-act))))
+               (vector active agent project session (buffer-name buffer) access state pid branch git-state prompts lines age last-act))))
      (my-codex--all-session-buffers))))
 
 (defun my-codex-top-kill-session ()
@@ -334,6 +375,20 @@ STATE is one of the strings `clean', `dirty', or `error'."
             (kill-process proc))))
       (kill-buffer buffer)
       (revert-buffer))))
+
+(defun my-codex-top-kill-dead-sessions ()
+  "Kill all session buffers that have no live process."
+  (interactive)
+  (let ((buffers (seq-remove #'my-codex--session-buffer-live-p
+                             (my-codex--all-session-buffers))))
+    (if (null buffers)
+        (message "No dead session buffers")
+      (when (yes-or-no-p
+             (format "Kill %d dead session buffer%s? "
+                     (length buffers)
+                     (if (= (length buffers) 1) "" "s")))
+        (mapc #'kill-buffer buffers)
+        (revert-buffer)))))
 
 (defun my-codex-top-visit-edit-window ()
   "Select the edit window associated with the session at point."
