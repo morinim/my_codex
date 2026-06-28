@@ -498,6 +498,10 @@ When PLAIN is non-nil, do not apply text properties."
 (defvar my-codex--backends (make-hash-table :test #'equal)
   "Backend instances keyed by agent buffer name.")
 
+(defun my-codex--remove-current-buffer-backend ()
+  "Remove the backend associated with the current buffer."
+  (remhash (buffer-name) my-codex--backends))
+
 (defvar my-codex--project-active-agents (make-hash-table :test #'equal)
   "Agent profile identifiers keyed by project root.")
 
@@ -647,6 +651,8 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
     (setq-local my-codex-session-last-activity (current-time))
     (setq-local my-codex-session-last-output-time nil)
     (setq-local my-codex-session-prompt-count 0)
+    (add-hook 'kill-buffer-hook
+              #'my-codex--remove-current-buffer-backend nil t)
     (my-codex--refresh-session-title)))
 
 (defun my-codex--mark-default-session

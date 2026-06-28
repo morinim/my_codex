@@ -363,20 +363,31 @@ STATE is one of the strings `clean', `dirty', or `error'."
          (buffer (and buffer-name (get-buffer buffer-name))))
     (unless buffer
       (user-error "No agent session on this line"))
+    (with-current-buffer buffer
+      (when (equal my-codex-session-id
+                   (my-codex--default-session-id
+                    my-codex-session-project-root
+                    my-codex-session-agent))
+        (user-error "The default session cannot be renamed")))
     (let* ((current-name (with-current-buffer buffer my-codex-session-name))
            (new-name (read-string (format "Rename session %s to: " (or current-name "default"))
                                   current-name)))
-      (when (string-empty-p (string-trim new-name))
-        (user-error "Session name cannot be empty"))
       (with-current-buffer buffer
-        (let* ((agent my-codex-session-agent)
+        (let* ((new-name (my-codex--normalise-session-name new-name))
+               (old-buffer-name (buffer-name))
+               (agent my-codex-session-agent)
                (root my-codex-session-project-root)
                (new-id (my-codex--session-id root new-name agent))
-               (new-buf-name (my-codex-session-buffer-name new-name agent)))
+               (new-buf-name (my-codex-session-buffer-name new-name agent))
+               (backend (gethash old-buffer-name my-codex--backends)))
           (setq-local my-codex-session-name new-name)
           (setq-local my-codex-session-id new-id)
           (my-codex--refresh-session-title)
-          (rename-buffer new-buf-name t)))
+          (setq new-buf-name (rename-buffer new-buf-name t))
+          (when backend
+            (remhash old-buffer-name my-codex--backends)
+            (setf (my-codex-vterm-backend-buffer-name backend) new-buf-name)
+            (puthash new-buf-name backend my-codex--backends))))
       (revert-buffer))))
 
 ;;;###autoload

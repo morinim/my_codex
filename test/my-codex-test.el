@@ -591,29 +591,45 @@
 
 (ert-deftest my-codex-top-rename-session-refreshes-session-title ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-top" t)))
-        (session-buffer (get-buffer-create "*codex-top-rename*")))
+        (session-buffer (get-buffer-create "*codex-top-rename*"))
+        (my-codex--backends (make-hash-table :test #'equal))
+        collision-buffer)
     (unwind-protect
         (progn
           (my-codex--mark-named-session
            session-buffer "before" root 'workspace-write)
-          (cl-letf (((symbol-function 'get-buffer-process)
-                     (lambda (buffer)
-                       (eq buffer session-buffer)))
-                    ((symbol-function 'process-live-p)
-                     (lambda (process) process))
-                    ((symbol-function 'process-id)
-                     (lambda (_) 9999))
-                    ((symbol-function 'my-codex--process-output-lines)
-                     (lambda (&rest _) nil))
-                    ((symbol-function 'pop-to-buffer) #'ignore)
-                    ((symbol-function 'read-string)
-                     (lambda (&rest _) "after")))
-            (my-codex-top)
-            (with-current-buffer "*Agents Top*"
-              (goto-char (point-min))
-              (search-forward "*codex-top-rename*")
-              (beginning-of-line)
-              (my-codex-top-rename-session)))
+          (setq collision-buffer
+                (get-buffer-create
+                 (with-current-buffer session-buffer
+                   (my-codex-session-buffer-name
+                    "after" my-codex-session-agent))))
+          (let ((backend (my-codex--backend-for-buffer-name
+                          (buffer-name session-buffer))))
+            (cl-letf (((symbol-function 'get-buffer-process)
+                       (lambda (buffer)
+                         (eq buffer session-buffer)))
+                      ((symbol-function 'process-live-p)
+                       (lambda (process) process))
+                      ((symbol-function 'process-id)
+                       (lambda (_) 9999))
+                      ((symbol-function 'my-codex--process-output-lines)
+                       (lambda (&rest _) nil))
+                      ((symbol-function 'pop-to-buffer) #'ignore)
+                      ((symbol-function 'read-string)
+                       (lambda (&rest _) "after")))
+              (my-codex-top)
+              (with-current-buffer "*Agents Top*"
+                (goto-char (point-min))
+                (search-forward "*codex-top-rename*")
+                (beginning-of-line)
+                (my-codex-top-rename-session)))
+            (should-not (gethash "*codex-top-rename*" my-codex--backends))
+            (should (eq backend
+                        (gethash (buffer-name session-buffer)
+                                 my-codex--backends)))
+            (should (equal (my-codex--backend-buffer-name backend)
+                           (buffer-name session-buffer)))
+            (should (string-suffix-p "<2>" (buffer-name session-buffer))))
           (with-current-buffer session-buffer
             (should (equal my-codex-session-name "after"))
             (should (string-match-p "Codex · WORKSPACE WRITE · after"
@@ -630,8 +646,38 @@
       (delete-directory root t)
       (when (buffer-live-p session-buffer)
         (kill-buffer session-buffer))
+      (when (buffer-live-p collision-buffer)
+        (kill-buffer collision-buffer))
       (when-let ((buffer (get-buffer "*Agents Top*")))
         (kill-buffer buffer)))))
+
+(ert-deftest my-codex-session-kill-removes-backend ()
+  (let ((buffer (get-buffer-create "*codex-kill-backend*"))
+        (root (file-name-as-directory (make-temp-file "my-codex-kill" t)))
+        (my-codex--backends (make-hash-table :test #'equal)))
+    (unwind-protect
+        (progn
+          (my-codex--mark-named-session buffer "kill" root 'read-only)
+          (my-codex--backend-for-buffer-name (buffer-name buffer))
+          (kill-buffer buffer)
+          (should-not (gethash "*codex-kill-backend*" my-codex--backends)))
+      (delete-directory root t)
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
+
+(ert-deftest my-codex-top-rejects-renaming-default-session ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-default" t)))
+        (session-buffer (get-buffer-create "*codex-default-rename*")))
+    (unwind-protect
+        (progn
+          (my-codex--mark-default-session session-buffer root 'read-only)
+          (cl-letf (((symbol-function 'tabulated-list-get-id)
+                     (lambda () (buffer-name session-buffer))))
+            (should-error (my-codex-top-rename-session)
+                          :type 'user-error)))
+      (delete-directory root t)
+      (when (buffer-live-p session-buffer)
+        (kill-buffer session-buffer)))))
 
 (ert-deftest my-codex-top-visit-edit-window-selects-associated-window ()
   (let ((session-buffer (get-buffer-create "*codex-top-edit*"))
