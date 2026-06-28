@@ -511,6 +511,9 @@ When PLAIN is non-nil, do not apply text properties."
 (defvar my-codex--project-active-agents (make-hash-table :test #'equal)
   "Agent profile identifiers keyed by project root.")
 
+(defvar my-codex--project-active-sessions (make-hash-table :test #'equal)
+  "Active agent session buffers keyed by project root.")
+
 (cl-defgeneric my-codex-backend-start
     (backend project-root command &optional session-name agent access-mode)
   "Start BACKEND in PROJECT-ROOT with COMMAND and return its buffer.
@@ -652,6 +655,7 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
     (setq-local my-codex-session-last-activity (current-time))
     (setq-local my-codex-session-last-output-time nil)
     (setq-local my-codex-session-prompt-count 0)
+    (add-hook 'kill-buffer-hook #'my-codex--forget-active-session nil t)
     (my-codex--refresh-session-title)))
 
 (defun my-codex--mark-default-session
@@ -711,6 +715,30 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
   (puthash (my-codex--project-key root)
            agent
            my-codex--project-active-agents))
+
+(defun my-codex--set-active-session (buffer)
+  "Record BUFFER as the active session for its project."
+  (unless (buffer-live-p buffer)
+    (user-error "Session buffer is no longer live"))
+  (with-current-buffer buffer
+    (unless (and (bound-and-true-p my-codex-session-id)
+                 my-codex-session-project-root)
+      (user-error "%s is not an agent session" (buffer-name buffer)))
+    (let ((root my-codex-session-project-root))
+      (puthash (my-codex--project-key root)
+               buffer
+               my-codex--project-active-sessions)
+      (when my-codex-session-agent
+        (my-codex--set-active-agent my-codex-session-agent root)))))
+
+(defun my-codex--forget-active-session ()
+  "Forget the current buffer when it is its project's active session."
+  (when (and (bound-and-true-p my-codex-session-id)
+             my-codex-session-project-root)
+    (let ((key (my-codex--project-key my-codex-session-project-root)))
+      (when (eq (gethash key my-codex--project-active-sessions)
+                (current-buffer))
+        (remhash key my-codex--project-active-sessions)))))
 
 (defun my-codex-current-buffer-name (&optional agent)
   "Return the buffer name for the current agent session."
@@ -783,12 +811,15 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
           (when (my-codex--project-session-buffer-p buffer root)
             buffer)))))
 
-(defun my-codex--project-visible-session-window (root)
-  "Return a visible agent session window for ROOT, if any."
-  (seq-find
-   (lambda (window)
-     (my-codex--project-session-buffer-p (window-buffer window) root))
-   (window-list (selected-frame) 'no-minibuf)))
+(defun my-codex--project-active-session-buffer (root)
+  "Return the explicitly active session buffer for ROOT, if valid."
+  (let* ((key (my-codex--project-key root))
+         (buffer (gethash key my-codex--project-active-sessions)))
+    (if (and buffer (my-codex--project-session-buffer-p buffer root))
+        buffer
+      (when buffer
+        (remhash key my-codex--project-active-sessions))
+      nil)))
 
 (defun my-codex--transient-session-buffer (root)
   "Return the current transient's captured session buffer for ROOT."
@@ -806,10 +837,7 @@ process."
          (buffer
           (or (my-codex--transient-session-buffer root)
               (my-codex--session-buffer-for-window (selected-window) root)
-              (when (my-codex--project-session-buffer-p (current-buffer) root)
-                (current-buffer))
-              (when-let ((window (my-codex--project-visible-session-window root)))
-                (window-buffer window))
+              (my-codex--project-active-session-buffer root)
               (my-codex--session-buffer))))
     (when (and require-live
                (not (my-codex--session-buffer-live-p buffer)))

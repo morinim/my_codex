@@ -440,6 +440,9 @@ AGENT identifies the agent profile used for buffer names and metadata."
           (my-codex-backend-start
            backend project-root codex-command session-name agent access-mode))
 
+        (when (my-codex--project-session-buffer-p term-buffer project-root)
+          (my-codex--set-active-session term-buffer))
+
         (if focus-term
             (select-window term-window)
           (when (window-live-p edit-window)

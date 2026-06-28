@@ -2005,6 +2005,45 @@
         (kill-buffer target))
       (delete-directory root t))))
 
+(ert-deftest my-codex-active-session-buffer-uses-remembered-session ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-active" t)))
+        (target (get-buffer-create "*my-codex-active-remembered*"))
+        (my-codex--project-active-sessions (make-hash-table :test #'equal)))
+    (unwind-protect
+        (let ((default-directory root))
+          (cl-letf (((symbol-function 'project-current)
+                     (lambda (&rest _args) nil)))
+            (my-codex--mark-named-session
+             target "review" root 'workspace-write 'antigravity)
+            (my-codex--set-active-session target)
+            (should (eq (my-codex-active-session-buffer) target))))
+      (when (buffer-live-p target)
+        (kill-buffer target))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-active-session-buffer-prefers-window-to-remembered-session ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-active" t)))
+        (remembered (get-buffer-create "*my-codex-active-remembered*"))
+        (window-target (get-buffer-create "*my-codex-active-window*"))
+        (my-codex--project-active-sessions (make-hash-table :test #'equal)))
+    (unwind-protect
+        (let ((default-directory root))
+          (cl-letf (((symbol-function 'project-current)
+                     (lambda (&rest _args) nil)))
+            (my-codex--mark-named-session
+             remembered "remembered" root 'workspace-write 'antigravity)
+            (my-codex--mark-named-session
+             window-target "window" root 'workspace-write 'antigravity)
+            (my-codex--set-active-session remembered)
+            (set-window-parameter
+             (selected-window) 'my-codex-term-buffer window-target)
+            (should (eq (my-codex-active-session-buffer) window-target))))
+      (set-window-parameter (selected-window) 'my-codex-term-buffer nil)
+      (dolist (buffer (list remembered window-target))
+        (when (buffer-live-p buffer)
+          (kill-buffer buffer)))
+      (delete-directory root t))))
+
 (ert-deftest my-codex-active-session-buffer-ignores-foreign-window-session ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-active" t)))
         (foreign-root

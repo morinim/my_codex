@@ -173,7 +173,8 @@
           (select-window term-window))
       (select-window
        (or (display-buffer buffer my-codex-display-buffer-action)
-           (user-error "Failed to display %s" (buffer-name buffer)))))))
+           (user-error "Failed to display %s" (buffer-name buffer)))))
+    (my-codex--set-active-session buffer)))
 
 (defun my-codex-top-visit ()
   "Visit the agent session at point."
