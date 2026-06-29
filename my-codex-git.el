@@ -418,6 +418,7 @@ repository toplevel."
          (relative-file (my-codex--git-relative-file-name file git-root))
          (head-buffer (my-codex--git-head-buffer git-root relative-file))
          (worktree-buffer (find-file-noselect file))
+         (window-configuration (current-window-configuration))
          (setup-complete nil))
     (unwind-protect
         (progn
@@ -434,6 +435,10 @@ repository toplevel."
                           (lambda ()
                             (when (buffer-live-p head-buffer)
                               (kill-buffer head-buffer)))
+                          nil t)
+                (add-hook 'ediff-after-quit-hook-internal
+                          (lambda ()
+                            (set-window-configuration window-configuration))
                           nil t))))))
       (unless setup-complete
         (when (buffer-live-p head-buffer)

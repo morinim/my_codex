@@ -1807,11 +1807,13 @@
   (with-temp-file (expand-file-name file default-directory)
     (insert text)))
 
-(ert-deftest my-codex-ediff-uses-side-by-side-layout-and-cleans-head-buffer ()
+(ert-deftest my-codex-ediff-uses-side-by-side-layout-and-restores-windows ()
   (let ((head-buffer (generate-new-buffer " *my-codex-head-test*"))
         (worktree-buffer (generate-new-buffer " *my-codex-worktree-test*"))
         (control-buffer (generate-new-buffer " *my-codex-ediff-test*"))
-        captured-layout captured-split captured-head)
+        (saved-window-configuration (current-window-configuration))
+        captured-layout captured-split captured-head captured-after-quit-hook
+        restored-window-configuration)
     (unwind-protect
         (progn
           (with-current-buffer worktree-buffer
@@ -1824,6 +1826,11 @@
                      (lambda (&rest _args) head-buffer))
                     ((symbol-function 'find-file-noselect)
                      (lambda (&rest _args) worktree-buffer))
+                    ((symbol-function 'current-window-configuration)
+                     (lambda (&rest _args) saved-window-configuration))
+                    ((symbol-function 'set-window-configuration)
+                     (lambda (configuration)
+                       (setq restored-window-configuration configuration)))
                     ((symbol-function 'ediff-buffers)
                      (lambda (head _worktree startup-hooks &rest _args)
                        (setq captured-layout ediff-window-setup-function
@@ -1832,14 +1839,24 @@
                        (with-current-buffer control-buffer
                          (mapc #'funcall startup-hooks)))))
             (my-codex--ediff-file-against-head
-             "/project/example.el" "/project/"))
+             "/project/example.el" "/project/")
+            (with-current-buffer control-buffer
+              (setq captured-after-quit-hook
+                    (remq t ediff-after-quit-hook-internal))
+              (setq-local ediff-quit-hook
+                          (list (lambda ()
+                                  (setq restored-window-configuration
+                                        'overwritten)))))
           (should (eq captured-layout #'ediff-setup-windows-plain))
           (should (eq captured-split #'split-window-horizontally))
           (should (eq captured-head head-buffer))
           (with-current-buffer head-buffer
             (should (derived-mode-p 'emacs-lisp-mode)))
           (with-current-buffer control-buffer
-            (run-hooks 'ediff-cleanup-hook))
+            (run-hooks 'ediff-cleanup-hook)
+            (run-hooks 'ediff-quit-hook))
+          (mapc #'funcall captured-after-quit-hook))
+          (should (eq restored-window-configuration saved-window-configuration))
           (should-not (buffer-live-p head-buffer)))
       (dolist (buffer (list head-buffer worktree-buffer control-buffer))
         (when (buffer-live-p buffer)
