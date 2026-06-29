@@ -1416,7 +1416,8 @@ Return `reference', `inline', or nil when no choice is needed."
 
 ;;;###autoload
 (defun my-codex-ask (prompt)
-  "Read PROMPT in the minibuffer and send it straight to the agent."
+  "Read PROMPT in the minibuffer and submit it to the active agent.
+When prompt preview is enabled, open it for review first."
   (interactive
    (list (read-string (format "Ask %s: " (my-codex--ask-prompt-label)))))
   (when (string-blank-p prompt)
