@@ -3097,7 +3097,8 @@
           (should
            (equal
             (my-codex--doctor-codex-context-rows config)
-            '(("Codex user config: tool_output_token_limit" ok "8,000 tokens")
+            '(("Codex user config: tool_output_token_limit" ok
+               "8,000 tokens per tool/function output retained in history")
               ("Codex user config: model_auto_compact_token_limit" ok "120,000 tokens")
               ("Codex user config: project_doc_max_bytes" ok
                "Not found in user-level config; another configuration layer may override it")))))
@@ -3116,7 +3117,8 @@
           (should
            (equal
             (my-codex--doctor-codex-context-rows config)
-            '(("Codex user config: tool_output_token_limit" ok "4,000 tokens")
+            '(("Codex user config: tool_output_token_limit" ok
+               "4,000 tokens per tool/function output retained in history")
               ("Codex user config: model_auto_compact_token_limit" ok
                "Not found in user-level config; another configuration layer may override it")
               ("Codex user config: project_doc_max_bytes" ok
@@ -3144,12 +3146,12 @@
           (with-temp-file second (insert (make-string 512 ?b)))
           (cl-letf (((symbol-function
                       'my-codex--doctor-codex-integer-setting-value)
-                     (lambda (&rest _) 2048)))
+                     (lambda (&rest _) 4096)))
             (should
              (equal (my-codex--doctor-project-instructions-row
-                     root (list first second))
+                    root (list first second))
                     '("Project instructions" ok
-                      "1.5 KiB across 2 files; allowance 2.0 KiB: AGENTS.md, CODEX.md")))))
+                      "1.5 KiB discovered across 2 files; 4.0 KiB allowance: AGENTS.md, CODEX.md")))))
       (delete-directory root t))))
 
 (ert-deftest my-codex-doctor-project-instructions-warns-near-allowance ()
@@ -3157,7 +3159,7 @@
         (my-codex-agent 'codex))
     (unwind-protect
         (let ((file (expand-file-name "AGENTS.md" root)))
-          (with-temp-file file (insert (make-string 820 ?a)))
+          (with-temp-file file (insert (make-string 620 ?a)))
           (cl-letf (((symbol-function
                       'my-codex--doctor-codex-integer-setting-value)
                      (lambda (&rest _) 1024)))
@@ -3165,6 +3167,22 @@
              (eq (cadr (my-codex--doctor-project-instructions-row
                         root (list file)))
                  'warn))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-doctor-project-instructions-warns-at-allowance ()
+  (let ((root (make-temp-file "my-codex-project-" t))
+        (my-codex-agent 'codex))
+    (unwind-protect
+        (let ((file (expand-file-name "AGENTS.md" root)))
+          (with-temp-file file (insert (make-string 1024 ?a)))
+          (cl-letf (((symbol-function
+                      'my-codex--doctor-codex-integer-setting-value)
+                     (lambda (&rest _) 1024)))
+            (should
+             (equal (my-codex--doctor-project-instructions-row
+                     root (list file))
+                    '("Project instructions" warn
+                      "1.0 KiB discovered across 1 file; 1.0 KiB allowance; Codex may omit or truncate instructions: AGENTS.md")))))
       (delete-directory root t))))
 
 (ert-deftest my-codex-doctor-project-instructions-uses-codex-default-allowance ()
@@ -3178,9 +3196,9 @@
                      (lambda (&rest _) nil)))
             (should
              (equal (my-codex--doctor-project-instructions-row
-                     root (list file))
+                    root (list file))
                     '("Project instructions" warn
-                      "27.0 KiB across 1 file; allowance 32.0 KiB: AGENTS.md")))))
+                      "27.0 KiB discovered across 1 file; 32.0 KiB allowance: AGENTS.md")))))
       (delete-directory root t))))
 
 (ert-deftest my-codex-project-overview-sends-orientation-instructions ()

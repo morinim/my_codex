@@ -334,19 +334,22 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
                  (or (my-codex--doctor-codex-integer-setting-value
                       "project_doc_max_bytes")
                      my-codex--doctor-codex-project-doc-default-bytes)))
-           (status (if (and allowance (>= bytes (* allowance 0.8)))
+           (status (if (and allowance (>= bytes (* allowance 0.6)))
                        'warn
                      'ok)))
       (list
        "Project instructions" status
        (concat
-        (format "%s across %d %s"
+        (format "%s discovered across %d %s"
                 (my-codex--doctor-byte-size bytes)
                 (length files)
                 (if (= (length files) 1) "file" "files"))
         (when allowance
-          (format "; allowance %s"
-                  (my-codex--doctor-byte-size allowance)))
+          (concat
+           (format "; %s allowance"
+                   (my-codex--doctor-byte-size allowance))
+           (when (>= bytes allowance)
+             "; Codex may omit or truncate instructions")))
         ": "
         (mapconcat (lambda (file) (file-relative-name file root))
                    files ", "))))))
@@ -382,7 +385,7 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
   (list
    (my-codex--doctor-codex-integer-setting
     "tool_output_token_limit" "Codex user config: tool_output_token_limit"
-    "tokens" file)
+    "tokens per tool/function output retained in history" file)
    (my-codex--doctor-codex-integer-setting
     "model_auto_compact_token_limit"
     "Codex user config: model_auto_compact_token_limit"
