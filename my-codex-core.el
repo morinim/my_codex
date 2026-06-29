@@ -239,7 +239,9 @@ When nil, use `compile-command'."
                (mapconcat #'buffer-name buffers ", ")))))
 
 (defcustom my-codex-enable-global-auto-revert t
-  "When non-nil, enable `global-auto-revert-mode' with `my-codex-global-mode'."
+  "When non-nil, enable `global-auto-revert-mode' with `my-codex-global-mode'.
+This defaults to non-nil so buffers follow changes made on disk by an agent,
+reducing the risk of users continuing to edit stale buffer contents."
   :type 'boolean
   :group 'my-codex)
 
