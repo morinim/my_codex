@@ -417,8 +417,27 @@ repository toplevel."
                      (my-codex--git-toplevel)))
          (relative-file (my-codex--git-relative-file-name file git-root))
          (head-buffer (my-codex--git-head-buffer git-root relative-file))
-         (worktree-buffer (find-file-noselect file)))
-    (ediff-buffers head-buffer worktree-buffer)))
+         (worktree-buffer (find-file-noselect file))
+         (setup-complete nil))
+    (unwind-protect
+        (progn
+          (with-current-buffer head-buffer
+            (funcall (buffer-local-value 'major-mode worktree-buffer)))
+          (let ((ediff-window-setup-function #'ediff-setup-windows-plain)
+                (ediff-split-window-function #'split-window-horizontally))
+            (ediff-buffers
+             head-buffer worktree-buffer
+             (list
+              (lambda ()
+                (setq setup-complete t)
+                (add-hook 'ediff-cleanup-hook
+                          (lambda ()
+                            (when (buffer-live-p head-buffer)
+                              (kill-buffer head-buffer)))
+                          nil t))))))
+      (unless setup-complete
+        (when (buffer-live-p head-buffer)
+          (kill-buffer head-buffer))))))
 
 (defun my-codex--selected-agent-vterm-window-p ()
   "Return non-nil when the selected window is the active agent vterm."

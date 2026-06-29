@@ -1807,6 +1807,44 @@
   (with-temp-file (expand-file-name file default-directory)
     (insert text)))
 
+(ert-deftest my-codex-ediff-uses-side-by-side-layout-and-cleans-head-buffer ()
+  (let ((head-buffer (generate-new-buffer " *my-codex-head-test*"))
+        (worktree-buffer (generate-new-buffer " *my-codex-worktree-test*"))
+        (control-buffer (generate-new-buffer " *my-codex-ediff-test*"))
+        captured-layout captured-split captured-head)
+    (unwind-protect
+        (progn
+          (with-current-buffer worktree-buffer
+            (emacs-lisp-mode))
+          (cl-letf (((symbol-function 'my-codex--git-toplevel)
+                     (lambda () "/project/"))
+                    ((symbol-function 'my-codex--git-relative-file-name)
+                     (lambda (&rest _args) "example.el"))
+                    ((symbol-function 'my-codex--git-head-buffer)
+                     (lambda (&rest _args) head-buffer))
+                    ((symbol-function 'find-file-noselect)
+                     (lambda (&rest _args) worktree-buffer))
+                    ((symbol-function 'ediff-buffers)
+                     (lambda (head _worktree startup-hooks &rest _args)
+                       (setq captured-layout ediff-window-setup-function
+                             captured-split ediff-split-window-function
+                             captured-head head)
+                       (with-current-buffer control-buffer
+                         (mapc #'funcall startup-hooks)))))
+            (my-codex--ediff-file-against-head
+             "/project/example.el" "/project/"))
+          (should (eq captured-layout #'ediff-setup-windows-plain))
+          (should (eq captured-split #'split-window-horizontally))
+          (should (eq captured-head head-buffer))
+          (with-current-buffer head-buffer
+            (should (derived-mode-p 'emacs-lisp-mode)))
+          (with-current-buffer control-buffer
+            (run-hooks 'ediff-cleanup-hook))
+          (should-not (buffer-live-p head-buffer)))
+      (dolist (buffer (list head-buffer worktree-buffer control-buffer))
+        (when (buffer-live-p buffer)
+          (kill-buffer buffer))))))
+
 (ert-deftest my-codex-show-git-diff-populates-diff-mode-buffer ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-diff" t))))
     (let ((default-directory root))
