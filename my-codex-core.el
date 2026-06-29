@@ -57,6 +57,8 @@ different profile interactively."
      ((read-only . "codex --sandbox read-only --ask-for-approval on-request")
       (workspace . "codex --sandbox workspace-write --ask-for-approval on-request")
       (resume . "codex resume"))
+     :session-actions
+     ((compact . "/compact"))
      :instruction-files
      ("AGENTS.override.md" "AGENTS.md" "CODEX.md" ".codex/instructions.md")
      :instruction-strategy hierarchical-first
@@ -68,6 +70,7 @@ different profile interactively."
      ((read-only . "agy --sandbox -i \"System policy: This is a read-only session. Do not write/edit files or execute commands that alter the codebase.\"")
       (workspace . "agy")
       (resume . "agy resume"))
+     :session-actions ()
      :instruction-files
      ("ANTIGRAVITY.md" ".antigravity/instructions.md")
      :instruction-strategy root-all
@@ -80,6 +83,7 @@ Each entry has the form:
       :commands ((read-only . COMMAND)
                  (workspace . COMMAND)
                  (resume . COMMAND))
+      :session-actions ((ACTION . INPUT) ...)
       :instruction-files (FILE ...)
       :instruction-strategy STRATEGY
       :doctor-function FUNCTION)
@@ -102,6 +106,10 @@ may be nil or a function returning backend-specific doctor rows."
                        :key-type (choice (const read-only)
                                          (const workspace)
                                          (const resume))
+                       :value-type string)
+                (const :format "" :value :session-actions)
+                (alist :tag "Session actions"
+                       :key-type symbol
                        :value-type string)
                 (const :format "" :value :instruction-files)
                 (repeat :tag "Instruction files" string)
@@ -512,6 +520,14 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
     (if (and (stringp command) (not (string-empty-p command)))
         command
       (user-error "Agent %s has no %s command" agent access-mode))))
+
+(defun my-codex--session-action (agent action)
+  "Return AGENT input for session ACTION, or nil when unsupported."
+  (let ((input (alist-get action
+                          (plist-get (my-codex--agent-profile agent)
+                                     :session-actions))))
+    (when (and (stringp input) (not (string-empty-p input)))
+      input)))
 
 (defun my-codex--read-agent ()
   "Read and return an agent profile identifier."

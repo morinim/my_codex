@@ -464,6 +464,37 @@ AGENT identifies the agent profile used for buffer names and metadata."
   (interactive (list (my-codex--read-agent)))
   (my-codex--show-default-session agent 'workspace-write))
 
+(defun my-codex--session-action-context (action &optional require-live)
+  "Return (BUFFER AGENT INPUT) for ACTION in the active session.
+When REQUIRE-LIVE is non-nil, require a running session process."
+  (let* ((buffer (my-codex-active-session-buffer require-live))
+         (agent (with-current-buffer buffer my-codex-session-agent))
+         (input (and agent (my-codex--session-action agent action))))
+    (unless input
+      (user-error "Agent %s does not support session action %s"
+                  (if agent (my-codex--agent-label agent) "session") action))
+    (list buffer agent input)))
+
+(defun my-codex--session-action-available-p (action)
+  "Return non-nil when ACTION is supported by the active live session."
+  (and (ignore-errors (my-codex--session-action-context action t)) t))
+
+(defun my-codex--run-session-action (action)
+  "Run ACTION in the active session."
+  (pcase-let ((`(,buffer ,_agent ,input)
+               (my-codex--session-action-context action t)))
+    (my-codex-send-prompt input buffer)))
+
+(defun my-codex--compact-session-available-p ()
+  "Return non-nil when the active session supports compaction."
+  (my-codex--session-action-available-p 'compact))
+
+;;;###autoload
+(defun my-codex-compact-session ()
+  "Compact the active session when its agent supports that action."
+  (interactive)
+  (my-codex--run-session-action 'compact))
+
 (defun my-codex--read-session-access-mode ()
   "Read and return an access mode for a new named session."
   (pcase (completing-read
@@ -635,6 +666,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (my-codex-top "l" "Dashboard" "Session" :prefix my-codex-session-transient :path "S" :menu "Session dashboard" :help "Display a dashboard of all agent sessions")
       (my-codex-new-session "n" "New named" "Session" :prefix my-codex-session-transient :path "S" :menu "New named session" :help "Start or show a named agent session")
       (my-codex-new-session-from-handoff "h" "From handoff" "Session" :prefix my-codex-session-transient :path "S" :menu "Start fresh with handoff" :help "Create a named session containing only a compact handoff")
+      (my-codex-compact-session "k" "Compact context" "Session" :prefix my-codex-session-transient :path "S" :menu "Compact session context" :available my-codex--compact-session-available-p :transient-available my-codex--compact-session-available-p :help "Compact context in the active session when supported")
       (my-codex-resume "r" "Resume" "Session" :prefix my-codex-session-transient)
       (my-codex-hide-window "q" "Hide agent" "Session" :prefix my-codex-session-transient :path "S" :menu "Hide selected session window" :help "Hide the agent window associated with the selected session")
       (my-codex-send-project-overview "p" "Project overview" "Tools" :prefix my-codex-tools-transient :path "T" :menu "Project overview" :help "Send the active agent a compact project overview")

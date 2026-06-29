@@ -68,6 +68,7 @@ Press `F8` to open the agent command menu.
 - `F8 S o` / `F8 S w` : select an agent, then start its default read-only or write session.
 - `F8 S n` : start or show a named session with a selected agent and access mode.
 - `F8 S h` : ask the active session for a compact handoff and start a fresh named session containing only that handoff.
+- `F8 S k` : compact the active session context when supported by its agent profile.
 - `F8 S l` / `F8 S q` / `F8 S r` : list open sessions, hide the selected session window, or resume the configured agent's previous session.
 - `F8 r` / `F8 q` : resume a previous session, or hide the active agent window.
 

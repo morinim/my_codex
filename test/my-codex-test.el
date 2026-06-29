@@ -499,6 +499,46 @@
      (equal (my-codex--agent-command 'antigravity 'resume)
             "agy-resume"))))
 
+(ert-deftest my-codex-session-action-reads-profile-capability ()
+  (let ((my-codex-agent-profiles
+         (quote ((codex :session-actions ((compact . "/compact")))
+                 (antigravity :label "Antigravity")))))
+    (should (equal (my-codex--session-action (quote codex) (quote compact))
+                   "/compact"))
+    (should-not
+     (my-codex--session-action (quote antigravity) (quote compact)))))
+
+(ert-deftest my-codex-compact-session-uses-active-session-agent ()
+  (let ((buffer (generate-new-buffer " *my-codex-compact-test*"))
+        (my-codex-agent-profiles
+         (quote ((codex :session-actions ((compact . "/compact")))
+                 (antigravity :label "Antigravity"))))
+        sent)
+    (unwind-protect
+        (progn
+          (with-current-buffer buffer
+            (setq-local my-codex-session-agent (quote codex)))
+          (cl-letf (((symbol-function (quote my-codex-active-session-buffer))
+                     (lambda (&optional _require-live) buffer))
+                    ((symbol-function (quote my-codex-send-prompt))
+                     (lambda (prompt target)
+                       (setq sent (list prompt target)))))
+            (my-codex-compact-session)
+            (should (equal sent (list "/compact" buffer)))))
+      (kill-buffer buffer))))
+
+(ert-deftest my-codex-compact-session-rejects-unsupported-agent ()
+  (let ((buffer (generate-new-buffer " *my-codex-compact-test*"))
+        (my-codex-agent-profiles (quote ((antigravity :label "Antigravity")))))
+    (unwind-protect
+        (progn
+          (with-current-buffer buffer
+            (setq-local my-codex-session-agent (quote antigravity)))
+          (cl-letf (((symbol-function (quote my-codex-active-session-buffer))
+                     (lambda (&optional _require-live) buffer)))
+            (should-error (my-codex-compact-session) :type (quote user-error))))
+      (kill-buffer buffer))))
+
 (ert-deftest my-codex-agent-buffer-name-supports-mixed-agents ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-buffer" t))))
     (unwind-protect
