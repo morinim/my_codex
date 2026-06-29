@@ -1161,6 +1161,16 @@ When SELECTED is nil, return one diagnostic if even one exceeds the budget."
       (user-error "Current file is outside the current project"))
     (format "@%s lines %d-%d" file line-start line-end)))
 
+;;;###autoload
+(defun my-codex-copy-region-reference (beg end)
+  "Copy an agent reference to the active region."
+  (interactive "r")
+  (unless (use-region-p)
+    (user-error "No active region"))
+  (let ((reference (my-codex--region-file-reference beg end)))
+    (kill-new reference)
+    (message "Copied %s" reference)))
+
 (defun my-codex--region-reference-p (beg end)
   "Return non-nil when region BEG to END should be sent by reference."
   (and buffer-file-name

@@ -2417,6 +2417,30 @@
               "@src/example.el lines 1-3"))))
       (delete-directory root t))))
 
+(ert-deftest my-codex-copy-region-reference-copies-formatted-reference ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t)))
+        kill-ring)
+    (unwind-protect
+        (with-temp-buffer
+          (setq default-directory root)
+          (setq buffer-file-name (expand-file-name "src/example.el" root))
+          (insert "first\nsecond\nthird\n")
+          (set-buffer-modified-p nil)
+          (cl-letf (((symbol-function 'use-region-p) (lambda () t))
+                    ((symbol-function 'my-codex-project-root)
+                     (lambda () root))
+                    ((symbol-function 'verify-visited-file-modtime)
+                     (lambda (_buffer) t)))
+            (my-codex-copy-region-reference (point-min) (point-max))
+            (should (equal (current-kill 0)
+                           "@src/example.el lines 1-3"))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-copy-region-reference-requires-active-region ()
+  (cl-letf (((symbol-function 'use-region-p) (lambda () nil)))
+    (should-error (my-codex-copy-region-reference 1 1)
+                  :type 'user-error)))
+
 (ert-deftest my-codex-region-file-reference-rejects-unsaved-files ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t))))
     (unwind-protect

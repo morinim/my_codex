@@ -46,6 +46,7 @@
 (autoload 'my-codex-visible-window "my-codex-prompts")
 (dolist (autoload-entry
          '((my-codex-send-region . "my-codex-prompts")
+           (my-codex-copy-region-reference . "my-codex-prompts")
            (my-codex-review-defun-at-point . "my-codex-prompts")
            (my-codex-send-current-file . "my-codex-prompts")
            (my-codex-analyse-test-coverage . "my-codex-prompts")
@@ -657,6 +658,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (my-codex-ediff-changed-file-against-head "D" "Ediff changed file" "Git" :menu "Ediff changed file against HEAD" :help "Choose a tracked changed file and review it against HEAD")
       (my-codex-git-commit-with-latest-message "c" "Commit with agent message" "Git" :menu "Edit commit with agent message" :help "Use the latest agent commit message, or ask for one, then edit before committing")
       (my-codex-explain-region-as-error "e" "Explain error" "Context" :menu "Explain selected error" :active (use-region-p) :help "Ask the active agent to explain the selected compiler/test error")
+      (my-codex-copy-region-reference "y" "Copy reference" "Context" :menu "Copy selected region reference" :active (use-region-p) :help "Copy a compact file-and-line reference for the selected region")
       (my-codex-open-project-instructions "i" "Project instructions" "Context" :menu "Open project instructions" :help "Open AGENTS.md, CODEX.md, or .codex/instructions.md")
       (my-codex-summarize-session-to-markdown "M" "Summarize session" "Context" :menu "Summarize session to Markdown" :help "Ask the active agent to summarize the conversation as Markdown notes")
       (my-codex-tools-transient "T" "Tools" "Context")
