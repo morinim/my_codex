@@ -13,6 +13,40 @@
 (require 'my-codex-core)
 
 (defvar vterm-copy-mode)
+(defvar vterm-max-scrollback)
+(defvar hack-local-variables-hook)
+(declare-function vterm-mode "vterm" ())
+
+(defun my-codex--ensure-vterm-scrollback ()
+  "Raise `vterm-max-scrollback' in the current Codex buffer when needed."
+  (when (and my-codex-vterm-min-scrollback
+             (boundp 'vterm-max-scrollback)
+             (numberp vterm-max-scrollback)
+             (< vterm-max-scrollback my-codex-vterm-min-scrollback))
+    (setq-local vterm-max-scrollback my-codex-vterm-min-scrollback)))
+
+(defun my-codex--vterm-scrollback-floor (scrollback)
+  "Return SCROLLBACK raised to `my-codex-vterm-min-scrollback' when needed."
+  (if (and my-codex-vterm-min-scrollback
+           (numberp scrollback)
+           (< scrollback my-codex-vterm-min-scrollback))
+      my-codex-vterm-min-scrollback
+    scrollback))
+
+(defun my-codex--floor-vterm-scrollback ()
+  "Raise the effective vterm scrollback without changing its locality."
+  (setq vterm-max-scrollback
+        (my-codex--vterm-scrollback-floor vterm-max-scrollback)))
+
+(defun my-codex--vterm-mode-with-scrollback-floor ()
+  "Enable `vterm-mode' with the configured minimum scrollback."
+  (require 'vterm)
+  (let ((vterm-max-scrollback
+        (my-codex--vterm-scrollback-floor vterm-max-scrollback))
+        (hack-local-variables-hook
+         (cons #'my-codex--floor-vterm-scrollback
+               hack-local-variables-hook)))
+    (vterm-mode)))
 
 (autoload 'my-codex-transient-preserve-selection "my-codex" nil t)
 (declare-function vterm-yank "vterm" ())

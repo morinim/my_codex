@@ -40,6 +40,8 @@
 (autoload 'vterm-copy-mode "vterm" nil t)
 (autoload 'my-codex-session-links-mode "my-codex-links" nil t)
 (autoload 'my-codex-vterm-integration-mode "my-codex-vterm" nil t)
+(autoload 'my-codex--vterm-mode-with-scrollback-floor "my-codex-vterm")
+(autoload 'my-codex--ensure-vterm-scrollback "my-codex-vterm")
 (autoload 'my-codex--current-or-left-file-available-p "my-codex-git")
 (autoload 'my-codex--request-marked-output "my-codex-prompts")
 (autoload 'my-codex-send-prompt "my-codex-prompts")
@@ -76,40 +78,6 @@
 (declare-function markdown-mode "markdown-mode")
 (declare-function projectile-toggle-between-implementation-and-test "projectile")
 (defvar vterm-copy-mode)
-(defvar vterm-max-scrollback)
-
-(defun my-codex--ensure-vterm-scrollback ()
-  "Raise `vterm-max-scrollback' in the current Codex buffer when needed."
-  (when (and my-codex-vterm-min-scrollback
-             (boundp 'vterm-max-scrollback)
-             (numberp vterm-max-scrollback)
-             (< vterm-max-scrollback my-codex-vterm-min-scrollback))
-    (setq-local vterm-max-scrollback my-codex-vterm-min-scrollback)))
-
-(defun my-codex--vterm-scrollback-floor (scrollback)
-  "Return SCROLLBACK raised to `my-codex-vterm-min-scrollback' when needed."
-  (if (and my-codex-vterm-min-scrollback
-           (numberp scrollback)
-           (< scrollback my-codex-vterm-min-scrollback))
-      my-codex-vterm-min-scrollback
-    scrollback))
-
-(defun my-codex--vterm-mode-with-scrollback-floor ()
-  "Enable `vterm-mode' while flooring the libvterm scrollback argument."
-  (require 'vterm)
-  (if (and my-codex-vterm-min-scrollback
-           (fboundp 'vterm--new))
-      (let ((vterm--new (symbol-function 'vterm--new)))
-        (cl-letf (((symbol-function 'vterm--new)
-                   (lambda (height width scrollback &rest args)
-                     (apply vterm--new
-                            height
-                            width
-                            (my-codex--vterm-scrollback-floor scrollback)
-                            args))))
-          (vterm-mode)))
-    (vterm-mode)))
-
 (defun my-codex--track-process-output-time (process)
   "Record output timestamps for PROCESS without replacing its behaviour."
   (unless (process-get process 'my-codex-output-time-filter)

@@ -16,6 +16,7 @@
 (defvar flycheck-current-errors)
 (defvar flycheck-mode)
 (defvar vterm-copy-mode-hook)
+(defvar vterm-max-scrollback)
 (defvar vterm-mode-hook)
 
 (ert-deftest my-codex-require-keeps-optional-modules-lazy ()
@@ -49,7 +50,8 @@
                              (nth 1 (symbol-function function))))
                       '(my-codex--request-marked-output
                         my-codex-send-prompt
-                        my-codex-visible-window)))))
+                        my-codex-visible-window
+                        my-codex--ensure-vterm-scrollback)))))
          (output
           (with-temp-buffer
             (let ((exit-code
@@ -60,7 +62,8 @@
                 (error "Nested Emacs failed: %s" (buffer-string)))
               (buffer-string)))))
     (should (equal output
-                   "(\"my-codex-prompts\" \"my-codex-prompts\" \"my-codex-prompts\")"))))
+                   (concat "(\"my-codex-prompts\" \"my-codex-prompts\" "
+                           "\"my-codex-prompts\" \"my-codex-vterm\")")))))
 
 (ert-deftest my-codex-command-catalogue-commands-exist ()
   (dolist (entry my-codex-command-catalogue)
@@ -1527,17 +1530,29 @@
   (let ((my-codex-vterm-min-scrollback 10000))
     (should (equal (my-codex--vterm-scrollback-floor 100) 10000))))
 
-(ert-deftest my-codex-vterm-mode-with-scrollback-floor-floors-vterm-new-arg ()
+(ert-deftest my-codex-vterm-mode-with-scrollback-floor-binds-public-option ()
   (let ((my-codex-vterm-min-scrollback 10000)
         captured-scrollback)
     (cl-letf (((symbol-function 'require) #'ignore)
               ((symbol-function 'vterm-mode)
                (lambda ()
-                 (vterm--new 24 80 100 nil nil nil nil nil nil)))
-              ((symbol-function 'vterm--new)
-               (lambda (_height _width scrollback &rest _args)
-                 (setq captured-scrollback scrollback))))
-      (my-codex--vterm-mode-with-scrollback-floor)
+                 (setq captured-scrollback vterm-max-scrollback))))
+      (let ((vterm-max-scrollback 100))
+        (my-codex--vterm-mode-with-scrollback-floor))
+      (should (equal captured-scrollback 10000)))))
+
+(ert-deftest my-codex-vterm-mode-with-scrollback-floor-overrides-dir-local ()
+  (let ((my-codex-vterm-min-scrollback 10000)
+        captured-scrollback)
+    (cl-letf (((symbol-function 'require) #'ignore)
+              ((symbol-function 'vterm-mode)
+               (lambda ()
+                 (setq vterm-max-scrollback 100)
+                 (run-hooks 'hack-local-variables-hook)
+                 (setq captured-scrollback vterm-max-scrollback))))
+      (let ((vterm-max-scrollback 1000)
+            (hack-local-variables-hook nil))
+        (my-codex--vterm-mode-with-scrollback-floor))
       (should (equal captured-scrollback 10000)))))
 
 (ert-deftest my-codex-vterm-integration-does-not-mutate-vterm-keymaps ()
