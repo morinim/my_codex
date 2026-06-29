@@ -80,7 +80,7 @@ Press `F8` to open the agent command menu.
 - `F8 x` / `F8 e` : explain the symbol at point or selected error.
 
 ### Git & GitHub Workflow
-- `F8 g` / `F8 G` : review the current Git diff or the staged Git diff.
+- `F8 g a` / `F8 g s` / `F8 g f` : review all changes, staged changes, or the current file's Git diff.
 - `F8 v` / `F8 V` : view the current or staged Git diff locally.
 - `F8 d` / `F8 D` : ediff the current or a changed file against `HEAD`.
 - `F8 c` : draft or reuse an agent-generated commit message, edit it, then commit.

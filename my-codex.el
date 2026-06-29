@@ -648,9 +648,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (my-codex-send-current-file "F" "Current file" "Send" :menu "Inspect current file" :active buffer-file-name :help "Ask the active agent to inspect the current file directly")
       (my-codex-analyse-test-coverage "C" "Coverage gaps" "Send" :menu "Analyse test coverage" :active buffer-file-name :help "Ask the active agent to analyse missing test scenarios")
       (my-codex-explain-symbol-at-point "x" "Explain symbol" "Send" :menu "Explain symbol at point" :active buffer-file-name :help "Ask the active agent to explain the symbol at point")
-      (my-codex-send-git-diff "g" "Review diff" "Git" :menu "Review Git diff" :help "Ask the active agent to review the current Git diff")
-      (my-codex-send-git-staged-diff "G" "Review staged diff" "Git" :menu "Review staged Git diff" :help "Ask the active agent to review the staged Git diff")
-      (my-codex-review-current-file-diff "l" "Review current-file diff" "Git" :menu "Review current-file Git diff" :available my-codex--current-or-left-file-available-p :transient-available my-codex--current-or-left-file-available-p :help "Ask the active agent to review only the current file's Git diff")
+      (my-codex-git-review-transient "g" "Review diff..." "Git" :menu "Review Git diff" :help "Open Git diff review commands")
       (my-codex-show-git-diff "v" "View diff" "Git" :menu "View Git diff" :help "Show the current Git diff in a diff-mode buffer")
       (my-codex-show-git-staged-diff "V" "View staged diff" "Git" :menu "View staged Git diff" :help "Show the staged Git diff in a diff-mode buffer")
       (my-codex-ediff-current-file-against-head "d" "Ediff current file" "Git" :menu "Ediff current file against HEAD" :available my-codex--current-or-left-file-available-p :help "Review the current file's uncommitted changes against HEAD")
@@ -673,6 +671,9 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (my-codex-export-session-to-markdown "X" "Export session" "Tools" :prefix my-codex-tools-transient :path "T" :menu "Export session" :help "Export the current agent session transcript to Markdown")
       (my-codex-diagnostics-transient "E" "Diagnostics" "Tools" :prefix my-codex-tools-transient :path "T" :menu "Diagnostics" :help "Open diagnostic explanation commands")
       (my-codex-doctor "!" "Doctor" "Tools" :prefix my-codex-tools-transient :path "T" :menu "Doctor" :help "Check Emacs, agent, vterm, Git, gh, project, configuration, and terminal startup")
+      (my-codex-send-git-diff "a" "All changes" "Review diff" :prefix my-codex-git-review-transient :path "g" :menu "Review all Git changes" :help "Ask the active agent to review the current Git diff")
+      (my-codex-send-git-staged-diff "s" "Staged changes" "Review diff" :prefix my-codex-git-review-transient :path "g" :menu "Review staged Git changes" :help "Ask the active agent to review the staged Git diff")
+      (my-codex-review-current-file-diff "f" "Current file" "Review diff" :prefix my-codex-git-review-transient :path "g" :menu "Review current-file Git diff" :available my-codex--current-or-left-file-available-p :transient-available my-codex--current-or-left-file-available-p :help "Ask the active agent to review only the current file's Git diff")
       (my-codex-list-open-issues "t" "List issues" "GitHub" :menu "List issues" :help "List open GitHub issues for the current repository in a buffer")
       (my-codex-summarize-session-to-github-issue "I" "Draft issue" "GitHub" :menu "Draft issue" :help "Ask the active agent to draft a GitHub issue, then edit it before creating it with gh")
       (my-codex-explain-diagnostic-at-point "p" "At point" "Diagnostics" :prefix my-codex-diagnostics-transient)
@@ -732,6 +733,10 @@ Open the generated notes in an editable Markdown buffer when they are ready."
 ;;;###autoload (autoload 'my-codex-tools-transient "my-codex" nil t)
 (my-codex--define-catalogue-transient my-codex-tools-transient
   "Show infrequent agent tools.")
+
+;;;###autoload (autoload 'my-codex-git-review-transient "my-codex" nil t)
+(my-codex--define-catalogue-transient my-codex-git-review-transient
+  "Show Git diff review commands.")
 
 ;;;###autoload (autoload 'my-codex-transient "my-codex" nil t)
 (my-codex--define-catalogue-transient my-codex-transient
