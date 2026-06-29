@@ -597,14 +597,33 @@ LABEL describes FILE in user-facing errors."
       (user-error "Test file is outside the current project"))
     file))
 
-(defun my-codex--test-coverage-prompt (implementation-relative test-relative)
+(defun my-codex--prompt-target-agent ()
+  "Return the agent profile targeted by the current prompt command."
+  (if-let ((buffer (my-codex--prompt-target-buffer (selected-window) t)))
+      (with-current-buffer buffer
+        (or my-codex-session-agent (my-codex--active-agent)))
+    (my-codex--active-agent)))
+
+(defun my-codex--format-file-reference (file &optional agent)
+  "Format project-relative FILE for AGENT.
+Use the current prompt target's agent when AGENT is nil."
+  (let* ((agent (or agent (my-codex--prompt-target-agent)))
+         (format-string
+          (or (plist-get (my-codex--agent-profile agent)
+                         :file-reference-format)
+              "%s")))
+    (format format-string file)))
+
+(defun my-codex--test-coverage-prompt (implementation-relative test-relative
+                                                               &optional agent)
   "Return a cache-friendly coverage prompt.
-IMPLEMENTATION-RELATIVE and TEST-RELATIVE are project-relative file names."
+IMPLEMENTATION-RELATIVE and TEST-RELATIVE are project-relative file names.
+AGENT is the agent profile used to format their references."
   (string-join
    (list my-codex-test-coverage-prompt
-         (format "context:\n  implementation: @%s\n  test: @%s"
-                 implementation-relative
-                 test-relative)
+         (format "context:\n  implementation: %s\n  test: %s"
+                 (my-codex--format-file-reference implementation-relative agent)
+                 (my-codex--format-file-reference test-relative agent))
          "request: Analyze test coverage now.")
    "\n\n"))
 
@@ -1159,7 +1178,9 @@ When SELECTED is nil, return one diagnostic if even one exceeds the budget."
          (line-end (line-number-at-pos (max beg (1- end)) t)))
     (unless file
       (user-error "Current file is outside the current project"))
-    (format "@%s lines %d-%d" file line-start line-end)))
+    (format "%s lines %d-%d"
+            (my-codex--format-file-reference file)
+            line-start line-end)))
 
 ;;;###autoload
 (defun my-codex-copy-region-reference (beg end)

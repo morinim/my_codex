@@ -62,6 +62,7 @@ different profile interactively."
      :instruction-files
      ("AGENTS.override.md" "AGENTS.md" "CODEX.md" ".codex/instructions.md")
      :instruction-strategy hierarchical-first
+     :file-reference-format "@%s"
      :doctor-function my-codex--doctor-codex-rows)
     (antigravity
      :label "Antigravity"
@@ -74,6 +75,7 @@ different profile interactively."
      :instruction-files
      ("ANTIGRAVITY.md" ".antigravity/instructions.md")
      :instruction-strategy root-all
+     :file-reference-format "%s"
      :doctor-function nil))
   "Agent profiles available to my-codex.
 Each entry has the form:
@@ -86,6 +88,7 @@ Each entry has the form:
       :session-actions ((ACTION . INPUT) ...)
       :instruction-files (FILE ...)
       :instruction-strategy STRATEGY
+      :file-reference-format FORMAT
       :doctor-function FUNCTION)
 
 ID is a symbol used for configuration and session metadata.  PREFIX is
@@ -93,7 +96,8 @@ used in buffer names, so different agents can have sessions with the
 same project and session name without colliding.  STRATEGY is either
 `hierarchical-first' (select the first matching file in each directory)
 or `root-all' (select every matching file at the project root).  FUNCTION
-may be nil or a function returning backend-specific doctor rows."
+may be nil or a function returning backend-specific doctor rows.  FORMAT
+is a `format' string used for project-relative file references."
   :type '(repeat
           (list :tag "Agent profile"
                 (symbol :tag "Identifier")
@@ -117,6 +121,8 @@ may be nil or a function returning backend-specific doctor rows."
                 (choice :tag "Instruction strategy"
                         (const hierarchical-first)
                         (const root-all))
+                (const :format "" :value :file-reference-format)
+                (string :tag "File reference format")
                 (const :format "" :value :doctor-function)
                 (choice :tag "Doctor function"
                         (const :tag "None" nil)

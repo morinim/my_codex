@@ -3042,6 +3042,14 @@
       (should (< implementation-pos test-pos))
       (should (< test-pos request-pos)))))
 
+(ert-deftest my-codex-test-coverage-prompt-uses-agent-file-reference-format ()
+  (let ((my-codex-test-coverage-prompt "Coverage instructions."))
+    (should
+     (string-match-p
+      "implementation: src/example\\.el"
+      (my-codex--test-coverage-prompt
+       "src/example.el" "test/example-test.el" 'antigravity)))))
+
 (ert-deftest my-codex-analyse-test-coverage-rejects-unsaved-implementation ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-coverage" t)))
         sent)
