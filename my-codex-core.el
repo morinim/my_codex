@@ -55,7 +55,7 @@ different profile interactively."
      :buffer-prefix "codex"
      :commands
      ((read-only . "codex --sandbox read-only --ask-for-approval on-request")
-      (workspace . "codex --sandbox workspace-write --ask-for-approval on-request")
+      (workspace-write . "codex --sandbox workspace-write --ask-for-approval on-request")
       (resume . "codex resume"))
      :session-actions
      ((compact . "/compact"))
@@ -69,7 +69,7 @@ different profile interactively."
      :buffer-prefix "agy"
      :commands
      ((read-only . "agy --sandbox -i \"System policy: This is a read-only session. Do not write/edit files or execute commands that alter the codebase.\"")
-      (workspace . "agy")
+      (workspace-write . "agy")
       (resume . "agy resume"))
      :session-actions ()
      :instruction-files
@@ -83,7 +83,7 @@ Each entry has the form:
   (ID :label LABEL
       :buffer-prefix PREFIX
       :commands ((read-only . COMMAND)
-                 (workspace . COMMAND)
+                 (workspace-write . COMMAND)
                  (resume . COMMAND))
       :session-actions ((ACTION . INPUT) ...)
       :instruction-files (FILE ...)
@@ -108,7 +108,7 @@ is a `format' string used for project-relative file references."
                 (const :format "" :value :commands)
                 (alist :tag "Commands"
                        :key-type (choice (const read-only)
-                                         (const workspace)
+                                         (const workspace-write)
                                          (const resume))
                        :value-type string)
                 (const :format "" :value :session-actions)
@@ -518,13 +518,10 @@ When SESSION-NAME is non-nil, mark the buffer as that named session.")
 
 (defun my-codex--agent-command (agent access-mode)
   "Return AGENT's command string for ACCESS-MODE."
+  (unless (memq access-mode '(read-only workspace-write resume))
+    (user-error "Unknown access mode: %s" access-mode))
   (let* ((profile (my-codex--agent-profile agent))
-         (key (pcase access-mode
-                ('read-only 'read-only)
-                ('workspace-write 'workspace)
-                ('resume 'resume)
-                (_ (user-error "Unknown access mode: %s" access-mode))))
-         (command (alist-get key (plist-get profile :commands))))
+         (command (alist-get access-mode (plist-get profile :commands))))
     (if (and (stringp command) (not (string-empty-p command)))
         command
       (user-error "Agent %s has no %s command" agent access-mode))))

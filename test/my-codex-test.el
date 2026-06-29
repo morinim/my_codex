@@ -478,11 +478,11 @@
   (let ((my-codex-agent-profiles
          '((codex :commands
                   ((read-only . "codex-ro")
-                   (workspace . "codex-ww")
+                   (workspace-write . "codex-ww")
                    (resume . "codex-resume")))
            (antigravity :commands
                         ((read-only . "agy-ro")
-                         (workspace . "agy-ww")
+                         (workspace-write . "agy-ww")
                          (resume . "agy-resume"))))))
     (should
      (equal (my-codex--agent-command 'codex 'read-only)
