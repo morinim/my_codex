@@ -2300,6 +2300,20 @@
         (kill-buffer target))
       (delete-directory root t))))
 
+(ert-deftest my-codex-active-session-buffer-reports-missing-session ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-active" t))))
+    (unwind-protect
+        (let ((default-directory root))
+          (cl-letf (((symbol-function 'my-codex--session-buffer)
+                     (lambda () nil)))
+            (condition-case err
+                (progn
+                  (my-codex-active-session-buffer t)
+                  (ert-fail "Expected a missing-session error"))
+              (user-error
+               (should (equal (cadr err) "No agent session available"))))))
+      (delete-directory root t))))
+
 (ert-deftest my-codex-send-prompt-uses-active-session-by-default ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-send" t)))
         (target (get-buffer-create "*my-codex-send-active*"))
@@ -3695,6 +3709,8 @@ Do not modify files."))))
       (set-buffer-modified-p nil)
       (cl-letf (((symbol-function 'my-codex-project-root)
                  (lambda () "/repo/"))
+                ((symbol-function 'my-codex--project-relative-file)
+                 (lambda (_file _root) "src/example.el"))
                 ((symbol-function 'my-codex--symbol-xref-context)
                  (lambda (_symbol _root) nil))
                 ((symbol-function 'my-codex--preview-and-send-prompt)
@@ -3703,6 +3719,17 @@ Do not modify files."))))
     (should (string-match-p "symbol: \"alpha\"" sent))
     (should (string-match-p "location: \"src/example\\.el:1\"" sent))
     (should-not (string-match-p "excerpt: |" sent))))
+
+(ert-deftest my-codex-explain-symbol-rejects-outside-project-file ()
+  (with-temp-buffer
+    (setq buffer-file-name "/outside/example.el")
+    (insert "alpha")
+    (goto-char (point-min))
+    (cl-letf (((symbol-function 'my-codex-project-root)
+               (lambda () "/repo/")))
+      (should-error
+       (my-codex-explain-symbol-at-point)
+       :type 'user-error))))
 
 (ert-deftest my-codex-explain-symbol-includes-modified-buffer-excerpt ()
   (let ((sent nil))
@@ -3714,6 +3741,8 @@ Do not modify files."))))
       (set-buffer-modified-p t)
       (cl-letf (((symbol-function 'my-codex-project-root)
                  (lambda () "/repo/"))
+                ((symbol-function 'my-codex--project-relative-file)
+                 (lambda (_file _root) "src/example.el"))
                 ((symbol-function 'my-codex--symbol-xref-context)
                  (lambda (_symbol _root) nil))
                 ((symbol-function 'my-codex--preview-and-send-prompt)

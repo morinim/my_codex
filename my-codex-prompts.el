@@ -768,7 +768,8 @@ and CONTEXT-LINES controls the excerpt radius for modified xref buffers."
   (unless buffer-file-name
     (user-error "Current buffer is not visiting a file"))
   (let* ((root (my-codex-project-root))
-         (file (file-relative-name buffer-file-name root))
+         (file (or (my-codex--project-relative-file buffer-file-name root)
+                   (user-error "Current file is outside the current project")))
          (line (line-number-at-pos))
          (symbol (my-codex--symbol-at-point))
          (context (when (buffer-modified-p)

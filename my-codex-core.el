@@ -804,7 +804,9 @@ process."
               (my-codex--session-buffer))))
     (when (and require-live
                (not (my-codex--session-buffer-live-p buffer)))
-      (user-error "No running agent process in %s" (buffer-name buffer)))
+      (if (buffer-live-p buffer)
+          (user-error "No running agent process in %s" (buffer-name buffer))
+        (user-error "No agent session available")))
     buffer))
 
 (defun my-codex--transient-target-description ()
