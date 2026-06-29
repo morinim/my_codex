@@ -28,6 +28,23 @@
 (declare-function markdown-mode "markdown-mode")
 (defvar vterm-max-scrollback)
 
+(defun my-codex--prepare-edit-buffer
+    (text root mode header accept-command cancel-command)
+  "Prepare the current buffer for editing TEXT from ROOT.
+MODE is the major-mode function.  HEADER is shown in the header line.
+ACCEPT-COMMAND and CANCEL-COMMAND are bound to `C-c C-c' and `C-c C-k'."
+  (let ((inhibit-read-only t))
+    (erase-buffer)
+    (insert text)
+    (goto-char (point-min)))
+  (setq default-directory root)
+  (funcall mode)
+  (setq-local header-line-format header)
+  (let ((map (define-keymap :parent (current-local-map)
+               "C-c C-c" accept-command
+               "C-c C-k" cancel-command)))
+    (use-local-map map)))
+
 (defgroup my-codex nil
   "Customisation options for the Codex development tool."
   :group 'convenience

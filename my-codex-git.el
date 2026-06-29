@@ -596,30 +596,24 @@ Return nil when no matching message is available."
   "Open an editable Git commit buffer with MESSAGE from ROOT.
 STAGED-SIGNATURE is the staged diff signature MESSAGE was drafted for.
 CODEX-BUFFER is the agent session buffer that requested MESSAGE."
-  (let ((buffer (get-buffer-create (my-codex--commit-message-buffer-name root))))
+  (let ((buffer (get-buffer-create (my-codex--commit-message-buffer-name root)))
+        (text (my-codex-clean-commit-message message)))
+    (when-let (template (my-codex--git-commit-template root))
+      (setq text
+            (concat text "\n\n"
+                    (my-codex--commit-template-section
+                     template
+                     (my-codex--git-comment-char root)))))
     (pop-to-buffer buffer)
-    (let ((inhibit-read-only t))
-      (erase-buffer)
-      (insert (my-codex-clean-commit-message message))
-      (when-let (template (my-codex--git-commit-template root))
-        (insert "\n\n")
-        (insert (my-codex--commit-template-section
-                 template
-                 (my-codex--git-comment-char root))))
-      (goto-char (point-min)))
-    (setq default-directory root)
-    (text-mode)
+    (my-codex--prepare-edit-buffer
+     text root #'text-mode
+     "Edit commit message. C-c C-c commits staged changes; C-c C-k cancels."
+     #'my-codex--finish-git-commit #'my-codex--cancel-git-commit)
     (setq-local my-codex--commit-buffer-staged-signature
                 (or staged-signature
                     (let ((default-directory root))
                       (my-codex--staged-diff-signature))))
     (setq-local my-codex--commit-buffer-codex-buffer codex-buffer)
-    (setq-local header-line-format
-                "Edit commit message. C-c C-c commits staged changes; C-c C-k cancels.")
-    (let ((map (define-keymap :parent (current-local-map)
-                 "C-c C-c" #'my-codex--finish-git-commit
-                 "C-c C-k" #'my-codex--cancel-git-commit)))
-      (use-local-map map))
     (message "Edit the commit message, then press C-c C-c to commit.")))
 
 (defun my-codex-git-commit-with-message

@@ -414,24 +414,18 @@ Display SENT-MESSAGE after the prompt is sent."
         (let ((buffer (get-buffer-create
                        (my-codex--prompt-preview-buffer-name root))))
           (my-codex--display-prompt-preview-buffer buffer origin-window)
-          (let ((inhibit-read-only t))
-            (erase-buffer)
-            (insert prompt)
-            (goto-char (point-min)))
-          (text-mode)
+          (my-codex--prepare-edit-buffer
+           prompt root #'text-mode nil
+           #'my-codex--finish-prompt-preview
+           #'my-codex--cancel-prompt-preview)
           (my-codex--setup-prompt-preview-font-lock)
           (font-lock-ensure)
-          (setq default-directory root)
           (setq-local my-codex--prompt-preview-origin-window origin-window)
           (setq-local my-codex--prompt-preview-target-buffer target-buffer)
           (setq-local my-codex--prompt-preview-sent-message sent-message)
           (my-codex--update-prompt-preview-header)
           (add-hook 'after-change-functions
                     #'my-codex--update-prompt-preview-header nil t)
-          (let ((map (define-keymap :parent (current-local-map)
-                       "C-c C-c" #'my-codex--finish-prompt-preview
-                       "C-c C-k" #'my-codex--cancel-prompt-preview)))
-            (use-local-map map))
           (message "%s prompt preview opened."
                    (my-codex--active-agent-label root)))
       (my-codex-send-prompt prompt target-buffer)

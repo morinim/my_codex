@@ -288,19 +288,13 @@ Preserve concrete file names, command names, and technical details. Do not edit 
           (get-buffer-create
            (my-codex--github-issue-draft-buffer-name root))))
     (pop-to-buffer buffer)
-    (let ((inhibit-read-only t))
-      (erase-buffer)
-      (insert (my-codex--github-issue-draft-text repository title body))
-      (goto-char (point-min)))
-    (setq default-directory root)
-    (my-codex--session-export-mode)
+    (my-codex--prepare-edit-buffer
+     (my-codex--github-issue-draft-text repository title body)
+     root #'my-codex--session-export-mode
+     (my-codex--github-issue-draft-header-line repository)
+     #'my-codex--create-github-issue-from-draft
+     #'my-codex--cancel-github-issue-draft)
     (setq my-codex--github-issue-repository repository)
-    (setq-local header-line-format
-                (my-codex--github-issue-draft-header-line repository))
-    (let ((map (define-keymap :parent (current-local-map)
-                 "C-c C-c" #'my-codex--create-github-issue-from-draft
-                 "C-c C-k" #'my-codex--cancel-github-issue-draft)))
-      (use-local-map map))
     (message "Edit the GitHub issue draft, then press C-c C-c to create it.")))
 
 ;;;###autoload
