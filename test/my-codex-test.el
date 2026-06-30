@@ -468,6 +468,17 @@
    (eq (my-codex--session-access-mode "codex --custom")
        'custom)))
 
+(ert-deftest my-codex-read-session-access-mode-shows-completions ()
+  (let (setup-hook-ran)
+    (cl-letf (((symbol-function 'minibuffer-completion-help)
+               (lambda () (setq setup-hook-ran t)))
+              ((symbol-function 'completing-read)
+               (lambda (&rest _args)
+                 (run-hooks 'minibuffer-setup-hook)
+                 "read-only")))
+      (should (eq (my-codex--read-session-access-mode) 'read-only))
+      (should setup-hook-ran))))
+
 (ert-deftest my-codex-access-mode-labels-highlight-risk ()
   (should (equal (my-codex--access-mode-label 'workspace-write t)
                  "WORKSPACE WRITE"))

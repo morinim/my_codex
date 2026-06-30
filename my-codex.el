@@ -497,10 +497,12 @@ When REQUIRE-LIVE is non-nil, require a running session process."
 
 (defun my-codex--read-session-access-mode ()
   "Read and return an access mode for a new named session."
-  (pcase (completing-read
-          "Session access: "
-          '("read-only" "workspace-write")
-          nil t nil nil "read-only")
+  (pcase (minibuffer-with-setup-hook
+             (lambda () (minibuffer-completion-help))
+           (completing-read
+            "Session access: "
+            '("read-only" "workspace-write")
+            nil t nil nil "read-only"))
     ("read-only" 'read-only)
     ("workspace-write" 'workspace-write)))
 
