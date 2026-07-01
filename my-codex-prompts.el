@@ -27,7 +27,7 @@
 (defvar my-codex--region-send-override nil
   "Dynamically override region delivery with `reference' or `inline'.")
 (defcustom my-codex-test-coverage-prompt
-  "Analyse test coverage for this implementation and its test file.
+  "Analyse test coverage for this implementation and its relevant tests.
 
 Identify missing edge cases, unhandled exceptions, logical flaws and important behaviour that is not currently tested. Do not edit or write tests; list missing scenarios only."
   "Prompt used by `my-codex-analyse-test-coverage'."
@@ -584,37 +584,46 @@ Use the current prompt target's agent when AGENT is nil."
               "%s")))
     (format format-string file)))
 
-(defun my-codex--test-coverage-prompt (implementation-relative test-relative
-                                                               &optional agent)
+(defun my-codex--test-coverage-prompt (implementation-relative &optional test-relative
+                                                               agent)
   "Return a cache-friendly coverage prompt.
-IMPLEMENTATION-RELATIVE and TEST-RELATIVE are project-relative file names.
+IMPLEMENTATION-RELATIVE and optional TEST-RELATIVE are project-relative file names.
 AGENT is the agent profile used to format their references."
   (string-join
    (list my-codex-test-coverage-prompt
-         (format "context:\n  implementation: %s\n  test: %s"
-                 (my-codex--format-file-reference implementation-relative agent)
-                 (my-codex--format-file-reference test-relative agent))
-         "request: Analyze test coverage now.")
+         (concat
+          (format "context:\n  implementation: %s"
+                  (my-codex--format-file-reference implementation-relative agent))
+          (when test-relative
+            (format "\n  test: %s"
+                    (my-codex--format-file-reference test-relative agent))))
+         (if test-relative
+             "Analyze test coverage."
+           "Find the relevant test files, then analyze test coverage."))
    "\n\n"))
 
 ;;;###autoload
-(defun my-codex-analyse-test-coverage ()
-  "Ask the agent to analyse coverage of the current file by its test file."
-  (interactive)
+(defun my-codex-analyse-test-coverage (&optional select-test-file)
+  "Ask the agent to analyse test coverage of the current file.
+With prefix argument SELECT-TEST-FILE, prompt for a specific test file."
+  (interactive "P")
   (unless buffer-file-name
     (user-error "Current buffer is not visiting a file"))
   (let* ((root (my-codex-project-root))
          (implementation-file buffer-file-name)
-         (test-file (my-codex--read-test-file implementation-file root))
+         (test-file (when select-test-file
+                      (my-codex--read-test-file implementation-file root)))
          (implementation-relative
           (my-codex--project-relative-file implementation-file root))
-         (test-relative (my-codex--project-relative-file test-file root)))
+         (test-relative (when test-file
+                          (my-codex--project-relative-file test-file root))))
     (my-codex--ensure-file-reference-current implementation-file
                                              "implementation file")
-    (my-codex--ensure-file-reference-current test-file "test file")
+    (when test-file
+      (my-codex--ensure-file-reference-current test-file "test file"))
     (unless implementation-relative
       (user-error "Implementation file is outside the current project"))
-    (unless test-relative
+    (when (and test-file (not test-relative))
       (user-error "Test file is outside the current project"))
     (my-codex--preview-and-send-prompt
      (my-codex--test-coverage-prompt

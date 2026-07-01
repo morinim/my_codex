@@ -3060,7 +3060,7 @@
           (test-pos
            (string-match "test: @test/example-test\\.el" prompt))
           (request-pos
-           (string-match "request: Analyze test coverage now\\." prompt)))
+           (string-match "Analyze test coverage\\." prompt)))
       (should instructions-pos)
       (should context-pos)
       (should implementation-pos)
@@ -3079,6 +3079,30 @@
       (my-codex--test-coverage-prompt
        "src/example.el" "test/example-test.el" 'antigravity)))))
 
+(ert-deftest my-codex-test-coverage-prompt-asks-agent-to-find-tests ()
+  (let ((prompt (my-codex--test-coverage-prompt "src/example.el")))
+    (should (string-match-p "implementation: @src/example\\.el" prompt))
+    (should-not (string-match-p "\\n  test:" prompt))
+    (should (string-match-p "Find the relevant test files" prompt))))
+
+(ert-deftest my-codex-analyse-test-coverage-finds-tests-by-default ()
+  (let (sent-prompt)
+    (with-temp-buffer
+      (setq buffer-file-name "/project/src/example.el")
+      (cl-letf (((symbol-function 'my-codex-project-root)
+                 (lambda () "/project/"))
+                ((symbol-function 'my-codex--project-relative-file)
+                 (lambda (&rest _args) "src/example.el"))
+                ((symbol-function 'my-codex--ensure-file-reference-current)
+                 #'ignore)
+                ((symbol-function 'my-codex--read-test-file)
+                 (lambda (&rest _args)
+                   (ert-fail "Prompted for a test file")))
+                ((symbol-function 'my-codex--preview-and-send-prompt)
+                 (lambda (prompt) (setq sent-prompt prompt))))
+        (my-codex-analyse-test-coverage)
+        (should (string-match-p "Find the relevant test files" sent-prompt))))))
+
 (ert-deftest my-codex-analyse-test-coverage-rejects-unsaved-implementation ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-coverage" t)))
         sent)
@@ -3095,7 +3119,7 @@
                     ((symbol-function 'my-codex--preview-and-send-prompt)
                      (lambda (prompt) (setq sent prompt))))
             (should-error
-             (my-codex-analyse-test-coverage)
+             (my-codex-analyse-test-coverage t)
              :type 'user-error)
             (should-not sent)))
       (delete-directory root t))))
@@ -3126,7 +3150,7 @@
                     ((symbol-function 'my-codex--preview-and-send-prompt)
                      (lambda (prompt) (setq sent prompt))))
             (should-error
-             (my-codex-analyse-test-coverage)
+             (my-codex-analyse-test-coverage t)
              :type 'user-error)
             (should-not sent)))
       (when (buffer-live-p test-buffer)
