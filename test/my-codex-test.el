@@ -3895,13 +3895,13 @@ Do not modify files."))))
                       (my-codex--prompt-preview-buffer-name root)))
     (should
      (string-prefix-p "*Antigravity GitHub issue:"
-                      (my-codex--github-issue-output-buffer-name root)))
+                      (my-codex--github-buffer-name root 'issue)))
     (should
      (string-prefix-p "*Antigravity open issues:"
-                      (my-codex--github-issue-list-buffer-name root)))
+                      (my-codex--github-buffer-name root 'issue-list)))
     (should
      (string-prefix-p "*Antigravity GitHub issue draft:"
-                      (my-codex--github-issue-draft-buffer-name root)))))
+                      (my-codex--github-buffer-name root 'issue-draft)))))
 
 (provide 'my-codex-test)
 

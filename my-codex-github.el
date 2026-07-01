@@ -42,23 +42,17 @@ Preserve concrete file names, command names, and technical details. Do not edit 
   :type 'string
   :group 'my-codex)
 
-(defun my-codex--github-issue-output-buffer-name (root)
-  "Return the GitHub issue process buffer name for ROOT."
+(defun my-codex--github-buffer-name (root purpose)
+  "Return the GitHub buffer name for ROOT and PURPOSE."
   (let* ((agent (my-codex--active-agent root))
-         (label (my-codex--agent-label agent)))
-    (format "*%s GitHub issue:%s*" label (my-codex--safe-root-name root))))
-
-(defun my-codex--github-issue-list-buffer-name (root)
-  "Return the open issue list buffer name for ROOT."
-  (let* ((agent (my-codex--active-agent root))
-         (label (my-codex--agent-label agent)))
-    (format "*%s open issues:%s*" label (my-codex--safe-root-name root))))
-
-(defun my-codex--github-issue-draft-buffer-name (root)
-  "Return the GitHub issue draft buffer name for ROOT."
-  (let* ((agent (my-codex--active-agent root))
-         (label (my-codex--agent-label agent)))
-    (format "*%s GitHub issue draft:%s*" label (my-codex--safe-root-name root))))
+         (label (my-codex--agent-label agent))
+         (description (pcase purpose
+                        ('issue "GitHub issue")
+                        ('issue-list "open issues")
+                        ('issue-draft "GitHub issue draft")
+                        (_ (error "Unknown GitHub buffer purpose: %S"
+                                  purpose)))))
+    (format "*%s %s:%s*" label description (my-codex--safe-root-name root))))
 
 (defun my-codex--github-issue-list-sentinel (proc _event)
   "Handle completion of open issue list process PROC."
@@ -93,7 +87,7 @@ Preserve concrete file names, command names, and technical details. Do not edit 
     (user-error "GitHub CLI `gh' not found in exec-path"))
   (let* ((root (my-codex-project-root))
          (buffer
-          (get-buffer-create (my-codex--github-issue-list-buffer-name root))))
+          (get-buffer-create (my-codex--github-buffer-name root 'issue-list))))
     (with-current-buffer buffer
       (read-only-mode -1)
       (let ((inhibit-read-only t))
@@ -205,7 +199,7 @@ Preserve concrete file names, command names, and technical details. Do not edit 
     (user-error "GitHub CLI `gh' not found in exec-path"))
   (let ((file (make-temp-file "my-codex-github-issue-" nil ".md"))
         (output-buffer
-         (get-buffer-create (my-codex--github-issue-output-buffer-name root))))
+         (get-buffer-create (my-codex--github-buffer-name root 'issue))))
     (condition-case err
         (progn
           (with-temp-file file
@@ -286,7 +280,7 @@ Preserve concrete file names, command names, and technical details. Do not edit 
          (body (plist-get fields :body))
          (buffer
           (get-buffer-create
-           (my-codex--github-issue-draft-buffer-name root))))
+           (my-codex--github-buffer-name root 'issue-draft))))
     (pop-to-buffer buffer)
     (my-codex--prepare-edit-buffer
      (my-codex--github-issue-draft-text repository title body)
