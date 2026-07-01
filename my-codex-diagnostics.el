@@ -129,8 +129,7 @@ When nil, diagnostics context is not capped by token budget."
       (let* ((key (my-codex--flycheck-group-key diagnostic root))
              (group (gethash key table)))
         (if group
-            (setf (plist-get group :diagnostics)
-                  (append (plist-get group :diagnostics) (list diagnostic)))
+            (push diagnostic (plist-get group :diagnostics))
           (setq group
                 (list :file (my-codex--flycheck-diagnostic-file diagnostic root)
                       :level (flycheck-error-level diagnostic)
@@ -139,8 +138,11 @@ When nil, diagnostics context is not capped by token budget."
                       :message (flycheck-error-message diagnostic)
                       :diagnostics (list diagnostic)))
           (puthash key group table)
-          (setq groups (append groups (list group))))))
-    groups))
+          (push group groups))))
+    (dolist (group groups)
+      (setf (plist-get group :diagnostics)
+            (nreverse (plist-get group :diagnostics))))
+    (nreverse groups)))
 
 (defun my-codex--flycheck-group-count (group)
   "Return the number of diagnostics represented by GROUP."
