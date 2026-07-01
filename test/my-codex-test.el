@@ -1549,6 +1549,23 @@
               "if ($LASTEXITCODE -ne $null) { exit $LASTEXITCODE }\n"
               "if ($?) { exit 0 } else { exit 1 }")))))
 
+(ert-deftest my-codex-global-mode-preserves-pre-existing-services ()
+  (let ((my-codex-enable-display-defaults nil)
+        (my-codex-enable-global-auto-revert t)
+        (my-codex-enable-vterm-integration t)
+        (global-auto-revert-mode t)
+        (my-codex-vterm-integration-mode t)
+        (my-codex--auto-revert-enabled-by-mode nil)
+        (my-codex--vterm-integration-enabled-by-mode nil)
+        calls)
+    (cl-letf (((symbol-function 'global-auto-revert-mode)
+               (lambda (arg) (push (cons 'auto-revert arg) calls)))
+              ((symbol-function 'my-codex-vterm-integration-mode)
+               (lambda (arg) (push (cons 'vterm arg) calls))))
+      (my-codex-global-mode 1)
+      (my-codex-global-mode -1)
+      (should-not calls))))
+
 (ert-deftest my-codex-ensure-vterm-scrollback-raises-low-value-locally ()
   (let ((was-bound (boundp 'vterm-max-scrollback))
         (original-value (and (boundp 'vterm-max-scrollback)
