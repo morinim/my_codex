@@ -907,8 +907,9 @@ Return `reference', `inline', or nil when no choice is needed."
             (my-codex--approx-token-count
              (buffer-substring-no-properties beg end)))))
 
-(defun my-codex--region-review-request (beg end)
-  "Return review prompt and delivery message for BEG to END."
+(defun my-codex--region-request (beg end prompt-function)
+  "Return a prompt and delivery message for BEG to END.
+PROMPT-FUNCTION builds the prompt from the region bounds."
   (let ((beg-marker (copy-marker beg t))
         (end-marker (copy-marker end)))
     (unwind-protect
@@ -919,29 +920,19 @@ Return `reference', `inline', or nil when no choice is needed."
                           beg-marker end-marker)
                          'reference
                        'inline)))
-          (cons (my-codex--region-review-prompt beg-marker end-marker)
+          (cons (funcall prompt-function beg-marker end-marker)
                 (my-codex--region-sent-message
                  beg-marker end-marker mode)))
       (set-marker beg-marker nil)
       (set-marker end-marker nil))))
 
+(defun my-codex--region-review-request (beg end)
+  "Return review prompt and delivery message for BEG to END."
+  (my-codex--region-request beg end #'my-codex--region-review-prompt))
+
 (defun my-codex--region-context-request (beg end)
   "Return prompt context and delivery message for BEG to END."
-  (let ((beg-marker (copy-marker beg t))
-        (end-marker (copy-marker end)))
-    (unwind-protect
-        (let* ((choice (my-codex--modified-region-send-choice
-                        beg-marker end-marker))
-               (my-codex--region-send-override choice)
-               (mode (if (my-codex--region-reference-p
-                          beg-marker end-marker)
-                         'reference
-                       'inline)))
-          (cons (my-codex--region-prompt-context beg-marker end-marker)
-                (my-codex--region-sent-message
-                 beg-marker end-marker mode)))
-      (set-marker beg-marker nil)
-      (set-marker end-marker nil))))
+  (my-codex--region-request beg end #'my-codex--region-prompt-context))
 
 (defun my-codex--region-review-reference-prompt (beg end)
   "Return a region review prompt that references BEG to END by file range."
