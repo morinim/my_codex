@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.98.1
+;; Version: 0.98.2
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -413,7 +413,6 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (my-codex-new-session "n" "New named" "Session" :prefix my-codex-session-transient :path "S" :menu "New named session" :help "Start or show a named agent session")
       (my-codex-new-session-from-handoff "h" "From handoff" "Session" :prefix my-codex-session-transient :path "S" :menu "Start fresh with handoff" :help "Create a named session containing only a compact handoff")
       (my-codex-compact-session "k" "Compact context" "Session" :prefix my-codex-session-transient :path "S" :menu "Compact session context" :available my-codex--compact-session-available-p :transient-available my-codex--compact-session-available-p :help "Compact context in the active session when supported")
-      (my-codex-resume "r" "Resume" "Session" :prefix my-codex-session-transient)
       (my-codex-hide-window "q" "Hide agent" "Session" :prefix my-codex-session-transient :path "S" :menu "Hide selected session window" :help "Hide the agent window associated with the selected session")
       (my-codex-send-project-overview "p" "Project overview" "Tools" :prefix my-codex-tools-transient :path "T" :menu "Project overview" :help "Send the active agent a compact project overview")
       (my-codex-export-session-to-markdown "X" "Export session" "Tools" :prefix my-codex-tools-transient :path "T" :menu "Export session" :help "Export the current agent session transcript to Markdown")
