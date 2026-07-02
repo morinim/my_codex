@@ -74,7 +74,8 @@ Press `F8` to open the agent command menu.
 
 ### Prompts & Refactoring
 - `F8 a` / `F8 A` : ask a free-form question or open the customizable prompt preset menu.
-- `F8 s` (or `F8 Right`) / `F8 R` : send the selected region, or draft a low-risk refactoring plan for it.
+- `F8 s` / `F8 R` : send the selected region, or draft a low-risk refactoring plan for it.
+- `F8 Right` : send the selected region when active, otherwise inspect the current file.
 - `F8 Left` / `F8 TAB` : insert agent text into code, or toggle focus between code and agent.
 - `F8 f` / `F8 F` / `F8 C` : review the current defun, inspect the current file, or analyse test coverage. The agent finds relevant tests; use `C-u F8 C` to select one explicitly.
 - `F8 x` / `F8 e` : explain the symbol at point or selected error.

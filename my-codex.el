@@ -378,6 +378,14 @@ Open the generated notes in an editable Markdown buffer when they are ready."
              (my-codex--active-agent-label root))))
 
 (eval-and-compile
+  (defun my-codex-send-region-or-current-file ()
+    "Send the active region, or the current file when no region is active."
+    (interactive)
+    (call-interactively
+     (if (use-region-p)
+         #'my-codex-send-region
+       #'my-codex-send-current-file)))
+
   (defconst my-codex-command-catalogue
     '((my-codex-read-only "o" "Read-only" "Session" :menu "Show/start read-only" :help "Show the configured agent in read-only mode")
       (my-codex-workspace "w" "Workspace" "Session" :menu "Show/start workspace-write" :help "Show the configured agent with workspace write access")
@@ -389,7 +397,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (my-codex-ask "a" "Ask" "Send" :menu "Ask agent..." :help "Prompt for a question and send it to the active agent")
       (my-codex-ask-preset-transient "A" "Preset menu" "Send" :menu "Preset menu" :help "Open the prompt preset menu")
       (my-codex-send-region "s" "Region" "Send" :menu "Send selected region" :active (use-region-p) :help "Send the selected region to the active agent")
-      (my-codex-send-region "<right>" "Region" "Send")
+      (my-codex-send-region-or-current-file "<right>" "Region or file" "Send")
       (my-codex-plan-refactor-region "R" "Refactor plan" "Send" :menu "Plan refactor for selected region" :active (use-region-p) :help "Ask the active agent for a low-risk refactoring plan")
       (my-codex-insert-selection-into-code "<left>" "Insert selection" "Send" :menu "Insert selection" :menu-key "Left" :help "Insert the captured agent selection into the code buffer")
       (my-codex-review-defun-at-point "f" "Current defun" "Send" :menu "Review current defun" :help "Ask the active agent to review the defun at point")

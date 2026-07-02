@@ -97,6 +97,26 @@
       (when (plist-get properties :menu)
         (should (plist-get properties :help))))))
 
+(ert-deftest my-codex-send-region-or-current-file-sends-active-region ()
+  (let (called)
+    (cl-letf (((symbol-function 'use-region-p) (lambda () t))
+              ((symbol-function 'my-codex-send-region)
+               (lambda (&rest _) (interactive) (setq called 'region)))
+              ((symbol-function 'my-codex-send-current-file)
+               (lambda () (interactive) (setq called 'file))))
+      (my-codex-send-region-or-current-file)
+      (should (eq called 'region)))))
+
+(ert-deftest my-codex-send-region-or-current-file-sends-current-file-without-region ()
+  (let (called)
+    (cl-letf (((symbol-function 'use-region-p) (lambda () nil))
+              ((symbol-function 'my-codex-send-region)
+               (lambda (&rest _) (interactive) (setq called 'region)))
+              ((symbol-function 'my-codex-send-current-file)
+               (lambda () (interactive) (setq called 'file))))
+      (my-codex-send-region-or-current-file)
+      (should (eq called 'file)))))
+
 (ert-deftest my-codex-transient-groups-use-columns ()
   (let* ((expansion
           (macroexpand-1
