@@ -97,6 +97,31 @@
     (when (plist-get entry :menu)
       (should (plist-get entry :help)))))
 
+(ert-deftest my-codex-easy-menu-includes-contextual-right-command ()
+  (let* ((entry (cl-find 'my-codex-send-region-or-current-file
+                         my-codex-command-catalogue
+                         :key (lambda (item) (plist-get item :command))))
+         (menu (my-codex--catalogue-easy-menu)))
+    (should (equal (plist-get entry :menu-key) "Right"))
+    (should (string-match-p "Send region or inspect current file"
+                            (prin1-to-string menu)))
+    (should (string-match-p "F8 Right" (prin1-to-string menu)))))
+
+(ert-deftest my-codex-command-catalogue-hides-region-from-transient-only ()
+  (let ((entry (cl-find 'my-codex-send-region my-codex-command-catalogue
+                        :key (lambda (item) (plist-get item :command)))))
+    (should (plist-member entry :transient))
+    (should-not (plist-get entry :transient))
+    (should (equal (plist-get entry :menu) "Send selected region"))
+    (should (eq (keymap-lookup my-codex-map "s") 'my-codex-send-region)))
+  (let ((layout (my-codex--catalogue-transient-layout
+                 'my-codex-transient)))
+    (should
+     (cl-loop for group in layout
+              never (cl-loop for index from 1 below (length group)
+                             thereis (equal (car (aref group index))
+                                            "s"))))))
+
 (ert-deftest my-codex-command-catalogue-groups-review-and-git-bindings ()
   (should (eq (keymap-lookup my-codex-map "r")
               'my-codex-git-review-transient))

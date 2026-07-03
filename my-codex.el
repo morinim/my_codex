@@ -409,8 +409,8 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (:command my-codex-toggle-focus :key "TAB")
       (:command my-codex-ask :key "a" :label "Ask" :group "Send" :menu "Ask agent..." :help "Prompt for a question and send it to the active agent")
       (:command my-codex-ask-preset-transient :key "A" :label "Preset menu" :group "Send" :menu "Preset menu" :help "Open the prompt preset menu")
-      (:command my-codex-send-region :key "s" :label "Region" :group "Send" :menu "Send selected region" :available my-codex--region-available-p :help "Send the selected region to the active agent")
-      (:command my-codex-send-region-or-current-file :key "<right>" :label "Region or file" :group "Send")
+      (:command my-codex-send-region :key "s" :label "Region" :group "Send" :menu "Send selected region" :available my-codex--region-available-p :transient nil :help "Send the selected region to the active agent")
+      (:command my-codex-send-region-or-current-file :key "<right>" :label "Region or file" :group "Send" :menu "Send region or inspect current file" :menu-key "Right" :help "Send the selected region, or ask the active agent to inspect the current file")
       (:command my-codex-plan-refactor-region :key "R" :label "Refactor plan" :group "Send" :menu "Plan refactor for selected region" :available my-codex--region-available-p :help "Ask the active agent for a low-risk refactoring plan")
       (:command my-codex-insert-selection-into-code :key "<left>" :label "Insert selection" :group "Send" :menu "Insert selection" :menu-key "Left" :available my-codex--agent-selection-available-p :help "Insert the captured agent selection into the code buffer")
       (:command my-codex-examine-transient :key "x" :label "Examine code..." :group "Send" :menu "Examine code" :help "Open code explanation, review, and coverage commands")
@@ -455,7 +455,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
 When RESOLVE is non-nil, also require availability predicates to be defined."
     (let ((known-properties
            '(:command :key :label :group :menu :menu-key :help
-             :available :prefix :path))
+             :available :prefix :path :transient))
           (bindings (make-hash-table :test #'equal)))
       (dolist (entry catalogue)
         (let ((properties entry))
@@ -499,6 +499,8 @@ When RESOLVE is non-nil, also require availability predicates to be defined."
         (when (and (eq (or (plist-get entry :prefix)
                            'my-codex-transient)
                        prefix)
+                   (not (and (plist-member entry :transient)
+                             (not (plist-get entry :transient))))
                    (plist-get entry :label))
           (let* ((group (plist-get entry :group))
                  (cell (assoc group groups))
