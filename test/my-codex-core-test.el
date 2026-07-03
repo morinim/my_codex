@@ -59,14 +59,15 @@
 
 (ert-deftest my-codex-command-catalogue-commands-exist ()
   (dolist (entry my-codex-command-catalogue)
-    (should (fboundp (car entry)))))
+    (should (fboundp (plist-get entry :command)))))
 
 (ert-deftest my-codex-command-catalogue-commands-exist-after-clean-require ()
   (let* ((script '(progn
                     (setq load-prefer-newer t)
                     (require 'my-codex)
                     (prin1
-                     (cl-every (lambda (entry) (fboundp (car entry)))
+                     (cl-every (lambda (entry)
+                                 (fboundp (plist-get entry :command)))
                                my-codex-command-catalogue))))
          (output
           (with-temp-buffer
@@ -82,20 +83,45 @@
 (ert-deftest my-codex-command-catalogue-bindings-do-not-conflict ()
   (let ((bindings (make-hash-table :test #'equal)))
     (dolist (entry my-codex-command-catalogue)
-      (let* ((command (car entry))
-             (properties (nthcdr 4 entry))
-             (prefix (or (plist-get properties :prefix)
+      (let* ((command (plist-get entry :command))
+             (prefix (or (plist-get entry :prefix)
                          'my-codex-transient))
-             (binding (cons prefix (key-description (kbd (nth 1 entry)))))
+             (binding (cons prefix
+                            (key-description (kbd (plist-get entry :key)))))
              (existing (gethash binding bindings)))
         (should (or (not existing) (eq existing command)))
         (puthash binding command bindings)))))
 
 (ert-deftest my-codex-command-catalogue-menu-entries-have-help ()
   (dolist (entry my-codex-command-catalogue)
-    (let ((properties (nthcdr 4 entry)))
-      (when (plist-get properties :menu)
-        (should (plist-get properties :help))))))
+    (when (plist-get entry :menu)
+      (should (plist-get entry :help)))))
+
+(ert-deftest my-codex-command-catalogue-validator-rejects-unknown-property ()
+  (should-error
+   (my-codex--validate-command-catalogue
+    '((:command ignore :key "x" :commmand ignore)))
+   :type 'error))
+
+(ert-deftest my-codex-command-catalogue-validator-rejects-incomplete-transient-entry ()
+  (should-error
+   (my-codex--validate-command-catalogue
+    '((:command ignore :key "x" :label "Ignore")))
+   :type 'error))
+
+(ert-deftest my-codex-command-catalogue-validator-rejects-unknown-predicate ()
+  (should-error
+   (my-codex--validate-command-catalogue
+    '((:command ignore :key "x" :available my-codex--missing-predicate)) t)
+   :type 'error))
+
+(ert-deftest my-codex-command-catalogue-byte-compiles-with-autoloaded-predicates ()
+  (let ((destination (make-temp-file "my-codex-" nil ".elc")))
+    (unwind-protect
+        (let ((byte-compile-dest-file-function (lambda (_) destination)))
+          (should (byte-compile-file
+                   (expand-file-name "my-codex.el" default-directory))))
+      (delete-file destination))))
 
 (ert-deftest my-codex-send-region-or-current-file-sends-active-region ()
   (let (called)
