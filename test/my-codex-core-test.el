@@ -39,7 +39,6 @@
                              (nth 1 (symbol-function function))))
                       '(my-codex--request-marked-output
                         my-codex-send-prompt
-                        my-codex-visible-window
                         my-codex-explain-diagnostic-at-point
                         my-codex-explain-buffer-diagnostics
                         my-codex--ensure-vterm-scrollback)))))
@@ -54,7 +53,7 @@
               (buffer-string)))))
     (should (equal output
                    (concat "(\"my-codex-prompts\" \"my-codex-prompts\" "
-                           "\"my-codex-prompts\" \"my-codex-diagnostics\" "
+                           "\"my-codex-diagnostics\" "
                            "\"my-codex-diagnostics\" \"my-codex-vterm\")")))))
 
 (ert-deftest my-codex-command-catalogue-commands-exist ()

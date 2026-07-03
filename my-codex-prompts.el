@@ -18,7 +18,6 @@
 (require 'xref)
 (require 'my-codex-core)
 
-(defvar my-codex--captured-selection)
 (defvar my-codex--prompt-preview-origin-window)
 (defvar-local my-codex--prompt-preview-target-buffer nil
   "Agent session buffer targeted by the current prompt preview.")
@@ -994,70 +993,6 @@ PROMPT-FUNCTION builds the prompt from the region bounds."
     (if file
         (find-file file)
       (user-error "No project instruction file found"))))
-
-(defun my-codex-visible-window ()
-  "Return the visible agent window in the selected frame, or raise an error."
-  (my-codex-active-session-window))
-
-(defun my-codex--associated-edit-window (codex-window)
-  "Return the edit window associated with CODEX-WINDOW, or nil."
-  (let ((codex-buffer (window-buffer codex-window)))
-    (seq-find
-     (lambda (window)
-       (and (window-parameter window 'my-codex-edit-window)
-            (eq (window-parameter window 'my-codex-term-buffer)
-                codex-buffer)))
-     (window-list (window-frame codex-window) 'no-minibuf))))
-
-(defun my-codex-code-window ()
-  "Return the most likely coding window associated with the agent."
-  (let ((codex-window (my-codex-visible-window)))
-    (let ((code-window (or (my-codex--associated-edit-window codex-window)
-                           (next-window codex-window nil))))
-      (if (and code-window (not (eq code-window codex-window)))
-          code-window
-        (user-error "No coding window found")))))
-
-(defun my-codex-back-to-code ()
-  "Move focus to the most likely coding window."
-  (interactive)
-  (select-window (my-codex-code-window)))
-
-;;;###autoload
-(defun my-codex-toggle-focus ()
-  "Toggle focus between the agent vterm and the coding window."
-  (interactive)
-  (let ((codex-window (my-codex-visible-window)))
-    (cond
-     ((eq (selected-window) codex-window) (my-codex-back-to-code))
-     (t (select-window codex-window)))))
-
-(defun my-codex-selected-text ()
-  "Return actively selected text from the visible agent window."
-  (let ((codex-window (my-codex-visible-window)))
-    (with-selected-window codex-window
-      (cond
-       ((use-region-p)
-        (prog1
-            (filter-buffer-substring
-             (region-beginning)
-             (region-end))
-          (setq my-codex--captured-selection nil)
-          (deactivate-mark)))
-       (my-codex--captured-selection
-        (prog1 my-codex--captured-selection
-          (setq my-codex--captured-selection nil)))
-       (t
-        (user-error "No active selection in the agent buffer"))))))
-
-;;;###autoload
-(defun my-codex-insert-selection-into-code ()
-  "Insert selected agent text into the coding window."
-  (interactive)
-  (let ((text (my-codex-selected-text))
-        (code-window (my-codex-code-window)))
-    (select-window code-window)
-    (insert text)))
 
 ;;;###autoload
 (defun my-codex-ask (prompt)

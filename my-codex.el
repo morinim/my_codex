@@ -46,7 +46,6 @@
 (autoload 'my-codex--current-or-left-file-available-p "my-codex-git")
 (autoload 'my-codex--request-marked-output "my-codex-prompts")
 (autoload 'my-codex-send-prompt "my-codex-prompts")
-(autoload 'my-codex-visible-window "my-codex-prompts")
 (dolist (autoload-entry
          '((my-codex-send-region . "my-codex-prompts")
            (my-codex-copy-region-reference . "my-codex-prompts")
@@ -59,8 +58,6 @@
            (my-codex-explain-region-as-error . "my-codex-prompts")
            (my-codex-plan-refactor-region . "my-codex-prompts")
            (my-codex-open-project-instructions . "my-codex-prompts")
-           (my-codex-toggle-focus . "my-codex-prompts")
-           (my-codex-insert-selection-into-code . "my-codex-prompts")
            (my-codex-ask . "my-codex-prompts")
            (my-codex-ask-preset-transient . "my-codex-prompts")
            (my-codex-send-project-overview . "my-codex-git")
