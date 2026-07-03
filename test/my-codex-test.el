@@ -8,6 +8,7 @@
              (file-name-directory (or load-file-name buffer-file-name)))
 
 (require 'my-codex-core-test)
+(require 'my-codex-layout-test)
 (require 'my-codex-ui-test)
 (require 'my-codex-vterm-test)
 (require 'my-codex-git-test)
