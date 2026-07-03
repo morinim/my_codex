@@ -394,6 +394,11 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     "Return non-nil when the current buffer visits a file."
     (and buffer-file-name t))
 
+  (defun my-codex--agent-selection-available-p ()
+    "Return non-nil when selected agent text can be inserted into code."
+    (and (my-codex--selected-window-is-codex-p)
+         (or my-codex--captured-selection (use-region-p))))
+
   (defconst my-codex-command-catalogue
     '((:command my-codex-read-only :key "o" :label "Read-only" :group "Session" :menu "Show/start read-only" :help "Show the configured agent in read-only mode")
       (:command my-codex-workspace :key "w" :label "Workspace" :group "Session" :menu "Show/start workspace-write" :help "Show the configured agent with workspace write access")
@@ -407,7 +412,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (:command my-codex-send-region :key "s" :label "Region" :group "Send" :menu "Send selected region" :available my-codex--region-available-p :help "Send the selected region to the active agent")
       (:command my-codex-send-region-or-current-file :key "<right>" :label "Region or file" :group "Send")
       (:command my-codex-plan-refactor-region :key "R" :label "Refactor plan" :group "Send" :menu "Plan refactor for selected region" :available my-codex--region-available-p :help "Ask the active agent for a low-risk refactoring plan")
-      (:command my-codex-insert-selection-into-code :key "<left>" :label "Insert selection" :group "Send" :menu "Insert selection" :menu-key "Left" :help "Insert the captured agent selection into the code buffer")
+      (:command my-codex-insert-selection-into-code :key "<left>" :label "Insert selection" :group "Send" :menu "Insert selection" :menu-key "Left" :available my-codex--agent-selection-available-p :help "Insert the captured agent selection into the code buffer")
       (:command my-codex-review-defun-at-point :key "f" :label "Current defun" :group "Send" :menu "Review current defun" :help "Ask the active agent to review the defun at point")
       (:command my-codex-send-current-file :key "F" :label "Current file" :group "Send" :menu "Inspect current file" :available my-codex--current-file-available-p :help "Ask the active agent to inspect the current file directly")
       (:command my-codex-analyse-test-coverage :key "C" :label "Coverage gaps" :group "Send" :menu "Analyse test coverage" :available my-codex--current-file-available-p :help "Ask the active agent to analyse missing test scenarios")

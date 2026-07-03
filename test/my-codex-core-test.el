@@ -143,6 +143,25 @@
       (my-codex-send-region-or-current-file)
       (should (eq called 'file)))))
 
+(ert-deftest my-codex-agent-selection-available-requires-agent-window ()
+  (let ((my-codex--captured-selection "selected"))
+    (cl-letf (((symbol-function 'my-codex--selected-window-is-codex-p)
+               (lambda () nil)))
+      (should-not (my-codex--agent-selection-available-p)))))
+
+(ert-deftest my-codex-agent-selection-available-accepts-captured-text ()
+  (let ((my-codex--captured-selection "selected"))
+    (cl-letf (((symbol-function 'my-codex--selected-window-is-codex-p)
+               (lambda () t)))
+      (should (my-codex--agent-selection-available-p)))))
+
+(ert-deftest my-codex-agent-selection-available-requires-text ()
+  (let ((my-codex--captured-selection nil))
+    (cl-letf (((symbol-function 'my-codex--selected-window-is-codex-p)
+               (lambda () t))
+              ((symbol-function 'use-region-p) (lambda () nil)))
+      (should-not (my-codex--agent-selection-available-p)))))
+
 (ert-deftest my-codex-transient-groups-use-columns ()
   (let* ((expansion
           (macroexpand-1
