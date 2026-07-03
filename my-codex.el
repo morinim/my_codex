@@ -413,10 +413,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (:command my-codex-send-region-or-current-file :key "<right>" :label "Region or file" :group "Send")
       (:command my-codex-plan-refactor-region :key "R" :label "Refactor plan" :group "Send" :menu "Plan refactor for selected region" :available my-codex--region-available-p :help "Ask the active agent for a low-risk refactoring plan")
       (:command my-codex-insert-selection-into-code :key "<left>" :label "Insert selection" :group "Send" :menu "Insert selection" :menu-key "Left" :available my-codex--agent-selection-available-p :help "Insert the captured agent selection into the code buffer")
-      (:command my-codex-review-defun-at-point :key "f" :label "Current defun" :group "Send" :menu "Review current defun" :help "Ask the active agent to review the defun at point")
-      (:command my-codex-send-current-file :key "F" :label "Current file" :group "Send" :menu "Inspect current file" :available my-codex--current-file-available-p :help "Ask the active agent to inspect the current file directly")
-      (:command my-codex-analyse-test-coverage :key "C" :label "Coverage gaps" :group "Send" :menu "Analyse test coverage" :available my-codex--current-file-available-p :help "Ask the active agent to analyse missing test scenarios")
-      (:command my-codex-explain-symbol-at-point :key "x" :label "Explain symbol" :group "Send" :menu "Explain symbol at point" :available my-codex--current-file-available-p :help "Ask the active agent to explain the symbol at point")
+      (:command my-codex-examine-transient :key "x" :label "Examine code..." :group "Send" :menu "Examine code" :help "Open code explanation, review, and coverage commands")
       (:command my-codex-git-transient :key "g" :label "Inspect diff..." :group "Git" :menu "Inspect Git diff" :help "Open local Git diff and ediff commands")
       (:command my-codex-git-commit-with-latest-message :key "c" :label "Commit with agent message" :group "Git" :menu "Edit commit with agent message" :help "Use the latest agent commit message, or ask for one, then edit before committing")
       (:command my-codex-explain-region-as-error :key "e" :label "Explain error" :group "Context" :menu "Explain selected error" :available my-codex--region-available-p :help "Ask the active agent to explain the selected compiler/test error")
@@ -436,6 +433,10 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (:command my-codex-export-session-to-markdown :key "X" :label "Export session" :group "Tools" :prefix my-codex-tools-transient :path "T" :menu "Export session" :help "Export the current agent session transcript to Markdown")
       (:command my-codex-diagnostics-transient :key "E" :label "Diagnostics" :group "Tools" :prefix my-codex-tools-transient :path "T" :menu "Diagnostics" :help "Open diagnostic explanation commands")
       (:command my-codex-doctor :key "!" :label "Doctor" :group "Tools" :prefix my-codex-tools-transient :path "T" :menu "Doctor" :help "Check Emacs, agent, vterm, Git, gh, project, configuration, and terminal startup")
+      (:command my-codex-explain-symbol-at-point :key "s" :label "Explain symbol" :group "Examine code" :prefix my-codex-examine-transient :path "x" :menu "Explain symbol at point" :available my-codex--current-file-available-p :help "Ask the active agent to explain the symbol at point")
+      (:command my-codex-review-defun-at-point :key "f" :label "Review defun" :group "Examine code" :prefix my-codex-examine-transient :path "x" :menu "Review current defun" :help "Ask the active agent to review the defun at point")
+      (:command my-codex-send-current-file :key "F" :label "Inspect file" :group "Examine code" :prefix my-codex-examine-transient :path "x" :menu "Inspect current file" :available my-codex--current-file-available-p :help "Ask the active agent to inspect the current file directly")
+      (:command my-codex-analyse-test-coverage :key "C" :label "Coverage gaps" :group "Examine code" :prefix my-codex-examine-transient :path "x" :menu "Analyse test coverage" :available my-codex--current-file-available-p :help "Ask the active agent to analyse missing test scenarios")
       (:command my-codex-send-git-diff :key "a" :label "All changes" :group "Review diff" :prefix my-codex-git-review-transient :path "r" :menu "Review all Git changes" :help "Ask the active agent to review the current Git diff")
       (:command my-codex-send-git-staged-diff :key "s" :label "Staged changes" :group "Review diff" :prefix my-codex-git-review-transient :path "r" :menu "Review staged Git changes" :help "Ask the active agent to review the staged Git diff")
       (:command my-codex-review-current-file-diff :key "f" :label "Current file" :group "Review diff" :prefix my-codex-git-review-transient :path "r" :menu "Review current-file Git diff" :available my-codex--current-or-left-file-available-p :help "Ask the active agent to review only the current file's Git diff")
@@ -550,6 +551,10 @@ When RESOLVE is non-nil, also require availability predicates to be defined."
 ;;;###autoload (autoload 'my-codex-tools-transient "my-codex" nil t)
 (my-codex--define-catalogue-transient my-codex-tools-transient
   "Show infrequent agent tools.")
+
+;;;###autoload (autoload 'my-codex-examine-transient "my-codex" nil t)
+(my-codex--define-catalogue-transient my-codex-examine-transient
+  "Show code examination commands.")
 
 ;;;###autoload (autoload 'my-codex-git-review-transient "my-codex" nil t)
 (my-codex--define-catalogue-transient my-codex-git-review-transient

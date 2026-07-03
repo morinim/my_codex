@@ -116,6 +116,24 @@
                (equal (plist-get item :key) key)))
         my-codex-command-catalogue)))))
 
+(ert-deftest my-codex-command-catalogue-groups-code-examination-bindings ()
+  (should (eq (keymap-lookup my-codex-map "x")
+              'my-codex-examine-transient))
+  (dolist (key '("f" "F" "C"))
+    (should-not (keymap-lookup my-codex-map key)))
+  (dolist (entry '((my-codex-explain-symbol-at-point "s")
+                   (my-codex-review-defun-at-point "f")
+                   (my-codex-send-current-file "F")
+                   (my-codex-analyse-test-coverage "C")))
+    (pcase-let ((`(,command ,key) entry))
+      (should
+       (cl-find-if
+        (lambda (item)
+          (and (eq (plist-get item :command) command)
+               (eq (plist-get item :prefix) 'my-codex-examine-transient)
+               (equal (plist-get item :key) key)))
+        my-codex-command-catalogue)))))
+
 (ert-deftest my-codex-command-catalogue-validator-rejects-unknown-property ()
   (should-error
    (my-codex--validate-command-catalogue
