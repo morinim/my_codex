@@ -36,19 +36,19 @@
                 codex-buffer)))
      (window-list (window-frame codex-window) 'no-minibuf))))
 
-(defun my-codex-code-window ()
-  "Return the most likely coding window associated with the agent."
+(defun my-codex-associated-edit-window ()
+  "Return the most likely edit window associated with the agent."
   (let ((codex-window (my-codex-visible-window)))
-    (let ((code-window (or (my-codex--associated-edit-window codex-window)
+    (let ((edit-window (or (my-codex--associated-edit-window codex-window)
                            (next-window codex-window nil))))
-      (if (and code-window (not (eq code-window codex-window)))
-          code-window
-        (user-error "No coding window found")))))
+      (if (and edit-window (not (eq edit-window codex-window)))
+          edit-window
+        (user-error "No edit window found")))))
 
 (defun my-codex-back-to-code ()
   "Move focus to the most likely coding window."
   (interactive)
-  (select-window (my-codex-code-window)))
+  (select-window (my-codex-associated-edit-window)))
 
 ;;;###autoload
 (defun my-codex-toggle-focus ()
@@ -82,8 +82,8 @@
   "Insert selected agent text into the coding window."
   (interactive)
   (let ((text (my-codex-selected-text))
-        (code-window (my-codex-code-window)))
-    (select-window code-window)
+        (edit-window (my-codex-associated-edit-window)))
+    (select-window edit-window)
     (insert text)))
 
 (defun my-codex--right-window-width (window)
