@@ -70,7 +70,7 @@ Press `F8` to open the agent command menu.
 - `F8 S h` : ask the active session for a compact handoff and start a fresh named session containing only that handoff.
 - `F8 S k` : compact the active session context when supported by its agent profile.
 - `F8 S l` / `F8 S q` : list open sessions, or hide the selected session window.
-- `F8 r` / `F8 q` : resume a previous session, or hide the active agent window.
+- `F8 S r` / `F8 q` : resume a previous session, or hide the active agent window.
 
 ### Prompts & Refactoring
 - `F8 a` / `F8 A` : ask a free-form question or open the customizable prompt preset menu.
@@ -81,9 +81,9 @@ Press `F8` to open the agent command menu.
 - `F8 x` / `F8 e` : explain the symbol at point or selected error.
 
 ### Git & GitHub Workflow
-- `F8 g a` / `F8 g s` / `F8 g f` : review all changes, staged changes, or the current file's Git diff.
-- `F8 v` / `F8 V` : view the current or staged Git diff locally.
-- `F8 d` / `F8 D` : ediff the current or a changed file against `HEAD`.
+- `F8 r a` / `F8 r s` / `F8 r f` : review all changes, staged changes, or the current file's Git diff.
+- `F8 g v` / `F8 g V` : view the current or staged Git diff locally.
+- `F8 g d` / `F8 g D` : ediff the current or a changed file against `HEAD`.
 - `F8 c` : draft or reuse an agent-generated commit message, edit it, then commit.
 - `F8 M` : summarize the session to Markdown notes.
 - `F8 t` / `F8 I` : list open GitHub issues, or draft a GitHub issue from the session.

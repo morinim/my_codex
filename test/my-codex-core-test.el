@@ -97,6 +97,25 @@
     (when (plist-get entry :menu)
       (should (plist-get entry :help)))))
 
+(ert-deftest my-codex-command-catalogue-groups-review-and-git-bindings ()
+  (should (eq (keymap-lookup my-codex-map "r")
+              'my-codex-git-review-transient))
+  (should (eq (keymap-lookup my-codex-map "g")
+              'my-codex-git-transient))
+  (dolist (key '("v" "V" "d" "D"))
+    (should-not (keymap-lookup my-codex-map key)))
+  (dolist (entry '((my-codex-resume my-codex-session-transient "r")
+                   (my-codex-send-git-diff my-codex-git-review-transient "a")
+                   (my-codex-show-git-diff my-codex-git-transient "v")))
+    (pcase-let ((`(,command ,prefix ,key) entry))
+      (should
+       (cl-find-if
+        (lambda (item)
+          (and (eq (plist-get item :command) command)
+               (eq (plist-get item :prefix) prefix)
+               (equal (plist-get item :key) key)))
+        my-codex-command-catalogue)))))
+
 (ert-deftest my-codex-command-catalogue-validator-rejects-unknown-property ()
   (should-error
    (my-codex--validate-command-catalogue
