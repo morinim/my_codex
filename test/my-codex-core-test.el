@@ -478,6 +478,17 @@
             (my-codex-current-buffer-name 'antigravity))))
       (delete-directory root t))))
 
+(ert-deftest my-codex-backend-factory-defaults-to-vterm ()
+  (let* ((my-codex-terminal-backend 'vterm)
+         (backend (my-codex--make-backend "*agent*")))
+    (should (my-codex-vterm-backend-p backend))
+    (should (equal (my-codex-backend-buffer-name backend) "*agent*"))))
+
+(ert-deftest my-codex-backend-factory-rejects-unknown-backend ()
+  (let ((my-codex-terminal-backend 'unknown))
+    (should-error (my-codex--make-backend "*agent*")
+                  :type 'user-error)))
+
 (ert-deftest my-codex-current-buffer-name-uses-project-active-agent ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-buffer" t))))
     (unwind-protect

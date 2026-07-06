@@ -51,11 +51,17 @@ ACCEPT-COMMAND and CANCEL-COMMAND are bound to `C-c C-c' and `C-c C-k'."
   :prefix "my-codex-")
 
 (defconst my-codex-default-buffer-name "*codex*"
-  "Default name of the vterm buffer used for Codex.")
+  "Default name of the terminal buffer used for Codex.")
 
 (defcustom my-codex-buffer-name my-codex-default-buffer-name
-  "Name of the vterm buffer used for Codex."
+  "Name of the terminal buffer used for Codex."
   :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-terminal-backend 'vterm
+  "Terminal backend used for agent sessions."
+  :type '(choice (const vterm)
+                 (const eat))
   :group 'my-codex)
 
 (defcustom my-codex-agent 'codex
@@ -540,28 +546,50 @@ When PLAIN is non-nil, do not apply text properties."
 (cl-defgeneric my-codex-backend-start
     (backend project-root command &optional session-name agent access-mode)
   "Start BACKEND in PROJECT-ROOT with COMMAND and return its buffer.
+The returned buffer must have a live backend process and stable name.
 When SESSION-NAME is non-nil, mark the buffer as that named session.")
 
 (cl-defgeneric my-codex-backend-send (backend prompt)
-  "Send PROMPT through BACKEND.")
+  "Send one complete PROMPT through BACKEND and record session activity.")
 
 (cl-defgeneric my-codex-backend-live-p (backend)
-  "Return non-nil when BACKEND has a live agent process.")
+  "Return non-nil when BACKEND has a live agent process.
+This operation must not change backend or session state.")
+
+(cl-defgeneric my-codex-backend-buffer-name (backend)
+  "Return BACKEND's stable session buffer name.")
+
+(cl-defmethod my-codex-backend-buffer-name
+  ((backend my-codex-vterm-backend))
+  "Return BACKEND's vterm buffer name."
+  (my-codex-vterm-backend-buffer-name backend))
 
 (autoload 'vterm-send-string "vterm")
 (autoload 'vterm-send-return "vterm")
+(declare-function my-codex--make-eat-backend "my-codex-eat" (buffer-name))
 
 (defun my-codex--backend-buffer-name (backend)
   "Return BACKEND's buffer name."
-  (my-codex-vterm-backend-buffer-name backend))
+  (my-codex-backend-buffer-name backend))
 
 (defun my-codex--backend-buffer (backend)
   "Return BACKEND's buffer, or nil when it does not exist."
   (get-buffer (my-codex--backend-buffer-name backend)))
 
+(defun my-codex--make-backend (buffer-name)
+  "Return the configured terminal backend for BUFFER-NAME."
+  (pcase my-codex-terminal-backend
+    ('vterm (my-codex--make-vterm-backend buffer-name))
+    ('eat
+     (unless (require 'my-codex-eat nil t)
+       (user-error "Eat backend is selected but my-codex-eat is unavailable"))
+     (my-codex--make-eat-backend buffer-name))
+    (backend
+     (user-error "Unknown my-codex terminal backend: %s" backend))))
+
 (defun my-codex--backend-for-buffer-name (buffer-name)
-  "Return the backend for BUFFER-NAME."
-  (my-codex--make-vterm-backend buffer-name))
+  "Return the configured backend for BUFFER-NAME."
+  (my-codex--make-backend buffer-name))
 
 (defun my-codex--current-backend ()
   "Return the backend for the current project default agent session."
