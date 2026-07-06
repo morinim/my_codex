@@ -272,6 +272,43 @@
       (should (equal setup-arguments
                      '(my-codex-session-transient nil nil :scope nil))))))
 
+(ert-deftest my-codex-define-agent-adds-profile-with-defaults ()
+  (let (my-codex-agent-profiles)
+    (should
+     (eq (my-codex-define-agent
+          'example
+          :commands '((read-only . "example --read-only")
+                      (workspace-write . "example")
+                      (resume . "example resume"))
+          :instruction-files '("EXAMPLE.md"))
+         'example))
+    (should (equal (my-codex--agent-label 'example) "Example"))
+    (should (equal (my-codex--agent-buffer-prefix 'example) "example"))
+    (should (equal (my-codex--agent-command 'example 'resume)
+                   "example resume"))
+    (should (equal (plist-get (my-codex--agent-profile 'example)
+                              :instruction-strategy)
+                   'root-all))))
+
+(ert-deftest my-codex-define-agent-replaces-profile ()
+  (let ((my-codex-agent-profiles '((example :label "Old"))))
+    (my-codex-define-agent
+     'example :label "New" :buffer-prefix "new"
+     :commands '((read-only . "new --read-only")
+                 (workspace-write . "new")))
+    (should (= (length my-codex-agent-profiles) 1))
+    (should (equal (my-codex--agent-label 'example) "New"))))
+
+(ert-deftest my-codex-define-agent-rejects-invalid-profile ()
+  (let (my-codex-agent-profiles)
+    (should-error
+     (my-codex-define-agent
+      nil :commands '((read-only . "example"))))
+    (should-error (my-codex-define-agent 'example :commands nil))
+    (should-error
+     (my-codex-define-agent
+      'example :commands '((unknown . "example"))))))
+
 (ert-deftest my-codex-project-instruction-files-follow-codex-scope ()
   (let* ((root (file-name-as-directory
                 (make-temp-file "my-codex-instructions" t)))

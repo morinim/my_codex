@@ -101,11 +101,17 @@ Configure options via `M-x customize-group RET my-codex RET`.
 ;; Set the default agent profile
 (setq my-codex-agent 'antigravity)
 
-;; Customise an agent profile
-(setf (alist-get 'workspace-write
-                 (plist-get (alist-get 'antigravity my-codex-agent-profiles)
-                            :commands))
-      "agy --sandbox")
+;; Define or replace an agent profile
+(my-codex-define-agent
+ 'example
+ :label "Example"
+ :buffer-prefix "example"
+ :commands '((read-only . "example --read-only")
+             (workspace-write . "example")
+             (resume . "example resume"))
+ :instruction-files '("EXAMPLE.md")
+ :instruction-strategy 'root-all
+ :file-reference-format "%s")
 
 ;; Layout & build commands
 (setq my-codex-right-width 80)

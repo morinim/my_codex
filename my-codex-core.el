@@ -146,6 +146,60 @@ is a `format' string used for project-relative file references."
                         (function :tag "Function"))))
   :group 'my-codex)
 
+(cl-defun my-codex-define-agent
+    (id &key label buffer-prefix commands session-actions instruction-files
+        (instruction-strategy 'root-all) (file-reference-format "%s")
+        doctor-function)
+  "Define or replace agent profile ID and return ID.
+COMMANDS is an alist mapping access modes to shell commands.  Supported
+access modes are `read-only', `workspace-write', and `resume'.
+SESSION-ACTIONS maps action symbols to text sent to the agent.
+INSTRUCTION-FILES lists project instruction file names.  The remaining
+keywords correspond to properties documented by
+`my-codex-agent-profiles'."
+  (unless (and id (symbolp id) (not (keywordp id)))
+    (error "Agent ID must be a non-keyword symbol: %S" id))
+  (unless (and (listp commands) commands)
+    (error "Agent %s must define commands" id))
+  (dolist (command commands)
+    (unless (and (consp command)
+                 (memq (car command) '(read-only workspace-write resume))
+                 (stringp (cdr command))
+                 (not (string-empty-p (cdr command))))
+      (error "Invalid command in agent %s: %S" id command)))
+  (dolist (action session-actions)
+    (unless (and (consp action) (symbolp (car action))
+                 (stringp (cdr action)) (not (string-empty-p (cdr action))))
+      (error "Invalid session action in agent %s: %S" id action)))
+  (unless (and (listp instruction-files)
+               (seq-every-p #'stringp instruction-files))
+    (error "Agent %s instruction files must be strings" id))
+  (unless (memq instruction-strategy '(hierarchical-first root-all))
+    (error "Invalid instruction strategy for agent %s: %S"
+           id instruction-strategy))
+  (unless (and (stringp file-reference-format)
+               (not (string-empty-p file-reference-format)))
+    (error "Agent %s file reference format must be a non-empty string" id))
+  (unless (or (null doctor-function) (symbolp doctor-function)
+              (functionp doctor-function))
+    (error "Invalid doctor function for agent %s: %S" id doctor-function))
+  (let ((profile
+         (list :label (or label (capitalize (symbol-name id)))
+               :buffer-prefix (or buffer-prefix (symbol-name id))
+               :commands commands
+               :session-actions session-actions
+               :instruction-files instruction-files
+               :instruction-strategy instruction-strategy
+               :file-reference-format file-reference-format
+               :doctor-function doctor-function)))
+    (unless (stringp (plist-get profile :label))
+      (error "Agent %s label must be a string" id))
+    (unless (and (stringp (plist-get profile :buffer-prefix))
+                 (not (string-empty-p (plist-get profile :buffer-prefix))))
+      (error "Agent %s buffer prefix must be a non-empty string" id))
+    (setf (alist-get id my-codex-agent-profiles nil nil #'eq) profile))
+  id)
+
 (defcustom my-codex-left-width 81
   "Width of the editing window text area in the Codex right-side layout."
   :type 'natnum
