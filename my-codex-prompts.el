@@ -820,28 +820,39 @@ and CONTEXT-LINES controls the excerpt radius for modified xref buffers."
            (buffer-substring-no-properties (region-beginning) (region-end)))))
 
 
-(defun my-codex--region-file-reference (beg end)
-  "Return an agent file reference for the region between BEG and END."
+(defun my-codex--current-file-reference ()
+  "Return an agent reference to the current file."
   (unless buffer-file-name
     (user-error "Current buffer is not visiting a file"))
   (my-codex--ensure-file-reference-current buffer-file-name)
   (let* ((root (my-codex-project-root))
-         (file (my-codex--project-relative-file buffer-file-name root))
-         (line-start (line-number-at-pos beg t))
-         (line-end (line-number-at-pos (max beg (1- end)) t)))
+         (file (my-codex--project-relative-file buffer-file-name root)))
     (unless file
       (user-error "Current file is outside the current project"))
+    (my-codex--format-file-reference file)))
+
+(defun my-codex--region-file-reference (beg end)
+  "Return an agent file reference for the region between BEG and END."
+  (let ((line-start (line-number-at-pos beg t))
+        (line-end (line-number-at-pos (max beg (1- end)) t)))
     (format "%s lines %d-%d"
-            (my-codex--format-file-reference file)
+            (my-codex--current-file-reference)
             line-start line-end)))
 
 ;;;###autoload
 (defun my-codex-copy-region-reference (beg end)
-  "Copy an agent reference to the active region."
-  (interactive "r")
-  (unless (use-region-p)
-    (user-error "No active region"))
-  (let ((reference (my-codex--region-file-reference beg end)))
+  "Copy an agent reference to the active region or current line."
+  (interactive
+   (if (use-region-p)
+       (list (region-beginning) (region-end))
+     (list nil nil)))
+  (let ((reference
+         (if (use-region-p)
+             (my-codex--region-file-reference beg end)
+           (let ((line (line-number-at-pos nil t)))
+             (format "%s line %d"
+                     (my-codex--current-file-reference)
+                     line)))))
     (kill-new reference)
     (message "Copied %s" reference)))
 

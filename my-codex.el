@@ -428,7 +428,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (:command my-codex-git-transient :key "g" :label "Inspect diff..." :group "Git" :menu "Inspect Git diff" :help "Open local Git diff and ediff commands")
       (:command my-codex-git-commit-with-latest-message :key "c" :label "Commit with agent message" :group "Git" :menu "Edit commit with agent message" :help "Use the latest agent commit message, or ask for one, then edit before committing")
       (:command my-codex-explain-region-as-error :key "e" :label "Explain error" :group "Context" :menu "Explain selected error" :available my-codex--region-available-p :help "Ask the active agent to explain the selected compiler/test error")
-      (:command my-codex-copy-region-reference :key "y" :label "Copy reference" :group "Context" :menu "Copy selected region reference" :available my-codex--region-available-p :help "Copy a compact file-and-line reference for the selected region")
+      (:command my-codex-copy-region-reference :key "y" :label "Copy reference" :group "Context" :menu "Copy region or line reference" :help "Copy a compact file-and-line reference for the selected region or current line")
       (:command my-codex-open-project-instructions :key "i" :label "Project instructions" :group "Context" :menu "Open project instructions" :help "Open AGENTS.md, CODEX.md, or .codex/instructions.md")
       (:command my-codex-summarize-session-to-markdown :key "M" :label "Summarize session" :group "Context" :menu "Summarize session to Markdown" :help "Ask the active agent to summarize the conversation as Markdown notes")
       (:command my-codex-tools-transient :key "T" :label "Tools" :group "Context")
