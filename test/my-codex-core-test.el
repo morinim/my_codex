@@ -150,7 +150,7 @@
   (dolist (entry '((my-codex-explain-symbol-at-point "s")
                    (my-codex-review-defun-at-point "f")
                    (my-codex-send-current-file "F")
-                   (my-codex-analyse-test-coverage "C")))
+                   (my-codex-analyse-test-coverage "c")))
     (pcase-let ((`(,command ,key) entry))
       (should
        (cl-find-if

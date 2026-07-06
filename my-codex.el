@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.98.3
+;; Version: 0.98.4
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -447,7 +447,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (:command my-codex-explain-symbol-at-point :key "s" :label "Explain symbol" :prefix my-codex-examine-transient :menu "Explain symbol at point" :available my-codex--current-file-available-p :help "Ask the active agent to explain the symbol at point")
       (:command my-codex-review-defun-at-point :key "f" :label "Review defun" :prefix my-codex-examine-transient :menu "Review current defun" :help "Ask the active agent to review the defun at point")
       (:command my-codex-send-current-file :key "F" :label "Inspect file" :prefix my-codex-examine-transient :menu "Inspect current file" :available my-codex--current-file-available-p :help "Ask the active agent to inspect the current file directly")
-      (:command my-codex-analyse-test-coverage :key "C" :label "Coverage gaps" :prefix my-codex-examine-transient :menu "Analyse test coverage" :available my-codex--current-file-available-p :help "Ask the active agent to analyse missing test scenarios")
+      (:command my-codex-analyse-test-coverage :key "c" :label "Coverage gaps" :prefix my-codex-examine-transient :menu "Analyse test coverage" :available my-codex--current-file-available-p :help "Ask the active agent to analyse missing test scenarios")
       (:command my-codex-send-git-diff :key "a" :label "All changes" :prefix my-codex-git-review-transient :menu "Review all Git changes" :help "Ask the active agent to review the current Git diff")
       (:command my-codex-send-git-staged-diff :key "s" :label "Staged changes" :prefix my-codex-git-review-transient :menu "Review staged Git changes" :help "Ask the active agent to review the staged Git diff")
       (:command my-codex-review-current-file-diff :key "f" :label "Current file" :prefix my-codex-git-review-transient :menu "Review current-file Git diff" :available my-codex--current-or-left-file-available-p :help "Ask the active agent to review only the current file's Git diff")
