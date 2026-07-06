@@ -26,7 +26,6 @@
 (require 'compile)
 (require 'my-codex-core)
 (require 'my-codex-layout)
-(require 'my-codex-ui)
 (require 'cl-lib)
 (require 'ediff)
 (require 'easymenu)
@@ -46,6 +45,7 @@
 (autoload 'my-codex--current-or-left-file-available-p "my-codex-git")
 (autoload 'my-codex--request-marked-output "my-codex-prompts")
 (autoload 'my-codex-send-prompt "my-codex-prompts")
+(autoload 'my-codex-top "my-codex-ui" nil t)
 (dolist (autoload-entry
          '((my-codex-send-region . "my-codex-prompts")
            (my-codex-copy-region-reference . "my-codex-prompts")

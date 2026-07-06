@@ -15,7 +15,7 @@
                     (prin1
                      (mapcar #'featurep
                              '(my-codex-prompts my-codex-diagnostics my-codex-git
-                               my-codex-github my-codex-links
+                               my-codex-github my-codex-links my-codex-ui
                                my-codex-doctor my-codex-vterm)))))
          (output
           (with-temp-buffer
@@ -26,7 +26,7 @@
               (unless (zerop exit-code)
                 (error "Nested Emacs failed: %s" (buffer-string)))
               (buffer-string)))))
-    (should (equal output "(nil nil nil nil nil nil nil)"))))
+    (should (equal output "(nil nil nil nil nil nil nil nil)"))))
 
 (ert-deftest my-codex-require-autoloads-main-prompt-dependencies ()
   (let* ((script '(progn
@@ -41,7 +41,8 @@
                         my-codex-send-prompt
                         my-codex-explain-diagnostic-at-point
                         my-codex-explain-buffer-diagnostics
-                        my-codex--ensure-vterm-scrollback)))))
+                        my-codex--ensure-vterm-scrollback
+                        my-codex-top)))))
          (output
           (with-temp-buffer
             (let ((exit-code
@@ -54,7 +55,8 @@
     (should (equal output
                    (concat "(\"my-codex-prompts\" \"my-codex-prompts\" "
                            "\"my-codex-diagnostics\" "
-                           "\"my-codex-diagnostics\" \"my-codex-vterm\")")))))
+                           "\"my-codex-diagnostics\" \"my-codex-vterm\" "
+                           "\"my-codex-ui\")")))))
 
 (ert-deftest my-codex-command-catalogue-commands-exist ()
   (dolist (entry my-codex-command-catalogue)
