@@ -32,6 +32,25 @@
                (lambda () expected)))
       (should (eq (my-codex-visible-window) expected)))))
 
+(ert-deftest my-codex-effective-right-width-uses-target-without-minimum ()
+  (let ((my-codex-right-width 60)
+        (my-codex-min-right-width nil))
+    (should (= (my-codex--effective-right-width) 60))))
+
+(ert-deftest my-codex-effective-right-width-honours-optional-minimum ()
+  (let ((my-codex-right-width 60)
+        (my-codex-min-right-width 80))
+    (should (= (my-codex--effective-right-width) 80)))
+  (let ((my-codex-right-width 100)
+        (my-codex-min-right-width 80))
+    (should (= (my-codex--effective-right-width) 100))))
+
+(ert-deftest my-codex-right-layout-width-combines-edit-and-agent-widths ()
+  (let ((my-codex-left-width 81)
+        (my-codex-right-width 60)
+        (my-codex-min-right-width nil))
+    (should (= (my-codex--right-layout-width) 141))))
+
 (ert-deftest my-codex-associated-edit-window-prefers-window-parameters ()
   (my-codex-layout-test--with-windows
       (edit-window agent-window edit-buffer agent-buffer)

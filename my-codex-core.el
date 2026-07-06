@@ -205,9 +205,11 @@ keywords correspond to properties documented by
   :type 'natnum
   :group 'my-codex)
 
-(defcustom my-codex-min-right-width 80
-  "Minimum width of the Codex vterm window."
-  :type 'natnum
+(defcustom my-codex-min-right-width nil
+  "Optional minimum width of the Codex vterm window.
+When nil, `my-codex-right-width' is used directly."
+  :type '(choice (const :tag "No minimum" nil)
+                 natnum)
   :group 'my-codex)
 
 (defcustom my-codex-right-width 80
