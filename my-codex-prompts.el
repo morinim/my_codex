@@ -51,6 +51,54 @@ Finish with the smallest safe first edit worth making."
   :type 'string
   :group 'my-codex)
 
+(defcustom my-codex-document-task-brief-prompt
+  "Use this document as the primary task brief.
+
+Identify the objective, constraints, relevant files or behaviours, and open
+risks. Then proceed with the smallest safe implementation step if the brief is
+actionable. If it is not actionable, ask for the smallest clarification needed."
+  "Prompt used by `my-codex-use-document-as-task-brief'."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-implement-plan-prompt
+  "Implement this selected plan.
+
+Follow the plan's intent and constraints. Keep edits focused, preserve existing
+style, and run the smallest relevant checks. If a step is ambiguous or unsafe,
+pause and explain the smallest clarification needed."
+  "Prompt used by `my-codex-implement-selected-plan'."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-review-plan-prompt
+  "Review this plan.
+
+Focus on correctness, missing steps, hidden assumptions, sequencing risk,
+test coverage, rollback points, and any unclear requirements. Do not edit
+files unless explicitly asked."
+  "Prompt used by `my-codex-review-plan'."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-open-questions-prompt
+  "Extract the open questions from this document.
+
+Group them by topic when useful. Keep the list concise and concrete. Do not
+edit files."
+  "Prompt used by `my-codex-extract-open-questions'."
+  :type 'string
+  :group 'my-codex)
+
+(defcustom my-codex-summarise-document-prompt
+  "Summarise this document.
+
+Capture the objective, decisions, constraints, action items, risks, and any
+named files or commands. Keep it concise. Do not edit files."
+  "Prompt used by `my-codex-summarise-document'."
+  :type 'string
+  :group 'my-codex)
+
 (defcustom my-codex-enable-prompt-preview nil
   "When non-nil, show an editable preview before sending prompts."
   :type 'boolean
@@ -142,6 +190,7 @@ Preserve concrete file names, command names, and technical details. Do not edit 
   :group 'my-codex)
 
 (declare-function my-codex--project-files "my-codex-git" (root))
+(declare-function my-codex--subject-buffer "my-codex" ())
 (defface my-codex-prompt-preview-reference-face
   '((t :inherit font-lock-constant-face))
   "Face used for references in prompt preview buffers.")
@@ -983,6 +1032,62 @@ PROMPT-FUNCTION builds the prompt from the region bounds."
     (my-codex--preview-and-send-prompt
      (format "%s\n\n%s" my-codex-refactor-plan-prompt context)
      sent-message)))
+
+(defun my-codex--document-subject-buffer ()
+  "Return the buffer document commands should inspect."
+  (or (and (fboundp 'my-codex--subject-buffer)
+           (my-codex--subject-buffer))
+      (current-buffer)))
+
+(defun my-codex--document-command (prompt &optional require-region)
+  "Send PROMPT with document context.
+When REQUIRE-REGION is non-nil, require an active region in the subject
+buffer; otherwise use the active region or the whole subject buffer."
+  (let ((buffer (my-codex--document-subject-buffer)))
+    (unless (buffer-live-p buffer)
+      (user-error "No document buffer available"))
+    (with-current-buffer buffer
+      (let* ((has-region (use-region-p))
+             (beg (cond
+                   (has-region (region-beginning))
+                   (require-region (user-error "No active region"))
+                   (t (point-min))))
+             (end (if has-region (region-end) (point-max))))
+        (pcase-let ((`(,context . ,sent-message)
+                     (my-codex--region-context-request beg end)))
+          (my-codex--preview-and-send-prompt
+           (format "%s\n\n%s" prompt context)
+           sent-message))))))
+
+;;;###autoload
+(defun my-codex-use-document-as-task-brief ()
+  "Ask the agent to use the subject document as a task brief."
+  (interactive)
+  (my-codex--document-command my-codex-document-task-brief-prompt))
+
+;;;###autoload
+(defun my-codex-implement-selected-plan ()
+  "Ask the agent to implement the selected plan."
+  (interactive)
+  (my-codex--document-command my-codex-implement-plan-prompt t))
+
+;;;###autoload
+(defun my-codex-review-plan ()
+  "Ask the agent to review the subject plan."
+  (interactive)
+  (my-codex--document-command my-codex-review-plan-prompt))
+
+;;;###autoload
+(defun my-codex-extract-open-questions ()
+  "Ask the agent to extract open questions from the subject document."
+  (interactive)
+  (my-codex--document-command my-codex-open-questions-prompt))
+
+;;;###autoload
+(defun my-codex-summarise-document ()
+  "Ask the agent to summarise the subject document."
+  (interactive)
+  (my-codex--document-command my-codex-summarise-document-prompt))
 
 ;;;###autoload
 (defun my-codex-open-project-instructions ()

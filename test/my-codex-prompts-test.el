@@ -945,6 +945,33 @@
                              my-codex-refactor-plan-prompt)))
       (should (equal sent-message "Sent inline")))))
 
+(ert-deftest my-codex-implement-selected-plan-uses-subject-region-context ()
+  (let ((subject (generate-new-buffer " *my-codex-plan-doc*"))
+        sent-prompt sent-message)
+    (unwind-protect
+        (with-current-buffer subject
+          (insert "1. Change the parser.\n2. Add tests.\n")
+          (cl-letf (((symbol-function 'my-codex--subject-buffer)
+                     (lambda () subject))
+                    ((symbol-function 'use-region-p) (lambda () t))
+                    ((symbol-function 'region-beginning) (lambda () 1))
+                    ((symbol-function 'region-end) (lambda () 22))
+                    ((symbol-function 'my-codex--region-context-request)
+                     (lambda (beg end)
+                       (should (= beg 1))
+                       (should (= end 22))
+                       '("Selected region:\n\ninline plan" . "Sent inline")))
+                    ((symbol-function 'my-codex--preview-and-send-prompt)
+                     (lambda (prompt &optional message)
+                       (setq sent-prompt prompt
+                             sent-message message))))
+            (my-codex-implement-selected-plan)
+            (should (equal sent-prompt
+                           (format "%s\n\nSelected region:\n\ninline plan"
+                                   my-codex-implement-plan-prompt)))
+            (should (equal sent-message "Sent inline"))))
+      (kill-buffer subject))))
+
 (ert-deftest my-codex-region-review-prompt-pastes-unnamed-large-regions ()
   (let ((my-codex-region-reference-threshold-chars 5))
     (with-temp-buffer

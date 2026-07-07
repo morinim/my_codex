@@ -105,6 +105,108 @@
     (should (eq (plist-get entry :available)
                 'my-codex--current-file-available-p))))
 
+(ert-deftest my-codex-subject-context-classifies-code-buffers ()
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (should (eq (my-codex--subject-context) 'code))))
+
+(ert-deftest my-codex-subject-context-classifies-document-buffers ()
+  (with-temp-buffer
+    (text-mode)
+    (should (eq (my-codex--subject-context) 'document))))
+
+(ert-deftest my-codex-subject-context-classifies-document-extensions ()
+  (with-temp-buffer
+    (setq buffer-file-name "/tmp/PLAN.md")
+    (fundamental-mode)
+    (should (eq (my-codex--subject-context) 'document))))
+
+(ert-deftest my-codex-subject-buffer-uses-associated-edit-window ()
+  (let ((edit-buffer (generate-new-buffer " *my-codex-subject-edit*"))
+        (old-buffer (current-buffer))
+        (edit-window (selected-window)))
+    (unwind-protect
+        (progn
+          (set-window-buffer edit-window edit-buffer)
+          (cl-letf (((symbol-function 'my-codex--selected-window-is-codex-p)
+                     (lambda () t))
+                    ((symbol-function 'my-codex-associated-edit-window)
+                     (lambda () edit-window))
+                    ((symbol-function 'window-in-direction)
+                     (lambda (&rest _) nil)))
+            (should (eq (my-codex--subject-buffer) edit-buffer))))
+      (set-window-buffer edit-window old-buffer)
+      (kill-buffer edit-buffer))))
+
+(ert-deftest my-codex-command-context-visible-filters-document-subjects ()
+  (with-temp-buffer
+    (text-mode)
+    (should (my-codex--command-context-visible-p '(document)))
+    (should-not (my-codex--command-context-visible-p '(code)))))
+
+(ert-deftest my-codex-command-available-checks-command-buffer ()
+  (let ((subject-buffer (generate-new-buffer " *my-codex-subject*")))
+    (unwind-protect
+        (with-temp-buffer
+          (setq buffer-file-name nil)
+          (with-current-buffer subject-buffer
+            (setq buffer-file-name "/tmp/plan.md"))
+          (cl-letf (((symbol-function 'my-codex--subject-buffer)
+                     (lambda () subject-buffer)))
+            (should-not (my-codex--command-available-p
+                         'my-codex--current-file-available-p))))
+      (kill-buffer subject-buffer))))
+
+(ert-deftest my-codex-command-available-preserves-agent-selection-checks ()
+  (let ((agent-buffer (generate-new-buffer " *my-codex-agent-selection*"))
+        (edit-buffer (generate-new-buffer " *my-codex-edit-subject*")))
+    (unwind-protect
+        (with-current-buffer agent-buffer
+          (cl-letf (((symbol-function 'my-codex--subject-buffer)
+                     (lambda () edit-buffer))
+                    ((symbol-function 'my-codex--selected-window-is-codex-p)
+                     (lambda () t))
+                    ((symbol-function 'use-region-p)
+                     (lambda () (eq (current-buffer) agent-buffer))))
+            (should (my-codex--command-available-p
+                     'my-codex--agent-selection-available-p))))
+      (kill-buffer agent-buffer)
+      (kill-buffer edit-buffer))))
+
+(ert-deftest my-codex-command-catalogue-has-document-right-label ()
+  (let ((entry (cl-find-if
+                (lambda (item)
+                  (and (eq (plist-get item :command)
+                           'my-codex-send-region-or-current-file)
+                       (equal (plist-get item :contexts) '(document))))
+                my-codex-command-catalogue)))
+    (should entry)
+    (should (equal (plist-get entry :label) "Region or doc"))
+    (should (equal (plist-get entry :menu)
+                   "Send region or inspect current document"))))
+
+(ert-deftest my-codex-command-catalogue-has-document-menu ()
+  (should
+   (cl-find-if
+    (lambda (item)
+      (and (eq (plist-get item :command) 'my-codex-document-transient)
+           (equal (plist-get item :contexts) '(document))))
+    my-codex-command-catalogue))
+  (dolist (entry '((my-codex-use-document-as-task-brief "b")
+                   (my-codex-implement-selected-plan "i")
+                   (my-codex-review-plan "r")
+                   (my-codex-extract-open-questions "q")
+                   (my-codex-summarise-document "s")))
+    (pcase-let ((`(,command ,key) entry))
+      (should
+       (cl-find-if
+        (lambda (item)
+          (and (eq (plist-get item :command) command)
+               (eq (plist-get item :prefix) 'my-codex-document-transient)
+               (equal (plist-get item :key) key)
+               (equal (plist-get item :contexts) '(document))))
+        my-codex-command-catalogue)))))
+
 (ert-deftest my-codex-easy-menu-includes-contextual-right-command ()
   (let* ((entry (cl-find 'my-codex-send-region-or-current-file
                          my-codex-command-catalogue
@@ -130,12 +232,25 @@
                              thereis (equal (car (aref group index))
                                             "s"))))))
 
+(ert-deftest my-codex-command-catalogue-refactor-plan-is-code-context ()
+  (let ((entry (cl-find 'my-codex-plan-refactor-region
+                        my-codex-command-catalogue
+                        :key (lambda (item) (plist-get item :command)))))
+    (should (equal (plist-get entry :contexts) '(code unknown)))))
+
+(ert-deftest my-codex-command-catalogue-review-defun-allows-non-file-buffers ()
+  (let ((entry (cl-find 'my-codex-review-defun-at-point
+                        my-codex-command-catalogue
+                        :key (lambda (item) (plist-get item :command)))))
+    (should (equal (plist-get entry :contexts) '(code unknown)))
+    (should-not (plist-get entry :available))))
+
 (ert-deftest my-codex-command-catalogue-groups-review-and-git-bindings ()
   (should (eq (keymap-lookup my-codex-map "r")
               'my-codex-git-review-transient))
   (should (eq (keymap-lookup my-codex-map "g")
               'my-codex-git-transient))
-  (dolist (key '("v" "V" "d" "D"))
+  (dolist (key '("v" "V" "D"))
     (should-not (keymap-lookup my-codex-map key)))
   (dolist (entry '((my-codex-resume my-codex-session-transient "r")
                    (my-codex-send-git-diff my-codex-git-review-transient "a")
@@ -183,6 +298,12 @@
   (should-error
    (my-codex--validate-command-catalogue
     '((:command ignore :key "x" :available my-codex--missing-predicate)) t)
+   :type 'error))
+
+(ert-deftest my-codex-command-catalogue-validator-rejects-invalid-context ()
+  (should-error
+   (my-codex--validate-command-catalogue
+    '((:command ignore :key "x" :contexts (spreadsheet))))
    :type 'error))
 
 (ert-deftest my-codex-command-catalogue-byte-compiles-with-autoloaded-predicates ()

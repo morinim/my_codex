@@ -57,6 +57,11 @@
            (my-codex-explain-buffer-diagnostics . "my-codex-diagnostics")
            (my-codex-explain-region-as-error . "my-codex-prompts")
            (my-codex-plan-refactor-region . "my-codex-prompts")
+           (my-codex-use-document-as-task-brief . "my-codex-prompts")
+           (my-codex-implement-selected-plan . "my-codex-prompts")
+           (my-codex-review-plan . "my-codex-prompts")
+           (my-codex-extract-open-questions . "my-codex-prompts")
+           (my-codex-summarise-document . "my-codex-prompts")
            (my-codex-open-project-instructions . "my-codex-prompts")
            (my-codex-ask . "my-codex-prompts")
            (my-codex-ask-preset-transient . "my-codex-prompts")
@@ -391,8 +396,64 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     "Return non-nil when the current buffer visits a file."
     (and buffer-file-name t))
 
+  (defun my-codex--subject-buffer ()
+    "Return the buffer current agent commands should use as subject."
+    (if (my-codex--selected-window-is-codex-p)
+        (when-let ((window (or (ignore-errors
+                                 (my-codex-associated-edit-window))
+                               (window-in-direction
+                                'left (selected-window)))))
+          (window-buffer window))
+      (current-buffer)))
+
+  (defun my-codex--subject-context ()
+    "Return the cheap context class for the current command subject."
+    (with-current-buffer (or (my-codex--subject-buffer) (current-buffer))
+      (let ((extension (and buffer-file-name
+                            (downcase
+                             (or (file-name-extension buffer-file-name) "")))))
+        (cond
+         ((derived-mode-p 'prog-mode) 'code)
+         ((derived-mode-p 'diff-mode) 'diff)
+         ((or (derived-mode-p 'markdown-mode 'org-mode 'rst-mode
+                              'adoc-mode 'text-mode)
+              (member extension '("md" "markdown" "org" "rst" "adoc" "txt")))
+          'document)
+         ((derived-mode-p 'vterm-mode 'term-mode 'shell-mode
+                          'eshell-mode 'compilation-mode)
+          'terminal)
+         (t 'unknown)))))
+
+  (defun my-codex--command-context-visible-p (contexts)
+    "Return non-nil when CONTEXTS allows the current command subject."
+    (or (null contexts)
+        (memq (my-codex--subject-context) contexts)))
+
+  (defun my-codex--command-available-p (predicate)
+    "Return non-nil when PREDICATE accepts the command buffer.
+Most commands execute in the selected buffer, so availability must not be
+computed from the subject buffer unless the predicate is itself left-aware."
+    (or (null predicate)
+        (if (eq predicate 'my-codex--agent-selection-available-p)
+            (funcall predicate)
+          (funcall predicate))))
+
+  (defun my-codex--document-region-available-p ()
+    "Return non-nil when the subject document has an active region."
+    (when-let ((buffer (my-codex--subject-buffer)))
+      (with-current-buffer buffer
+        (use-region-p))))
+
+  (defun my-codex--catalogue-entry-context-visible-p (entry)
+    "Return non-nil when command catalogue ENTRY matches subject context."
+    (my-codex--command-context-visible-p (plist-get entry :contexts)))
+
+  (defun my-codex--catalogue-entry-available-p (entry)
+    "Return non-nil when command catalogue ENTRY is available."
+    (my-codex--command-available-p (plist-get entry :available)))
+
   (defun my-codex--agent-selection-available-p ()
-    "Return non-nil when selected agent text can be inserted into code."
+    "Return non-nil when selected agent text can be inserted."
     (and (my-codex--selected-window-is-codex-p)
          (or my-codex--captured-selection (use-region-p))))
 
@@ -404,6 +465,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
        ('my-codex-session-transient '(:group "Session" :path "S"))
        ('my-codex-tools-transient '(:group "Tools" :path "T"))
        ('my-codex-examine-transient '(:group "Examine code" :path "x"))
+       ('my-codex-document-transient '(:group "Document" :path "d"))
        ('my-codex-git-review-transient '(:group "Review diff" :path "r"))
        ('my-codex-git-transient '(:group "Inspect diff" :path "g"))
        ('my-codex-diagnostics-transient '(:group "Diagnostics")))))
@@ -421,10 +483,12 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (:command my-codex-ask :key "a" :label "Ask" :group "Send" :menu "Ask agent..." :help "Prompt for a question and send it to the active agent")
       (:command my-codex-ask-preset-transient :key "A" :label "Preset menu" :group "Send" :menu "Preset menu" :help "Open the prompt preset menu")
       (:command my-codex-send-region :key "s" :label "Region" :group "Send" :menu "Send selected region" :available my-codex--region-available-p :transient nil :help "Send the selected region to the active agent")
-      (:command my-codex-send-region-or-current-file :key "<right>" :label "Region or file" :group "Send" :menu "Send region or inspect current file" :menu-key "Right" :help "Send the selected region, or ask the active agent to inspect the current file")
-      (:command my-codex-plan-refactor-region :key "R" :label "Refactor plan" :group "Send" :menu "Plan refactor for selected region" :available my-codex--region-available-p :help "Ask the active agent for a low-risk refactoring plan")
-      (:command my-codex-insert-selection-into-code :key "<left>" :label "Insert selection" :group "Send" :menu "Insert selection" :menu-key "Left" :available my-codex--agent-selection-available-p :help "Insert the captured agent selection into the code buffer")
-      (:command my-codex-examine-transient :key "x" :label "Examine code..." :group "Send" :menu "Examine code" :help "Open code explanation, review, and coverage commands")
+      (:command my-codex-send-region-or-current-file :key "<right>" :label "Region or file" :group "Send" :menu "Send region or inspect current file" :menu-key "Right" :contexts (code unknown) :help "Send the selected region, or ask the active agent to inspect the current file")
+      (:command my-codex-send-region-or-current-file :key "<right>" :label "Region or doc" :group "Send" :menu "Send region or inspect current document" :menu-key "Right" :contexts (document) :help "Send the selected region, or ask the active agent to inspect the current document")
+      (:command my-codex-plan-refactor-region :key "R" :label "Refactor plan" :group "Send" :menu "Plan refactor for selected region" :contexts (code unknown) :available my-codex--region-available-p :help "Ask the active agent for a low-risk refactoring plan")
+      (:command my-codex-insert-selection-into-code :key "<left>" :label "Insert selection" :group "Send" :menu "Insert selection" :menu-key "Left" :available my-codex--agent-selection-available-p :help "Insert the captured agent selection into the edit buffer")
+      (:command my-codex-examine-transient :key "x" :label "Examine..." :group "Send" :menu "Examine subject" :contexts (code unknown) :help "Open code explanation, review, and coverage commands")
+      (:command my-codex-document-transient :key "d" :label "Document..." :group "Send" :menu "Document commands" :contexts (document) :help "Open document task, plan review, and summary commands")
       (:command my-codex-git-transient :key "g" :label "Inspect diff..." :group "Git" :menu "Inspect Git diff" :help "Open local Git diff and ediff commands")
       (:command my-codex-git-commit-with-latest-message :key "c" :label "Commit with agent message" :group "Git" :menu "Edit commit with agent message" :help "Use the latest agent commit message, or ask for one, then edit before committing")
       (:command my-codex-explain-region-as-error :key "e" :label "Explain error" :group "Context" :menu "Explain selected error" :available my-codex--region-available-p :help "Ask the active agent to explain the selected compiler/test error")
@@ -444,10 +508,15 @@ Open the generated notes in an editable Markdown buffer when they are ready."
       (:command my-codex-export-session-to-markdown :key "X" :label "Export session" :prefix my-codex-tools-transient :menu "Export session" :help "Export the current agent session transcript to Markdown")
       (:command my-codex-diagnostics-transient :key "E" :label "Diagnostics" :prefix my-codex-tools-transient :menu "Diagnostics" :help "Open diagnostic explanation commands")
       (:command my-codex-doctor :key "!" :label "Doctor" :prefix my-codex-tools-transient :menu "Doctor" :help "Check Emacs, agent, vterm, Git, gh, project, configuration, and terminal startup")
-      (:command my-codex-explain-symbol-at-point :key "s" :label "Explain symbol" :prefix my-codex-examine-transient :menu "Explain symbol at point" :available my-codex--current-file-available-p :help "Ask the active agent to explain the symbol at point")
-      (:command my-codex-review-defun-at-point :key "f" :label "Review defun" :prefix my-codex-examine-transient :menu "Review current defun" :help "Ask the active agent to review the defun at point")
-      (:command my-codex-send-current-file :key "F" :label "Inspect file" :prefix my-codex-examine-transient :menu "Inspect current file" :available my-codex--current-file-available-p :help "Ask the active agent to inspect the current file directly")
-      (:command my-codex-analyse-test-coverage :key "c" :label "Coverage gaps" :prefix my-codex-examine-transient :menu "Analyse test coverage" :available my-codex--current-file-available-p :help "Ask the active agent to analyse missing test scenarios")
+      (:command my-codex-use-document-as-task-brief :key "b" :label "Use as task brief" :prefix my-codex-document-transient :menu "Use as task brief" :contexts (document) :help "Ask the active agent to use the document or selection as the task brief")
+      (:command my-codex-implement-selected-plan :key "i" :label "Implement selected plan" :prefix my-codex-document-transient :menu "Implement selected plan" :contexts (document) :available my-codex--document-region-available-p :help "Ask the active agent to implement the selected plan")
+      (:command my-codex-review-plan :key "r" :label "Review plan" :prefix my-codex-document-transient :menu "Review plan" :contexts (document) :help "Ask the active agent to review the plan")
+      (:command my-codex-extract-open-questions :key "q" :label "Extract open questions" :prefix my-codex-document-transient :menu "Extract open questions" :contexts (document) :help "Ask the active agent to extract open questions from the document")
+      (:command my-codex-summarise-document :key "s" :label "Summarise document" :prefix my-codex-document-transient :menu "Summarise document" :contexts (document) :help "Ask the active agent to summarise the document")
+      (:command my-codex-explain-symbol-at-point :key "s" :label "Explain symbol" :prefix my-codex-examine-transient :menu "Explain symbol at point" :contexts (code unknown) :available my-codex--current-file-available-p :help "Ask the active agent to explain the symbol at point")
+      (:command my-codex-review-defun-at-point :key "f" :label "Review defun" :prefix my-codex-examine-transient :menu "Review current defun" :contexts (code unknown) :help "Ask the active agent to review the defun at point")
+      (:command my-codex-send-current-file :key "F" :label "Inspect file" :prefix my-codex-examine-transient :menu "Inspect current file" :contexts (code unknown) :available my-codex--current-file-available-p :help "Ask the active agent to inspect the current file directly")
+      (:command my-codex-analyse-test-coverage :key "c" :label "Coverage gaps" :prefix my-codex-examine-transient :menu "Analyse test coverage" :contexts (code unknown) :available my-codex--current-file-available-p :help "Ask the active agent to analyse missing test scenarios")
       (:command my-codex-send-git-diff :key "a" :label "All changes" :prefix my-codex-git-review-transient :menu "Review all Git changes" :help "Ask the active agent to review the current Git diff")
       (:command my-codex-send-git-staged-diff :key "s" :label "Staged changes" :prefix my-codex-git-review-transient :menu "Review staged Git changes" :help "Ask the active agent to review the staged Git diff")
       (:command my-codex-review-current-file-diff :key "f" :label "Current file" :prefix my-codex-git-review-transient :menu "Review current-file Git diff" :available my-codex--current-or-left-file-available-p :help "Ask the active agent to review only the current file's Git diff")
@@ -465,7 +534,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
     "Validate command CATALOGUE and return it.
 When RESOLVE is non-nil, also require availability predicates to be defined."
     (let ((known-properties
-           '(:command :key :label :group :menu :menu-key :help
+           '(:command :key :label :group :menu :menu-key :help :contexts
              :available :prefix :path :transient))
           (bindings (make-hash-table :test #'equal)))
       (dolist (entry catalogue)
@@ -482,6 +551,7 @@ When RESOLVE is non-nil, also require availability predicates to be defined."
                (key (plist-get entry :key))
                (label (plist-get entry :label))
                (group (plist-get entry :group))
+               (contexts (plist-get entry :contexts))
                (available (plist-get entry :available))
                (prefix (or (plist-get entry :prefix) 'my-codex-transient))
                (binding (and key (cons prefix (key-description (kbd key)))))
@@ -496,6 +566,14 @@ When RESOLVE is non-nil, also require availability predicates to be defined."
             (error "Availability predicate is not a symbol: %S" available))
           (when (and resolve available (not (fboundp available)))
             (error "Unknown availability predicate: %S" available))
+          (when (and contexts
+                     (or (not (listp contexts))
+                         (cl-some (lambda (context)
+                                    (not (memq context
+                                               '(code document diff
+                                                 terminal unknown))))
+                                  contexts)))
+            (error "Invalid command contexts: %S" contexts))
           (when (and existing (not (eq existing command)))
             (error "Duplicate command binding %s %s" prefix key))
           (puthash binding command bindings)))
@@ -518,9 +596,18 @@ When RESOLVE is non-nil, also require availability predicates to be defined."
                  (suffix (append (list (plist-get entry :key)
                                        (plist-get entry :label)
                                        (plist-get entry :command))
+                                 (when-let ((contexts
+                                             (plist-get entry :contexts)))
+                                   (list :if
+                                         `(lambda ()
+                                            (my-codex--command-context-visible-p
+                                             ',contexts))))
                                  (when-let ((predicate
                                              (plist-get entry :available)))
-                                   (list :inapt-if-not predicate)))))
+                                   (list :inapt-if-not
+                                         `(lambda ()
+                                            (my-codex--command-available-p
+                                             ',predicate)))))))
             (if cell
                 (setcdr cell (append (cdr cell) (list suffix)))
               (setq groups (append groups (list (list group suffix))))))))
@@ -568,6 +655,10 @@ When RESOLVE is non-nil, also require availability predicates to be defined."
 ;;;###autoload (autoload 'my-codex-examine-transient "my-codex" nil t)
 (my-codex--define-catalogue-transient my-codex-examine-transient
   "Show code examination commands.")
+
+;;;###autoload (autoload 'my-codex-document-transient "my-codex" nil t)
+(my-codex--define-catalogue-transient my-codex-document-transient
+  "Show document commands.")
 
 ;;;###autoload (autoload 'my-codex-git-review-transient "my-codex" nil t)
 (my-codex--define-catalogue-transient my-codex-git-review-transient
@@ -650,12 +741,15 @@ When RESOLVE is non-nil, also require availability predicates to be defined."
                (path (plist-get entry :path))
                (key (or (plist-get entry :menu-key)
                         (plist-get entry :key)))
-               (available (plist-get entry :available))
                (item (vector label (plist-get entry :command)
                              :keys (string-join
                                     (delq nil (list "F8" path key)) " ")
-                             :active (or (and available (list available))
-                                         t)
+                             :visible
+                             (list 'my-codex--catalogue-entry-context-visible-p
+                                   (list 'quote entry))
+                             :active
+                             (list 'my-codex--catalogue-entry-available-p
+                                   (list 'quote entry))
                              :help (plist-get entry :help))))
           (if group
               (setcdr group (append (cdr group) (list item)))
