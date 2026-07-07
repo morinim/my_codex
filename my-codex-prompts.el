@@ -1069,7 +1069,7 @@ buffer; otherwise use the active region or the whole subject buffer."
 (defun my-codex-implement-selected-plan ()
   "Ask the agent to implement the selected plan."
   (interactive)
-  (my-codex--document-command my-codex-implement-plan-prompt t))
+  (my-codex--document-command my-codex-implement-plan-prompt))
 
 ;;;###autoload
 (defun my-codex-review-plan ()

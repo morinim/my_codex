@@ -105,6 +105,12 @@
     (should (eq (plist-get entry :available)
                 'my-codex--current-file-available-p))))
 
+(ert-deftest my-codex-implement-selected-plan-is-available-without-region ()
+  (let ((entry (cl-find 'my-codex-implement-selected-plan
+                        my-codex-command-catalogue
+                        :key (lambda (item) (plist-get item :command)))))
+    (should-not (plist-member entry :available))))
+
 (ert-deftest my-codex-subject-context-classifies-code-buffers ()
   (with-temp-buffer
     (emacs-lisp-mode)

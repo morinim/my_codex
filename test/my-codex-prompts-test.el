@@ -972,6 +972,31 @@
             (should (equal sent-message "Sent inline"))))
       (kill-buffer subject))))
 
+(ert-deftest my-codex-implement-selected-plan-uses-whole-subject-without-region ()
+  (let ((subject (generate-new-buffer " *my-codex-plan-doc*"))
+        sent-prompt sent-message)
+    (unwind-protect
+        (with-current-buffer subject
+          (insert "1. Change the parser.\n2. Add tests.\n")
+          (cl-letf (((symbol-function 'my-codex--subject-buffer)
+                     (lambda () subject))
+                    ((symbol-function 'use-region-p) (lambda () nil))
+                    ((symbol-function 'my-codex--region-context-request)
+                     (lambda (beg end)
+                       (should (= beg (point-min)))
+                       (should (= end (point-max)))
+                       '("Selected region:\n\nwhole plan" . "Sent inline")))
+                    ((symbol-function 'my-codex--preview-and-send-prompt)
+                     (lambda (prompt &optional message)
+                       (setq sent-prompt prompt
+                             sent-message message))))
+            (my-codex-implement-selected-plan)
+            (should (equal sent-prompt
+                           (format "%s\n\nSelected region:\n\nwhole plan"
+                                   my-codex-implement-plan-prompt)))
+            (should (equal sent-message "Sent inline"))))
+      (kill-buffer subject))))
+
 (ert-deftest my-codex-region-review-prompt-pastes-unnamed-large-regions ()
   (let ((my-codex-region-reference-threshold-chars 5))
     (with-temp-buffer
