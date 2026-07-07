@@ -98,6 +98,13 @@
     (when (plist-get entry :menu)
       (should (plist-get entry :help)))))
 
+(ert-deftest my-codex-copy-reference-requires-file-buffer ()
+  (let ((entry (cl-find 'my-codex-copy-region-reference
+                        my-codex-command-catalogue
+                        :key (lambda (item) (plist-get item :command)))))
+    (should (eq (plist-get entry :available)
+                'my-codex--current-file-available-p))))
+
 (ert-deftest my-codex-easy-menu-includes-contextual-right-command ()
   (let* ((entry (cl-find 'my-codex-send-region-or-current-file
                          my-codex-command-catalogue
