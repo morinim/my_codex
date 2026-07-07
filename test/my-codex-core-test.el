@@ -238,6 +238,18 @@
                         :key (lambda (item) (plist-get item :command)))))
     (should (equal (plist-get entry :contexts) '(code unknown)))))
 
+(ert-deftest my-codex-command-catalogue-preset-menu-is-code-context ()
+  (let ((entry (cl-find 'my-codex-ask-preset-transient
+                        my-codex-command-catalogue
+                        :key (lambda (item) (plist-get item :command)))))
+    (should (equal (plist-get entry :contexts) '(code unknown)))))
+
+(ert-deftest my-codex-command-catalogue-explain-error-hides-document-context ()
+  (let ((entry (cl-find 'my-codex-explain-region-as-error
+                        my-codex-command-catalogue
+                        :key (lambda (item) (plist-get item :command)))))
+    (should (equal (plist-get entry :contexts) '(code terminal unknown)))))
+
 (ert-deftest my-codex-command-catalogue-review-defun-allows-non-file-buffers ()
   (let ((entry (cl-find 'my-codex-review-defun-at-point
                         my-codex-command-catalogue

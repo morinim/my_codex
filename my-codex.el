@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.98.4
+;; Version: 0.99.0
 ;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -481,7 +481,7 @@ computed from the subject buffer unless the predicate is itself left-aware."
       (:command my-codex-toggle-focus :key "<tab>" :label "Toggle focus" :group "Session" :menu "Toggle focus" :menu-key "TAB" :help "Toggle focus between the agent and the previous window")
       (:command my-codex-toggle-focus :key "TAB")
       (:command my-codex-ask :key "a" :label "Ask" :group "Send" :menu "Ask agent..." :help "Prompt for a question and send it to the active agent")
-      (:command my-codex-ask-preset-transient :key "A" :label "Preset menu" :group "Send" :menu "Preset menu" :help "Open the prompt preset menu")
+      (:command my-codex-ask-preset-transient :key "A" :label "Preset menu" :group "Send" :menu "Preset menu" :contexts (code unknown) :help "Open the prompt preset menu")
       (:command my-codex-send-region :key "s" :label "Region" :group "Send" :menu "Send selected region" :available my-codex--region-available-p :transient nil :help "Send the selected region to the active agent")
       (:command my-codex-send-region-or-current-file :key "<right>" :label "Region or file" :group "Send" :menu "Send region or inspect current file" :menu-key "Right" :contexts (code unknown) :help "Send the selected region, or ask the active agent to inspect the current file")
       (:command my-codex-send-region-or-current-file :key "<right>" :label "Region or doc" :group "Send" :menu "Send region or inspect current document" :menu-key "Right" :contexts (document) :help "Send the selected region, or ask the active agent to inspect the current document")
@@ -491,7 +491,7 @@ computed from the subject buffer unless the predicate is itself left-aware."
       (:command my-codex-document-transient :key "d" :label "Document..." :group "Send" :menu "Document commands" :contexts (document) :help "Open document task, plan review, and summary commands")
       (:command my-codex-git-transient :key "g" :label "Inspect diff..." :group "Git" :menu "Inspect Git diff" :help "Open local Git diff and ediff commands")
       (:command my-codex-git-commit-with-latest-message :key "c" :label "Commit with agent message" :group "Git" :menu "Edit commit with agent message" :help "Use the latest agent commit message, or ask for one, then edit before committing")
-      (:command my-codex-explain-region-as-error :key "e" :label "Explain error" :group "Context" :menu "Explain selected error" :available my-codex--region-available-p :help "Ask the active agent to explain the selected compiler/test error")
+      (:command my-codex-explain-region-as-error :key "e" :label "Explain error" :group "Context" :menu "Explain selected error" :contexts (code terminal unknown) :available my-codex--region-available-p :help "Ask the active agent to explain the selected compiler/test error")
       (:command my-codex-copy-region-reference :key "y" :label "Copy reference" :group "Context" :menu "Copy region or line reference" :available my-codex--current-file-available-p :help "Copy a compact file-and-line reference for the selected region or current line")
       (:command my-codex-open-project-instructions :key "i" :label "Project instructions" :group "Context" :menu "Open project instructions" :help "Open AGENTS.md, CODEX.md, or .codex/instructions.md")
       (:command my-codex-summarize-session-to-markdown :key "M" :label "Summarize session" :group "Context" :menu "Summarize session to Markdown" :help "Ask the active agent to summarize the conversation as Markdown notes")
