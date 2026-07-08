@@ -132,6 +132,17 @@
         (my-codex-latest-commit-message-after (current-buffer) start)
         "fix: latest message")))))
 
+(ert-deftest my-codex-latest-marked-output-after-waits-for-latest-block ()
+  (with-temp-buffer
+    (let ((start (copy-marker (point))))
+      (insert "BEGIN_COMMIT_MESSAGE\n"
+              "fix: first message\n"
+              "END_COMMIT_MESSAGE\n"
+              "BEGIN_COMMIT_MESSAGE\n"
+              "fix: newer message\n")
+      (should-not
+       (my-codex-latest-commit-message-after (current-buffer) start)))))
+
 (ert-deftest my-codex-latest-marked-output-after-ignores-placeholders ()
   (with-temp-buffer
     (let ((start (copy-marker (point))))
@@ -140,6 +151,60 @@
               "END_COMMIT_MESSAGE\n")
       (should-not
        (my-codex-latest-commit-message-after (current-buffer) start)))))
+
+(ert-deftest my-codex-latest-marked-output-after-stops-at-latest-placeholder ()
+  (with-temp-buffer
+    (let ((start (copy-marker (point))))
+      (insert "BEGIN_COMMIT_MESSAGE\n"
+              "fix: stale message\n"
+              "END_COMMIT_MESSAGE\n"
+              "BEGIN_COMMIT_MESSAGE\n"
+              "<commit message here>\n"
+              "END_COMMIT_MESSAGE\n")
+      (should-not
+       (my-codex-latest-commit-message-after (current-buffer) start)))))
+
+(ert-deftest my-codex-latest-marked-output-after-ignores-echoed-instructions ()
+  (with-temp-buffer
+    (let ((start (copy-marker (point))))
+      (insert "Put only the final answer between these exact markers:\n\n"
+              "BEGIN_COMMIT_MESSAGE\n"
+              "<commit message here>\n"
+              "END_COMMIT_MESSAGE\n")
+      (should-not
+       (my-codex-latest-commit-message-after (current-buffer) start))
+      (insert "BEGIN_COMMIT_MESSAGE\n"
+              "fix: use generated message\n"
+              "END_COMMIT_MESSAGE\n")
+      (should
+       (equal
+        (my-codex-latest-commit-message-after (current-buffer) start)
+        "fix: use generated message")))))
+
+(ert-deftest my-codex-latest-marked-output-after-ignores-prefixed-instructions ()
+  (with-temp-buffer
+    (let ((start (copy-marker (point))))
+      (insert "> Put only the final answer between these exact markers:\n\n"
+              "BEGIN_COMMIT_MESSAGE\n"
+              "<commit message here>\n"
+              "END_COMMIT_MESSAGE\n")
+      (should-not
+       (my-codex-latest-commit-message-after (current-buffer) start)))))
+
+(ert-deftest my-codex-latest-marked-output-after-handles-spaced-echoed-end ()
+  (with-temp-buffer
+    (let ((start (copy-marker (point))))
+      (insert "Put only the final answer between these exact markers:\n\n"
+              "BEGIN_COMMIT_MESSAGE\n"
+              "<commit message here>\n"
+              "E\nN\nD_COMMIT_MESSAGE\n"
+              "BEGIN_COMMIT_MESSAGE\n"
+              "fix: use generated message\n"
+              "END_COMMIT_MESSAGE\n")
+      (should
+       (equal
+        (my-codex-latest-commit-message-after (current-buffer) start)
+        "fix: use generated message")))))
 
 (ert-deftest my-codex-latest-marked-output-after-tolerates-terminal-spacing ()
   (with-temp-buffer

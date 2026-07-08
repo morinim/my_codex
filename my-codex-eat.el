@@ -17,6 +17,7 @@
 (defvar eat-buffer-name)
 (defvar eat-terminal)
 (defvar eat-term-scrollback-size)
+(declare-function eat-term-input-event "eat" (terminal n event &optional ref-pos))
 (declare-function eat-term-send-string "eat" (terminal string))
 (declare-function eat-term-send-string-as-yank "eat" (terminal args))
 
@@ -131,7 +132,9 @@
         (user-error "No running Eat process in %s" (buffer-name buffer)))
       (goto-char (point-max))
       (eat-term-send-string-as-yank eat-terminal prompt)
-      (eat-term-send-string eat-terminal "\n")
+      (if (fboundp 'eat-term-input-event)
+          (eat-term-input-event eat-terminal 1 'return)
+        (eat-term-send-string eat-terminal "\n"))
       (setq my-codex-session-last-activity (current-time))
       (setq my-codex-session-prompt-count
             (1+ (or my-codex-session-prompt-count 0))))))

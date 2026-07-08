@@ -106,6 +106,9 @@
                     ((symbol-function 'eat-term-send-string-as-yank)
                      (lambda (terminal string)
                        (push (list :yank terminal string) calls)))
+                    ((symbol-function 'eat-term-input-event)
+                     (lambda (terminal count event)
+                       (push (list :input-event terminal count event) calls)))
                     ((symbol-function 'eat-term-send-string)
                      (lambda (terminal string)
                        (push (list :send terminal string) calls))))
@@ -113,7 +116,7 @@
             (should
              (equal (nreverse calls)
                     '((:yank test-terminal "line one\nline two")
-                      (:send test-terminal "\n"))))
+                      (:input-event test-terminal 1 return))))
             (with-current-buffer buffer
               (should (equal my-codex-session-prompt-count 1)))))
       (when (buffer-live-p buffer)

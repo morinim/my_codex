@@ -64,6 +64,80 @@
                     "fix: use unique markers"))))
       (kill-buffer buffer))))
 
+(ert-deftest my-codex-git-commit-latest-message-uses-request-markers ()
+  (let ((buffer (generate-new-buffer "*my-codex-test-session*"))
+        (root "/project/")
+        edited-message)
+    (unwind-protect
+        (progn
+          (with-current-buffer buffer
+            (setq-local my-codex--commit-message-request-marker
+                        (copy-marker (point)))
+            (setq-local my-codex--commit-message-request-output-markers
+                        '("BEGIN_COMMIT_MESSAGE_unique"
+                          . "END_COMMIT_MESSAGE_unique"))
+            (setq-local my-codex--commit-message-request-signature "sig")
+            (insert "BEGIN_COMMIT_MESSAGE\n"
+                    "<commit message here>\n"
+                    "END_COMMIT_MESSAGE\n"
+                    "BEGIN_COMMIT_MESSAGE_unique\n"
+                    "fix: use unique markers\n"
+                    "END_COMMIT_MESSAGE_unique\n"))
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root))
+                    ((symbol-function 'my-codex--ensure-git-repository)
+                     #'ignore)
+                    ((symbol-function 'my-codex--staged-changes-p)
+                     (lambda () t))
+                    ((symbol-function 'my-codex--staged-diff-signature)
+                     (lambda () "sig"))
+                    ((symbol-function 'my-codex-active-session-buffer)
+                     (lambda (&optional _require-live) buffer))
+                    ((symbol-function 'my-codex-edit-git-commit-with-message)
+                     (lambda (message _root _signature _codex-buffer)
+                       (setq edited-message message))))
+            (my-codex-git-commit-with-latest-message)
+            (should (equal edited-message "fix: use unique markers"))))
+      (kill-buffer buffer))))
+
+(ert-deftest my-codex-git-commit-latest-message-waits-on-echoed-placeholder ()
+  (let ((buffer (generate-new-buffer "*my-codex-test-session*"))
+        (root "/project/")
+        waited edited-message)
+    (unwind-protect
+        (progn
+          (with-current-buffer buffer
+            (setq-local my-codex--commit-message-request-marker
+                        (copy-marker (point)))
+            (setq-local my-codex--commit-message-request-output-markers
+                        '("BEGIN_COMMIT_MESSAGE_unique"
+                          . "END_COMMIT_MESSAGE_unique"))
+            (setq-local my-codex--commit-message-request-signature "sig")
+            (insert "> Put only the final answer between these exact markers:\n\n"
+                    "BEGIN_COMMIT_MESSAGE_unique\n"
+                    "<commit message here>\n"
+                    "END_COMMIT_MESSAGE_unique\n"))
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root))
+                    ((symbol-function 'my-codex--ensure-git-repository)
+                     #'ignore)
+                    ((symbol-function 'my-codex--staged-changes-p)
+                     (lambda () t))
+                    ((symbol-function 'my-codex--staged-diff-signature)
+                     (lambda () "sig"))
+                    ((symbol-function 'my-codex-active-session-buffer)
+                     (lambda (&optional _require-live) buffer))
+                    ((symbol-function 'my-codex-edit-git-commit-with-message)
+                     (lambda (message _root _signature _codex-buffer)
+                       (setq edited-message message)))
+                    ((symbol-function 'my-codex--wait-for-commit-message)
+                     (lambda (&rest _args)
+                       (setq waited t))))
+            (my-codex-git-commit-with-latest-message)
+            (should waited)
+            (should-not edited-message)))
+      (kill-buffer buffer))))
+
 (ert-deftest my-codex-git-command-does-not-load-main-package ()
   (let* ((script '(progn
                     (setq load-prefer-newer t)

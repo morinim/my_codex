@@ -1098,6 +1098,18 @@ shown between them as an example."
      output
      (my-codex--common-leading-whitespace-width output))))
 
+(defun my-codex--marked-output-instruction-block-p (marker-beg)
+  "Return non-nil when MARKER-BEG starts an echoed instruction block."
+  (save-excursion
+    (let ((bound (max (point-min) (- marker-beg 500)))
+          (instruction
+           "Put only the final answer between these exact markers:"))
+      (goto-char marker-beg)
+      (and (re-search-backward (regexp-quote instruction) bound t)
+           (not (re-search-forward
+                 (my-codex--terminal-marker-regexp "END_")
+                 marker-beg t))))))
+
 (defun my-codex--latest-marked-output-after
     (buffer start-point begin-marker end-marker &optional ignored-values)
   "Return marked output in BUFFER after START-POINT, or nil.
@@ -1116,25 +1128,32 @@ empty output and any exact string in IGNORED-VALUES."
                            (eq (marker-buffer start-point) buffer))
                        (<= (point-min) start-point)
                        (< start-point (point))))
-                 (bound (when valid-start-point-p start-point)))
+                 (bound (when valid-start-point-p start-point))
+                 (begin-regexp
+                  (my-codex--terminal-marker-regexp begin-marker))
+                 (end-regexp
+                  (my-codex--terminal-marker-regexp end-marker)))
             (when (or (null start-point) bound)
-              (when (re-search-backward
-                     (my-codex--terminal-marker-regexp begin-marker)
-                     bound t)
-                (let ((marker-beg (match-beginning 0))
-                      (beg (match-end 0)))
-                  (when (re-search-forward
-                         (my-codex--terminal-marker-regexp end-marker)
-                         nil t)
-                    (when (or (null bound) (>= marker-beg bound))
-                      (let ((output
-                             (my-codex--normalize-marked-output
-                              (buffer-substring-no-properties
-                               beg
-                               (match-beginning 0)))))
-                        (unless (member output
-                                        (append '("") ignored-values))
-                          output)))))))))))))
+              (catch 'found
+                (while (re-search-backward begin-regexp bound t)
+                  (let ((marker-beg (match-beginning 0))
+                        (beg (match-end 0)))
+                    (unless (my-codex--marked-output-instruction-block-p
+                             marker-beg)
+                      (throw
+                       'found
+                       (when (re-search-forward end-regexp nil t)
+                         (when (or (null bound) (>= marker-beg bound))
+                           (let ((candidate
+                                  (my-codex--normalize-marked-output
+                                   (buffer-substring-no-properties
+                                    beg
+                                    (match-beginning 0)))))
+                             (unless (member candidate
+                                             (append '("") ignored-values))
+                               candidate))))))
+                    (goto-char marker-beg)))
+                nil))))))))
 
 (defun my-codex--clear-marker (marker)
   "Detach MARKER from its buffer when MARKER is a marker."
