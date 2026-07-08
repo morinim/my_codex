@@ -42,6 +42,40 @@
           (set 'vterm-max-scrollback original-value)
         (makunbound 'vterm-max-scrollback)))))
 
+(ert-deftest my-codex-doctor-eat-scrollback-reports-unlimited ()
+  (let ((my-codex-eat-min-scrollback nil))
+    (should
+     (equal
+      (my-codex--doctor-eat-scrollback t)
+      '("Codex Eat scrollback" ok
+        "Unlimited scrollback configured")))))
+
+(ert-deftest my-codex-doctor-terminal-rows-use-vterm-selection ()
+  (let ((my-codex-terminal-backend 'vterm))
+    (cl-letf (((symbol-function 'my-codex--doctor-require-vterm)
+               (lambda () (cons nil "stub vterm missing")))
+              ((symbol-function 'my-codex--doctor-require-eat)
+               (lambda () (error "Should not inspect Eat"))))
+      (let ((rows (my-codex--doctor-terminal-rows)))
+        (should (equal (car rows)
+                       '("vterm package" fail "stub vterm missing")))
+        (should-not (seq-find (lambda (row)
+                                (string-prefix-p "Eat" (car row)))
+                              rows))))))
+
+(ert-deftest my-codex-doctor-terminal-rows-use-eat-selection ()
+  (let ((my-codex-terminal-backend 'eat))
+    (cl-letf (((symbol-function 'my-codex--doctor-require-eat)
+               (lambda () (cons nil "stub Eat missing")))
+              ((symbol-function 'my-codex--doctor-require-vterm)
+               (lambda () (error "Should not inspect vterm"))))
+      (let ((rows (my-codex--doctor-terminal-rows)))
+        (should (equal (car rows)
+                       '("Eat package" fail "stub Eat missing")))
+        (should-not (seq-find (lambda (row)
+                                (string-prefix-p "vterm" (car row)))
+                              rows))))))
+
 (ert-deftest my-codex-doctor-codex-service-tier-warns-for-fast ()
   (let ((config (make-temp-file "my-codex-config-" nil ".toml")))
     (unwind-protect
@@ -245,6 +279,30 @@
                     '("Project instructions" warn
                       "27.0 KiB discovered across 1 file; 32.0 KiB allowance: AGENTS.md")))))
       (delete-directory root t))))
+
+(ert-deftest my-codex-doctor-eat-startup-passes-resolved-shell ()
+  (let (eat-args)
+    (cl-letf (((symbol-function 'eat)
+               (lambda (&rest args)
+                 (setq eat-args args)))
+              ((symbol-function 'get-buffer-process)
+               (lambda (_buffer) 'eat-process))
+              ((symbol-function 'process-live-p)
+               (lambda (process) (eq process 'eat-process)))
+              ((symbol-function 'process-name)
+               (lambda (_process) "eat-process"))
+              ((symbol-function 'delete-process)
+               #'ignore)
+              ((symbol-function 'kill-buffer)
+               #'ignore))
+      (let ((explicit-shell-file-name "")
+            (process-environment
+             (cons "ESHELL=" process-environment))
+            (shell-file-name "/bin/sh"))
+        (should
+         (equal (my-codex--doctor-eat-terminal-start)
+                '("terminal startup" ok "Eat process `eat-process' is live")))
+        (should (equal eat-args '("/bin/sh")))))))
 
 
 (provide 'my-codex-doctor-test)

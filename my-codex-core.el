@@ -58,8 +58,14 @@ ACCEPT-COMMAND and CANCEL-COMMAND are bound to `C-c C-c' and `C-c C-k'."
   :type 'string
   :group 'my-codex)
 
-(defcustom my-codex-terminal-backend 'vterm
-  "Terminal backend used for agent sessions."
+(defun my-codex-default-terminal-backend ()
+  "Return the default terminal backend for this system."
+  (if (eq system-type 'windows-nt) 'eat 'vterm))
+
+(defcustom my-codex-terminal-backend (my-codex-default-terminal-backend)
+  "Terminal backend used for agent sessions.
+The default is Eat on Windows, where vterm is not supported, and vterm
+elsewhere."
   :type '(choice (const vterm)
                  (const eat))
   :group 'my-codex)
@@ -345,6 +351,11 @@ reducing the risk of users continuing to edit stale buffer contents."
   :type 'boolean
   :group 'my-codex)
 
+(defcustom my-codex-enable-eat-integration t
+  "When non-nil, enable Eat helpers with `my-codex-global-mode'."
+  :type 'boolean
+  :group 'my-codex)
+
 (defcustom my-codex-vterm-min-scrollback 10000
   "Minimum `vterm-max-scrollback' used in agent vterm buffers.
 This protects marked-output extraction from losing markers when
@@ -353,11 +364,22 @@ the agent emits verbose output.  When nil, do not adjust vterm scrollback."
                  natnum)
   :group 'my-codex)
 
+(defcustom my-codex-eat-min-scrollback 1000000
+  "Minimum `eat-term-scrollback-size' used in agent Eat buffers.
+Eat measures scrollback in characters.  When nil, Eat scrollback is
+unlimited."
+  :type '(choice (const :tag "Unlimited" nil)
+                 natnum)
+  :group 'my-codex)
+
 (defvar my-codex--auto-revert-enabled-by-mode nil
   "Non-nil when `my-codex-global-mode' enabled `global-auto-revert-mode'.")
 
 (defvar my-codex--vterm-integration-enabled-by-mode nil
   "Non-nil when `my-codex-global-mode' enabled vterm integration.")
+
+(defvar my-codex--eat-integration-enabled-by-mode nil
+  "Non-nil when `my-codex-global-mode' enabled Eat integration.")
 
 (defvar my-codex--saved-show-trailing-whitespace nil
   "Previous default value of `show-trailing-whitespace'.")
@@ -414,6 +436,9 @@ the agent emits verbose output.  When nil, do not adjust vterm scrollback."
 (defvar-local my-codex-session-agent nil
   "Agent profile used for the current agent session buffer.")
 
+(defvar-local my-codex-session-terminal-backend nil
+  "Terminal backend used by the current agent session buffer.")
+
 (defvar-local my-codex-session-start-time nil
   "Time when the agent session started.")
 
@@ -467,6 +492,7 @@ When PLAIN is non-nil, do not apply text properties."
   "Return a short label for the current terminal buffer type."
   (cond
    ((derived-mode-p 'vterm-mode) "vterm")
+   ((derived-mode-p 'eat-mode) "Eat")
    ((derived-mode-p 'term-mode) "ansi-term")
    ((derived-mode-p 'shell-mode) "shell")
    (t (format-mode-line mode-name))))
@@ -537,6 +563,11 @@ When PLAIN is non-nil, do not apply text properties."
   "Backend implementation that runs an agent in a vterm buffer."
   buffer-name)
 
+(cl-defstruct (my-codex-eat-backend
+               (:constructor my-codex--make-eat-backend (buffer-name)))
+  "Backend implementation that runs an agent in an Eat buffer."
+  buffer-name)
+
 (defvar my-codex--project-active-agents (make-hash-table :test #'equal)
   "Agent profile identifiers keyed by project root.")
 
@@ -564,10 +595,13 @@ This operation must not change backend or session state.")
   "Return BACKEND's vterm buffer name."
   (my-codex-vterm-backend-buffer-name backend))
 
+(cl-defmethod my-codex-backend-buffer-name
+  ((backend my-codex-eat-backend))
+  "Return BACKEND's Eat buffer name."
+  (my-codex-eat-backend-buffer-name backend))
+
 (autoload 'vterm-send-string "vterm")
 (autoload 'vterm-send-return "vterm")
-(declare-function my-codex--make-eat-backend "my-codex-eat" (buffer-name))
-
 (defun my-codex--backend-buffer-name (backend)
   "Return BACKEND's buffer name."
   (my-codex-backend-buffer-name backend))
@@ -576,9 +610,10 @@ This operation must not change backend or session state.")
   "Return BACKEND's buffer, or nil when it does not exist."
   (get-buffer (my-codex--backend-buffer-name backend)))
 
-(defun my-codex--make-backend (buffer-name)
-  "Return the configured terminal backend for BUFFER-NAME."
-  (pcase my-codex-terminal-backend
+(defun my-codex--make-backend (buffer-name &optional backend)
+  "Return BACKEND for BUFFER-NAME.
+When BACKEND is nil, use `my-codex-terminal-backend'."
+  (pcase (or backend my-codex-terminal-backend)
     ('vterm (my-codex--make-vterm-backend buffer-name))
     ('eat
      (unless (require 'my-codex-eat nil t)
@@ -588,8 +623,13 @@ This operation must not change backend or session state.")
      (user-error "Unknown my-codex terminal backend: %s" backend))))
 
 (defun my-codex--backend-for-buffer-name (buffer-name)
-  "Return the configured backend for BUFFER-NAME."
-  (my-codex--make-backend buffer-name))
+  "Return the backend for BUFFER-NAME.
+Existing session buffers keep their recorded terminal backend."
+  (my-codex--make-backend
+   buffer-name
+   (when-let ((buffer (get-buffer buffer-name)))
+     (with-current-buffer buffer
+       my-codex-session-terminal-backend))))
 
 (defun my-codex--current-backend ()
   "Return the backend for the current project default agent session."
@@ -664,6 +704,42 @@ This operation must not change backend or session state.")
       (setq my-codex-session-prompt-count
             (1+ (or my-codex-session-prompt-count 0))))))
 
+(defun my-codex--track-process-output-time (process)
+  "Record output timestamps for PROCESS without replacing its behaviour."
+  (unless (process-get process 'my-codex-output-time-filter)
+    (let ((original-filter (process-filter process)))
+      (process-put process 'my-codex-output-time-filter t)
+      (set-process-filter
+       process
+       (lambda (proc output)
+         (when (and output (not (string-empty-p output)))
+           (when-let (buffer (process-buffer proc))
+             (with-current-buffer buffer
+               (setq-local my-codex-session-last-output-time (current-time))
+               (force-mode-line-update))))
+         (when original-filter
+           (funcall original-filter proc output)))))))
+
+(defun my-codex--shell-executable-name (shell)
+  "Return SHELL's executable name, normalised for comparison."
+  (downcase
+   (file-name-nondirectory
+    (replace-regexp-in-string "\\\\" "/" (or shell "")))))
+
+(defun my-codex--shell-command-and-exit-for-shell (command shell)
+  "Return shell text that runs COMMAND, then exits with its status in SHELL."
+  (let ((shell (my-codex--shell-executable-name shell)))
+    (cond
+     ((member shell '("cmd" "cmd.exe" "cmdproxy" "cmdproxy.exe"))
+      (format "%s\nexit %%ERRORLEVEL%%" command))
+     ((member shell '("powershell" "powershell.exe" "pwsh" "pwsh.exe"))
+      (format (concat "%s\n"
+                      "if ($LASTEXITCODE -ne $null) { exit $LASTEXITCODE }\n"
+                      "if ($?) { exit 0 } else { exit 1 }")
+              command))
+     (t
+      (format "%s\nstatus=$?\nexit $status" command)))))
+
 (defun my-codex--session-access-mode (command &optional agent)
   "Return the session access mode represented by COMMAND."
   (let ((agent (or agent my-codex-agent)))
@@ -689,7 +765,8 @@ This operation must not change backend or session state.")
           (my-codex--safe-session-name session-name)))
 
 (defun my-codex--mark-session
-    (buffer session-id session-name project-root access-mode agent)
+    (buffer session-id session-name project-root access-mode agent
+            &optional backend)
   "Mark BUFFER as SESSION-ID named SESSION-NAME for PROJECT-ROOT."
   (with-current-buffer buffer
     (setq-local my-codex-session-id session-id)
@@ -698,6 +775,8 @@ This operation must not change backend or session state.")
                 (file-name-as-directory (file-truename project-root)))
     (setq-local my-codex-session-access-mode access-mode)
     (setq-local my-codex-session-agent agent)
+    (setq-local my-codex-session-terminal-backend
+                (or backend my-codex-terminal-backend))
     (setq-local my-codex-session-start-time (current-time))
     (setq-local my-codex-session-last-activity (current-time))
     (setq-local my-codex-session-last-output-time nil)
@@ -706,7 +785,7 @@ This operation must not change backend or session state.")
     (my-codex--refresh-session-title)))
 
 (defun my-codex--mark-default-session
-    (buffer project-root access-mode &optional agent)
+    (buffer project-root access-mode &optional agent backend)
   "Mark BUFFER as the default agent session for PROJECT-ROOT."
   (let ((agent (or agent my-codex-agent)))
     (my-codex--mark-session
@@ -715,10 +794,11 @@ This operation must not change backend or session state.")
      "default"
      project-root
      access-mode
-     agent)))
+     agent
+     backend)))
 
 (defun my-codex--mark-named-session
-    (buffer session-name project-root access-mode &optional agent)
+    (buffer session-name project-root access-mode &optional agent backend)
   "Mark BUFFER as SESSION-NAME for PROJECT-ROOT."
   (let ((agent (or agent my-codex-agent)))
     (my-codex--mark-session
@@ -727,7 +807,8 @@ This operation must not change backend or session state.")
      session-name
      project-root
      access-mode
-     agent)))
+     agent
+     backend)))
 
 (defun my-codex--safe-root-name (root)
   "Return a buffer-name-safe representation of ROOT."

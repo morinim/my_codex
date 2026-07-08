@@ -14,11 +14,12 @@
 (require 'seq)
 (require 'subr-x)
 (require 'my-codex-core)
-(require 'my-codex-vterm)
 
 (defvar my-codex-agent)
 (defvar my-codex-project-build-command)
 (defvar vterm-max-scrollback)
+(defvar eat-buffer-name)
+(defvar eat-term-scrollback-size)
 
 (defcustom my-codex-doctor-terminal-timeout 3
   "Seconds to wait for a diagnostic vterm process to start."
@@ -29,6 +30,8 @@
   "Codex's default maximum size for project instruction files.")
 
 (declare-function vterm-mode "vterm" ())
+(declare-function eat "eat" (&optional program new-session))
+(autoload 'my-codex--eat-shell-name "my-codex-eat")
 
 (defface my-codex-doctor-info-face
   '((t :inherit font-lock-doc-face))
@@ -107,6 +110,17 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
     (error
      (cons nil (error-message-string err)))))
 
+(defun my-codex--doctor-require-eat ()
+  "Return a cons describing whether Eat can be loaded.
+The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
+  (condition-case err
+      (if (require 'eat nil t)
+          (cons t (format "Loaded from %s"
+                          (or (locate-library "eat") "load-path")))
+        (cons nil "Cannot load Eat"))
+    (error
+     (cons nil (error-message-string err)))))
+
 (defun my-codex--doctor-terminal-start ()
   "Return a diagnostic row describing whether a vterm process starts."
   (let ((buffer (generate-new-buffer " *my-codex-doctor-vterm*"))
@@ -127,6 +141,36 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
                                 (process-name process)))
                 (list "terminal startup" 'fail
                       "vterm-mode did not create a live process")))
+          (error
+           (list "terminal startup" 'fail
+                 (error-message-string err))))
+      (when (process-live-p process)
+        (delete-process process))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
+
+(defun my-codex--doctor-eat-terminal-start ()
+  "Return a diagnostic row describing whether an Eat process starts."
+  (let ((buffer (generate-new-buffer " *my-codex-doctor-eat*"))
+        process)
+    (unwind-protect
+        (condition-case err
+            (let ((eat-buffer-name (buffer-name buffer)))
+              (with-current-buffer buffer
+                (eat (my-codex--eat-shell-name))
+                (let ((deadline (+ (float-time)
+                                   my-codex-doctor-terminal-timeout)))
+                  (while (and (not (process-live-p
+                                    (get-buffer-process buffer)))
+                              (< (float-time) deadline))
+                    (accept-process-output nil 0.05)))
+                (setq process (get-buffer-process buffer))
+                (if (process-live-p process)
+                    (list "terminal startup" 'ok
+                          (format "Eat process `%s' is live"
+                                  (process-name process)))
+                  (list "terminal startup" 'fail
+                        "Eat did not create a live process"))))
           (error
            (list "terminal startup" 'fail
                  (error-message-string err))))
@@ -165,6 +209,84 @@ VTERM-LOADABLE is non-nil when `vterm' can be loaded."
    (t
     (list "Codex vterm scrollback" 'warn
           "Skipped; vterm cannot be loaded"))))
+
+(defun my-codex--doctor-eat-scrollback (eat-loadable)
+  "Return a diagnostic row for Codex Eat scrollback settings.
+EAT-LOADABLE is non-nil when Eat can be loaded."
+  (cond
+   ((null my-codex-eat-min-scrollback)
+    (list "Codex Eat scrollback" 'ok
+          "Unlimited scrollback configured"))
+   ((< my-codex-eat-min-scrollback 100000)
+    (list "Codex Eat scrollback" 'warn
+          (format "Floor is %s characters; recommended minimum is 100000"
+                  my-codex-eat-min-scrollback)))
+   ((and eat-loadable (boundp 'eat-term-scrollback-size)
+         (numberp eat-term-scrollback-size)
+         (< eat-term-scrollback-size my-codex-eat-min-scrollback))
+    (list "Codex Eat scrollback" 'ok
+          (format "Codex buffers raise %s to %s characters"
+                  eat-term-scrollback-size
+                  my-codex-eat-min-scrollback)))
+   ((and eat-loadable (boundp 'eat-term-scrollback-size)
+         (numberp eat-term-scrollback-size))
+    (list "Codex Eat scrollback" 'ok
+          (format "Effective floor is %s characters"
+                  (max eat-term-scrollback-size
+                       my-codex-eat-min-scrollback))))
+   (eat-loadable
+    (list "Codex Eat scrollback" 'warn
+          "Cannot inspect eat-term-scrollback-size"))
+   (t
+    (list "Codex Eat scrollback" 'warn
+          "Skipped; Eat cannot be loaded"))))
+
+(defun my-codex--doctor-terminal-rows ()
+  "Return selected terminal backend diagnostic rows."
+  (pcase my-codex-terminal-backend
+    ('vterm
+     (let* ((vterm-status (my-codex--doctor-require-vterm))
+            (vterm-loadable (car vterm-status)))
+       (list
+        (list "vterm package"
+              (if vterm-loadable 'ok 'fail)
+              (cdr vterm-status))
+        (list "vterm backend"
+              (cond
+               ((featurep 'vterm-module) 'ok)
+               ((and vterm-loadable (fboundp 'vterm-mode)) 'warn)
+               (t 'fail))
+              (cond
+               ((featurep 'vterm-module) "Native module loaded")
+               ((and vterm-loadable (fboundp 'vterm-mode))
+                "vterm-mode is available; backend will be confirmed by startup check")
+               (t "vterm-mode is unavailable")))
+        (my-codex--doctor-vterm-scrollback vterm-loadable)
+        (if vterm-loadable
+            (my-codex--doctor-terminal-start)
+          (list "terminal startup" 'fail
+                "Skipped; vterm cannot be loaded")))))
+    ('eat
+     (let* ((eat-status (my-codex--doctor-require-eat))
+            (eat-loadable (car eat-status)))
+       (list
+        (list "Eat package"
+              (if eat-loadable 'ok 'fail)
+              (cdr eat-status))
+        (list "Eat backend"
+              (if (and eat-loadable (fboundp 'eat)) 'ok 'fail)
+              (if (and eat-loadable (fboundp 'eat))
+                  "Public `eat' entry point is available"
+                "Public `eat' entry point is unavailable"))
+        (my-codex--doctor-eat-scrollback eat-loadable)
+        (if eat-loadable
+            (my-codex--doctor-eat-terminal-start)
+          (list "terminal startup" 'fail
+                "Skipped; Eat cannot be loaded")))))
+    (backend
+     (list
+      (list "terminal backend" 'fail
+            (format "Unknown my-codex terminal backend: %s" backend))))))
 
 (defun my-codex--doctor-toml-string-value (line key)
   "Return KEY's TOML string value from LINE, or nil."
@@ -414,9 +536,7 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
          (agent-exec (my-codex--doctor-command-executable-token agent-cmd))
          (agent-path (and agent-exec (executable-find agent-exec)))
          (git (executable-find "git"))
-         (gh (executable-find "gh"))
-         (vterm-status (my-codex--doctor-require-vterm))
-         (vterm-loadable (car vterm-status)))
+         (gh (executable-find "gh")))
     (append
      (list
       (list "Emacs version"
@@ -437,20 +557,6 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
         (list (format "%s --version" (or agent-exec "agent"))
               'fail
               (format "Skipped; %s not found" (or agent-exec "executable"))))
-      (list "vterm package"
-            (if vterm-loadable 'ok 'fail)
-            (cdr vterm-status))
-      (list "vterm backend"
-            (cond
-             ((featurep 'vterm-module) 'ok)
-             ((and vterm-loadable (fboundp 'vterm-mode)) 'warn)
-             (t 'fail))
-            (cond
-             ((featurep 'vterm-module) "Native module loaded")
-             ((and vterm-loadable (fboundp 'vterm-mode))
-              "vterm-mode is available; backend will be confirmed by startup check")
-             (t "vterm-mode is unavailable")))
-      (my-codex--doctor-vterm-scrollback vterm-loadable)
       (list "Git executable"
             (if git 'ok 'fail)
             (or git "Not found in exec-path"))
@@ -484,6 +590,7 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
               (format "No project detected; using %s" root)))
       (my-codex--doctor-project-instructions-row
        root (my-codex-project-instruction-files root)))
+     (my-codex--doctor-terminal-rows)
      (my-codex--doctor-agent-rows my-codex-agent)
      (list
       (my-codex--doctor-command-status
@@ -499,11 +606,7 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
             (if my-codex-project-build-command 'ok 'warn)
             (or my-codex-project-build-command
                 (format "Uses compile-command: %s"
-                        compile-command)))
-      (if vterm-loadable
-          (my-codex--doctor-terminal-start)
-        (list "terminal startup" 'fail
-              "Skipped; vterm cannot be loaded"))))))
+                        compile-command)))))))
 
 (defun my-codex--doctor-status-label (status)
   "Return display label for diagnostic STATUS."

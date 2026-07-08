@@ -11,6 +11,7 @@
 (require 'my-codex-layout-test)
 (require 'my-codex-ui-test)
 (require 'my-codex-vterm-test)
+(require 'my-codex-eat-test)
 (require 'my-codex-git-test)
 (require 'my-codex-github-test)
 (require 'my-codex-prompts-test)

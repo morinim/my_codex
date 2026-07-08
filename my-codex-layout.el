@@ -315,10 +315,15 @@ AGENT identifies the agent profile used for buffer names and metadata."
 
       (when (and existing-buf
                  (not (my-codex-backend-live-p backend)))
-        (with-current-buffer existing-buf
-          (rename-buffer
-           (generate-new-buffer-name
-            (format "%s<old>" buffer-name))))
+        (let ((recorded-backend
+               (with-current-buffer existing-buf
+                 my-codex-session-terminal-backend)))
+          (with-current-buffer existing-buf
+            (rename-buffer
+             (generate-new-buffer-name
+              (format "%s<old>" buffer-name))))
+          (setq backend
+                (my-codex--make-backend buffer-name recorded-backend)))
         (setq existing-buf nil))
 
       (let* ((edit-window (selected-window))
@@ -334,8 +339,17 @@ AGENT identifies the agent profile used for buffer names and metadata."
           (set-window-buffer term-window existing-buf))
         (unless (and existing-buf
                      (my-codex-backend-live-p backend))
-          (my-codex-backend-start
-           backend project-root codex-command session-name agent access-mode))
+          (let ((started-buffer
+                 (my-codex-backend-start
+                  backend project-root codex-command
+                  session-name agent access-mode)))
+            (when (bufferp started-buffer)
+              (setq term-buffer started-buffer)
+              (when (window-live-p term-window)
+                (set-window-buffer term-window term-buffer))
+              (when (window-live-p edit-window)
+                (set-window-parameter
+                 edit-window 'my-codex-term-buffer term-buffer)))))
 
         (when (my-codex--project-session-buffer-p term-buffer project-root)
           (my-codex--set-active-session term-buffer))

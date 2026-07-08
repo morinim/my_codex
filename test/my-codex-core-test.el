@@ -7,6 +7,7 @@
 (require 'ert)
 (require 'my-codex)
 (require 'my-codex-vterm)
+(require 'my-codex-eat)
 
 (ert-deftest my-codex-require-keeps-optional-modules-lazy ()
   (let* ((script '(progn
@@ -57,6 +58,23 @@
                            "\"my-codex-diagnostics\" "
                            "\"my-codex-diagnostics\" \"my-codex-vterm\" "
                            "\"my-codex-ui\")")))))
+
+(ert-deftest my-codex-package-requires-keeps-vterm-optional ()
+  (with-temp-buffer
+    (insert-file-contents "my-codex.el")
+    (goto-char (point-min))
+    (re-search-forward "^;; Package-Requires: \\(.*\\)$")
+    (let ((requires (read (match-string 1))))
+      (should (assoc 'transient requires))
+      (should-not (assoc 'vterm requires)))))
+
+(ert-deftest my-codex-default-terminal-backend-uses-eat-on-windows ()
+  (let ((system-type 'windows-nt))
+    (should (eq (my-codex-default-terminal-backend) 'eat))))
+
+(ert-deftest my-codex-default-terminal-backend-uses-vterm-off-windows ()
+  (let ((system-type 'gnu/linux))
+    (should (eq (my-codex-default-terminal-backend) 'vterm))))
 
 (ert-deftest my-codex-command-catalogue-commands-exist ()
   (dolist (entry my-codex-command-catalogue)
@@ -630,10 +648,32 @@
     (should (my-codex-vterm-backend-p backend))
     (should (equal (my-codex-backend-buffer-name backend) "*agent*"))))
 
+(ert-deftest my-codex-backend-factory-selects-eat-in-core ()
+  (let* ((my-codex-terminal-backend 'eat)
+         (backend (my-codex--make-backend "*agent*")))
+    (should (my-codex-eat-backend-p backend))
+    (should (equal (my-codex-backend-buffer-name backend) "*agent*"))))
+
 (ert-deftest my-codex-backend-factory-rejects-unknown-backend ()
   (let ((my-codex-terminal-backend 'unknown))
     (should-error (my-codex--make-backend "*agent*")
                   :type 'user-error)))
+
+(ert-deftest my-codex-backend-for-buffer-name-uses-recorded-backend ()
+  (let ((buffer (get-buffer-create "*my-codex-recorded-backend*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buffer
+            (setq-local my-codex-session-terminal-backend 'eat))
+          (let* ((my-codex-terminal-backend 'vterm)
+                 (backend
+                  (my-codex--backend-for-buffer-name
+                   "*my-codex-recorded-backend*")))
+            (should (my-codex-eat-backend-p backend))
+            (should (equal (my-codex-backend-buffer-name backend)
+                           "*my-codex-recorded-backend*"))))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
 
 (ert-deftest my-codex-current-buffer-name-uses-project-active-agent ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-buffer" t))))
@@ -694,6 +734,7 @@
                   (file-name-as-directory (file-truename root))))
           (should (eq my-codex-session-access-mode 'workspace-write))
           (should (eq my-codex-session-agent 'codex))
+          (should (eq my-codex-session-terminal-backend 'vterm))
           (should (string-match-p "Codex · WORKSPACE WRITE · default"
                                   header-line-format))
           (let ((footer (my-codex--session-footer)))
@@ -1114,6 +1155,108 @@
       (delete-directory root-a t)
       (delete-directory root-b t))))
 
+(ert-deftest my-codex-dead-buffer-restart-uses-recorded-backend ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-dead" t)))
+        (buffer-name "*codex-dead-backend-test*")
+        started-backend)
+    (unwind-protect
+        (let ((buffer (get-buffer-create buffer-name))
+              (my-codex-buffer-name buffer-name)
+              (my-codex-terminal-backend 'eat))
+          (with-current-buffer buffer
+            (setq-local my-codex-session-terminal-backend 'vterm))
+          (let ((default-directory root))
+            (cl-letf (((symbol-function 'my-codex--fit-frame-to-right-layout)
+                       #'ignore)
+                      ((symbol-function 'my-codex--apply-display-window-width)
+                       #'ignore)
+                      ((symbol-function 'my-codex--resize-edit-window-for-right-layout)
+                       #'ignore)
+                      ((symbol-function 'my-codex--enable-edit-fill-column-indicator)
+                       #'ignore)
+                      ((symbol-function 'my-codex-project-root)
+                       (lambda () root))
+                      ((symbol-function 'my-codex-current-buffer-name)
+                       (lambda (&optional _agent) buffer-name))
+                      ((symbol-function 'my-codex-backend-start)
+                       (lambda (backend project-root _command
+                                &optional _session-name agent access-mode)
+                         (let ((buffer (get-buffer buffer-name))
+                               (backend-id
+                                (if (my-codex-vterm-backend-p backend)
+                                    'vterm
+                                  'eat)))
+                           (setq started-backend backend)
+                           (my-codex--mark-default-session
+                            buffer project-root access-mode agent backend-id)
+                           buffer)))
+                      ((symbol-function 'display-buffer)
+                       (lambda (buf &rest _args)
+                         (set-window-buffer (selected-window) buf)
+                         (selected-window))))
+              (my-codex-two-column-layout-with-command
+               (my-codex--agent-command 'codex 'read-only))))
+          (should (my-codex-vterm-backend-p started-backend))
+          (with-current-buffer (get-buffer buffer-name)
+            (should (eq my-codex-session-terminal-backend 'vterm)))
+          (should (get-buffer buffer-name)))
+      (dolist (buffer (buffer-list))
+        (when (string-prefix-p "*codex-dead-backend-test" (buffer-name buffer))
+          (kill-buffer buffer)))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-layout-tracks-backend-returned-buffer ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-eat-layout" t)))
+        (buffer-name "*codex-eat-layout-test*")
+        fresh-buffer)
+    (unwind-protect
+        (let ((my-codex-buffer-name buffer-name)
+              (my-codex-terminal-backend 'eat)
+              (my-codex--project-active-sessions
+               (make-hash-table :test #'equal)))
+          (let ((default-directory root))
+            (cl-letf (((symbol-function 'my-codex--fit-frame-to-right-layout)
+                       #'ignore)
+                      ((symbol-function 'my-codex--apply-display-window-width)
+                       #'ignore)
+                      ((symbol-function 'my-codex--resize-edit-window-for-right-layout)
+                       #'ignore)
+                      ((symbol-function 'my-codex-project-root)
+                       (lambda () root))
+                      ((symbol-function 'my-codex-current-buffer-name)
+                       (lambda (&optional _agent) buffer-name))
+                      ((symbol-function 'my-codex-backend-start)
+                       (lambda (_backend project-root _command
+                                &optional _session-name agent access-mode)
+                         (let ((placeholder (get-buffer buffer-name)))
+                           (setq fresh-buffer
+                                 (generate-new-buffer buffer-name))
+                           (when placeholder
+                             (kill-buffer placeholder))
+                           (with-current-buffer fresh-buffer
+                             (rename-buffer buffer-name)
+                             (my-codex--mark-default-session
+                              fresh-buffer project-root access-mode agent))
+                           fresh-buffer)))
+                      ((symbol-function 'display-buffer)
+                       (lambda (buf &rest _args)
+                         (set-window-buffer (selected-window) buf)
+                         (selected-window))))
+              (let ((edit-window (selected-window)))
+                (my-codex-two-column-layout-with-command
+                 (my-codex--agent-command 'codex 'read-only))
+                (should (buffer-live-p fresh-buffer))
+                (should (eq (get-buffer buffer-name) fresh-buffer))
+                (should (eq (window-parameter
+                             edit-window 'my-codex-term-buffer)
+                            fresh-buffer))
+                (should (eq (my-codex-active-session-buffer)
+                            fresh-buffer))))))
+      (dolist (buffer (buffer-list))
+        (when (string-prefix-p "*codex-eat-layout-test" (buffer-name buffer))
+          (kill-buffer buffer)))
+      (delete-directory root t))))
+
 (defmacro my-codex-test-with-vterm-shell (shell &rest body)
   "Bind `vterm-shell' to SHELL while running BODY."
   (declare (indent 1))
@@ -1162,6 +1305,52 @@
       (my-codex-global-mode 1)
       (my-codex-global-mode -1)
       (should-not calls))))
+
+(ert-deftest my-codex-global-mode-enables-vterm-integration-only-for-vterm ()
+  (let ((my-codex-terminal-backend 'vterm)
+        (my-codex-enable-display-defaults nil)
+        (my-codex-enable-global-auto-revert nil)
+        (my-codex-enable-vterm-integration t)
+        (my-codex-enable-eat-integration t)
+        (my-codex-vterm-integration-mode nil)
+        (my-codex-eat-integration-mode nil)
+        (my-codex--vterm-integration-enabled-by-mode nil)
+        (my-codex--eat-integration-enabled-by-mode nil)
+        calls)
+    (cl-letf (((symbol-function 'my-codex-vterm-integration-mode)
+               (lambda (arg)
+                 (setq my-codex-vterm-integration-mode (> arg 0))
+                 (push (cons 'vterm arg) calls)))
+              ((symbol-function 'my-codex-eat-integration-mode)
+               (lambda (arg)
+                 (setq my-codex-eat-integration-mode (> arg 0))
+                 (push (cons 'eat arg) calls))))
+      (my-codex-global-mode 1)
+      (my-codex-global-mode -1)
+      (should (equal (nreverse calls) '((vterm . 1) (vterm . -1)))))))
+
+(ert-deftest my-codex-global-mode-enables-eat-integration-only-for-eat ()
+  (let ((my-codex-terminal-backend 'eat)
+        (my-codex-enable-display-defaults nil)
+        (my-codex-enable-global-auto-revert nil)
+        (my-codex-enable-vterm-integration t)
+        (my-codex-enable-eat-integration t)
+        (my-codex-vterm-integration-mode nil)
+        (my-codex-eat-integration-mode nil)
+        (my-codex--vterm-integration-enabled-by-mode nil)
+        (my-codex--eat-integration-enabled-by-mode nil)
+        calls)
+    (cl-letf (((symbol-function 'my-codex-vterm-integration-mode)
+               (lambda (arg)
+                 (setq my-codex-vterm-integration-mode (> arg 0))
+                 (push (cons 'vterm arg) calls)))
+              ((symbol-function 'my-codex-eat-integration-mode)
+               (lambda (arg)
+                 (setq my-codex-eat-integration-mode (> arg 0))
+                 (push (cons 'eat arg) calls))))
+      (my-codex-global-mode 1)
+      (my-codex-global-mode -1)
+      (should (equal (nreverse calls) '((eat . 1) (eat . -1)))))))
 
 (provide 'my-codex-core-test)
 

@@ -17,7 +17,7 @@
 └───────────────┴───────────────┘
 ```
 
-`my-codex.el` runs the Google Antigravity CLI (`agy`) or OpenAI Codex CLI (`codex`) inside Emacs using `vterm`.
+`my-codex.el` runs the Google Antigravity CLI (`agy`) or OpenAI Codex CLI (`codex`) inside an Emacs terminal backend. `vterm` is the default backend on systems that support it; Eat is the default on Windows.
 
 > [!NOTE]
 > The package is named `my-codex.el` because it initially supported only the OpenAI Codex CLI. It has since been expanded to support Google Antigravity as a first-class agent.
@@ -32,7 +32,7 @@ It keeps your code on the left and the active agent CLI on the right, providing 
 - **Refactoring & Coverage**: draft low-risk refactoring plans for file ranges and analyze implementation files against tests for missing coverage.
 - **Integration Tools**: export session transcripts, summarize conversations into Markdown notes, and draft commits or GitHub issues directly from Emacs.
 - **Interactive UI**: insert agent output back into your code, and open clickable file references and URLs directly from the terminal.
-- **Diagnostics**: verify Emacs, agent binaries, vterm, and Git availability using the `my-codex-doctor` health check.
+- **Diagnostics**: verify Emacs, agent binaries, the selected terminal backend, and Git availability using the `my-codex-doctor` health check.
 
 The package treats token cost as part of the workflow: it limits generated
 project context, warns before oversized prompts, references saved project-file
@@ -42,12 +42,13 @@ costs and retained context.
 ## Requirements
 
 - Emacs 29.1 or newer.
-- [`vterm`][vterm].
+- [`vterm`][vterm] for the default terminal backend on supported systems.
+- [Eat][eat] for Windows, or when selected with `my-codex-terminal-backend`.
 - [`transient`][transient].
 - Google [Antigravity CLI][agy] and/or OpenAI [Codex CLI][codex].
 - Git (for Git commands) and GitHub CLI `gh` (for issue creation).
 
-`vterm` is loaded lazily only when an agent session is started.
+`vterm` is optional at package-install time and is loaded lazily only when a vterm-backed agent session is started. Eat is loaded only when the Eat backend is selected.
 
 ## Installation
 
@@ -182,6 +183,7 @@ Attribution:
 [aihero-grillme]: https://www.aihero.dev/skills-grill-me
 [aihero-handoff]: https://www.aihero.dev/skills-handoff
 [codex]: https://github.com/openai/codex
+[eat]: https://elpa.nongnu.org/nongnu/eat.html
 [license]: https://github.com/morinim/my_codex/blob/main/LICENSE
 [mpl2]: https://www.mozilla.org/MPL/2.0/
 [releases]: https://github.com/morinim/my_codex/releases

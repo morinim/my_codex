@@ -40,7 +40,8 @@
 
 (defun my-codex--vterm-mode-with-scrollback-floor ()
   "Enable `vterm-mode' with the configured minimum scrollback."
-  (require 'vterm)
+  (unless (require 'vterm nil t)
+    (user-error "vterm backend is selected but the vterm package is unavailable"))
   (let ((vterm-max-scrollback
         (my-codex--vterm-scrollback-floor vterm-max-scrollback))
         (hack-local-variables-hook

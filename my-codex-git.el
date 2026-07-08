@@ -358,7 +358,7 @@ When STAGED is non-nil, show the staged diff."
 (defun my-codex-review-current-file-diff (&optional staged)
   "Ask the agent to review the current file's Git diff.
 With prefix argument STAGED, review the staged diff.  When invoked from
-the agent vterm, use the file in the window to its left."
+the agent terminal, use the file in the window to its left."
   (interactive "P")
   (let* ((file (my-codex--current-or-left-file-name))
          (root (my-codex-project-root))
@@ -444,13 +444,13 @@ repository toplevel."
         (when (buffer-live-p head-buffer)
           (kill-buffer head-buffer))))))
 
-(defun my-codex--selected-agent-vterm-window-p ()
-  "Return non-nil when the selected window is the active agent vterm."
+(defun my-codex--selected-agent-terminal-window-p ()
+  "Return non-nil when the selected window is the active agent terminal."
   (let ((buffer (window-buffer (selected-window))))
     (and (eq buffer (ignore-errors
                       (my-codex-active-session-buffer)))
          (with-current-buffer buffer
-           (derived-mode-p 'vterm-mode)))))
+           (derived-mode-p 'vterm-mode 'eat-mode)))))
 
 (defun my-codex--left-window-file-name ()
   "Return the file visited by the window to the left, or nil."
@@ -459,10 +459,10 @@ repository toplevel."
     (buffer-file-name buffer)))
 
 (defun my-codex--current-or-left-file-name ()
-  "Return the current file, using the left window from the agent vterm."
+  "Return the current file, using the left window from the agent terminal."
   (cond
    (buffer-file-name)
-   ((my-codex--selected-agent-vterm-window-p)
+   ((my-codex--selected-agent-terminal-window-p)
     (or (my-codex--left-window-file-name)
         (user-error "No file-visiting buffer to the left of agent")))
    (t
@@ -471,13 +471,13 @@ repository toplevel."
 (defun my-codex--current-or-left-file-available-p ()
   "Return non-nil when a file target is available for current-file commands."
   (or buffer-file-name
-      (and (my-codex--selected-agent-vterm-window-p)
+      (and (my-codex--selected-agent-terminal-window-p)
            (my-codex--left-window-file-name))))
 
 ;;;###autoload
 (defun my-codex-ediff-current-file-against-head ()
   "Review the current file's uncommitted changes against HEAD using Ediff.
-When invoked from the agent vterm, use the file in the window to its left."
+When invoked from the agent terminal, use the file in the window to its left."
   (interactive)
   (let ((file (my-codex--current-or-left-file-name))
         (root (my-codex-project-root)))

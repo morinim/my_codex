@@ -181,6 +181,34 @@
         (should (equal captured
                        "Review 100% of changes using git diff -- example.el"))))))
 
+(ert-deftest my-codex-current-file-git-commands-use-left-file-from-eat ()
+  (let ((edit-buffer (generate-new-buffer " *my-codex-eat-edit*"))
+        (agent-buffer (generate-new-buffer " *my-codex-eat-agent*"))
+        edit-window agent-window)
+    (unwind-protect
+        (progn
+          (delete-other-windows)
+          (setq edit-window (selected-window))
+          (set-window-buffer edit-window edit-buffer)
+          (setq agent-window (split-window-right))
+          (set-window-buffer agent-window agent-buffer)
+          (with-current-buffer edit-buffer
+            (setq buffer-file-name "/project/src/example.el"))
+          (with-current-buffer agent-buffer
+            (setq major-mode 'eat-mode))
+          (select-window agent-window)
+          (cl-letf (((symbol-function 'my-codex-active-session-buffer)
+                     (lambda (&optional _require-live) agent-buffer)))
+            (should (equal (my-codex--current-or-left-file-name)
+                           "/project/src/example.el"))
+            (should (my-codex--current-or-left-file-available-p))))
+      (when (window-live-p agent-window)
+        (delete-window agent-window))
+      (when (buffer-live-p edit-buffer)
+        (kill-buffer edit-buffer))
+      (when (buffer-live-p agent-buffer)
+        (kill-buffer agent-buffer)))))
+
 (ert-deftest my-codex-preset-command-loads-git-helpers-without-main-package ()
   (let ((load-path-root default-directory)
         (root (file-name-as-directory (make-temp-file "my-codex-preset" t))))

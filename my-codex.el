@@ -5,8 +5,8 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.99.0
-;; Package-Requires: ((emacs "29.1") (vterm "0") (transient "0"))
+;; Version: 0.100.0
+;; Package-Requires: ((emacs "29.1") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
 
@@ -17,7 +17,7 @@
 ;;; Commentary:
 
 ;; my-codex.el runs OpenAI Codex CLI or Google Antigravity inside an Emacs
-;; vterm buffer. It provides a two-column layout, project-specific agent
+;; terminal buffer. It provides a two-column layout, project-specific agent
 ;; sessions, helpers for Git diffs, selected regions, diagnostics, build
 ;; output, and compiler or test errors.
 
@@ -40,6 +40,7 @@
 (autoload 'vterm-copy-mode "vterm" nil t)
 (autoload 'my-codex-session-links-mode "my-codex-links" nil t)
 (autoload 'my-codex-vterm-integration-mode "my-codex-vterm" nil t)
+(autoload 'my-codex-eat-integration-mode "my-codex-eat" nil t)
 (autoload 'my-codex--vterm-mode-with-scrollback-floor "my-codex-vterm")
 (autoload 'my-codex--ensure-vterm-scrollback "my-codex-vterm")
 (autoload 'my-codex--current-or-left-file-available-p "my-codex-git")
@@ -81,21 +82,6 @@
 (declare-function markdown-mode "markdown-mode")
 (declare-function projectile-toggle-between-implementation-and-test "projectile")
 (defvar vterm-copy-mode)
-(defun my-codex--track-process-output-time (process)
-  "Record output timestamps for PROCESS without replacing its behaviour."
-  (unless (process-get process 'my-codex-output-time-filter)
-    (let ((original-filter (process-filter process)))
-      (process-put process 'my-codex-output-time-filter t)
-      (set-process-filter
-       process
-       (lambda (proc output)
-         (when (and output (not (string-empty-p output)))
-           (when-let (buffer (process-buffer proc))
-             (with-current-buffer buffer
-               (setq-local my-codex-session-last-output-time (current-time))
-               (force-mode-line-update))))
-         (when original-filter
-           (funcall original-filter proc output)))))))
 
 (cl-defmethod my-codex-backend-start
   ((backend my-codex-vterm-backend) project-root command
@@ -124,9 +110,9 @@
         (vterm-send-return)))
     (if session-name
         (my-codex--mark-named-session
-         buffer session-name project-root access-mode agent)
+         buffer session-name project-root access-mode agent 'vterm)
       (my-codex--mark-default-session
-       buffer project-root access-mode agent))
+       buffer project-root access-mode agent 'vterm))
     (when (bound-and-true-p my-codex-vterm-integration-mode)
       (with-current-buffer buffer
         (my-codex--enable-vterm-buffer-integration)))
@@ -152,17 +138,9 @@
 
 (defun my-codex--shell-command-and-exit (command)
   "Return shell text that runs COMMAND, then exits with its status."
-  (let ((shell (downcase (my-codex--vterm-shell-name))))
-    (cond
-     ((member shell '("cmd" "cmd.exe" "cmdproxy" "cmdproxy.exe"))
-      (format "%s\nexit %%ERRORLEVEL%%" command))
-     ((member shell '("powershell" "powershell.exe" "pwsh" "pwsh.exe"))
-      (format (concat "%s\n"
-                      "if ($LASTEXITCODE -ne $null) { exit $LASTEXITCODE }\n"
-                      "if ($?) { exit 0 } else { exit 1 }")
-              command))
-     (t
-      (format "%s\nstatus=$?\nexit $status" command)))))
+  (my-codex--shell-command-and-exit-for-shell
+   command
+   (my-codex--vterm-shell-name)))
 
 
 ;;;###autoload
@@ -419,7 +397,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
                               'adoc-mode 'text-mode)
               (member extension '("md" "markdown" "org" "rst" "adoc" "txt")))
           'document)
-         ((derived-mode-p 'vterm-mode 'term-mode 'shell-mode
+         ((derived-mode-p 'vterm-mode 'eat-mode 'term-mode 'shell-mode
                           'eshell-mode 'compilation-mode)
           'terminal)
          (t 'unknown)))))
@@ -777,10 +755,17 @@ When RESOLVE is non-nil, also require availability predicates to be defined."
         (when my-codex-enable-display-defaults
           (my-codex--enable-display-defaults))
         (when (and my-codex-enable-vterm-integration
+                   (eq my-codex-terminal-backend 'vterm)
                    (not my-codex--vterm-integration-enabled-by-mode)
                    (not (bound-and-true-p my-codex-vterm-integration-mode)))
           (setq my-codex--vterm-integration-enabled-by-mode t)
           (my-codex-vterm-integration-mode 1))
+        (when (and my-codex-enable-eat-integration
+                   (eq my-codex-terminal-backend 'eat)
+                   (not my-codex--eat-integration-enabled-by-mode)
+                   (not (bound-and-true-p my-codex-eat-integration-mode)))
+          (setq my-codex--eat-integration-enabled-by-mode t)
+          (my-codex-eat-integration-mode 1))
         (when (and my-codex-enable-global-auto-revert
                    (not my-codex--auto-revert-enabled-by-mode)
                    (not (bound-and-true-p global-auto-revert-mode)))
@@ -792,8 +777,12 @@ When RESOLVE is non-nil, also require availability predicates to be defined."
     (when (and my-codex--vterm-integration-enabled-by-mode
                (bound-and-true-p my-codex-vterm-integration-mode))
       (my-codex-vterm-integration-mode -1))
+    (when (and my-codex--eat-integration-enabled-by-mode
+               (bound-and-true-p my-codex-eat-integration-mode))
+      (my-codex-eat-integration-mode -1))
     (my-codex--restore-display-defaults)
     (setq my-codex--vterm-integration-enabled-by-mode nil)
+    (setq my-codex--eat-integration-enabled-by-mode nil)
     (setq my-codex--auto-revert-enabled-by-mode nil)))
 
 (provide 'my-codex)
