@@ -17,7 +17,7 @@
 └───────────────┴───────────────┘
 ```
 
-`my-codex.el` runs the Google Antigravity CLI (`agy`) or OpenAI Codex CLI (`codex`) inside an Emacs terminal backend. `vterm` is the default backend on systems that support it; Eat is the default on Windows.
+`my-codex.el` runs the Google Antigravity CLI (`agy`) or OpenAI Codex CLI (`codex`) inside an Emacs terminal backend. `vterm` is the default backend on systems that support it; `eat` is the default on Windows.
 
 > [!NOTE]
 > The package is named `my-codex.el` because it initially supported only the OpenAI Codex CLI. It has since been expanded to support Google Antigravity as a first-class agent.

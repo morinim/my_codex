@@ -789,6 +789,32 @@
       (delete-directory root t)
       (delete-directory outside-root t))))
 
+(ert-deftest my-codex-send-current-file-uses-subject-buffer ()
+  (let ((subject (generate-new-buffer " *my-codex-file-subject*"))
+        sent)
+    (unwind-protect
+        (with-current-buffer subject
+          (setq buffer-file-name "/repo/src/example.el")
+          (set-buffer-modified-p nil)
+          (cl-letf (((symbol-function 'my-codex--subject-buffer)
+                     (lambda () subject))
+                    ((symbol-function 'my-codex-project-root)
+                     (lambda () "/repo/"))
+                    ((symbol-function 'my-codex--project-relative-file)
+                     (lambda (file root)
+                       (should (equal file "/repo/src/example.el"))
+                       (should (equal root "/repo/"))
+                       "src/example.el"))
+                    ((symbol-function 'my-codex--ensure-file-reference-current)
+                     (lambda (file &optional _label)
+                       (should (equal file "/repo/src/example.el"))))
+                    ((symbol-function 'my-codex--preview-and-send-prompt)
+                     (lambda (prompt) (setq sent prompt))))
+            (with-temp-buffer
+              (my-codex-send-current-file))
+            (should (string-match-p "Inspect `src/example\\.el`" sent))))
+      (kill-buffer subject))))
+
 (ert-deftest my-codex-region-review-prompt-references-small-file-regions-by-default ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-region" t)))
         (my-codex-region-reference-threshold-chars 100))

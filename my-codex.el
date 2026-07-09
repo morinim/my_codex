@@ -46,6 +46,7 @@
 (autoload 'my-codex--current-or-left-file-available-p "my-codex-git")
 (autoload 'my-codex--request-marked-output "my-codex-prompts")
 (autoload 'my-codex-send-prompt "my-codex-prompts")
+(autoload 'my-codex--with-subject-buffer "my-codex-prompts")
 (autoload 'my-codex-top "my-codex-ui" nil t)
 (dolist (autoload-entry
          '((my-codex-send-region . "my-codex-prompts")
@@ -361,18 +362,21 @@ Open the generated notes in an editable Markdown buffer when they are ready."
   (defun my-codex-send-region-or-current-file ()
     "Send the active region, or the current file when no region is active."
     (interactive)
-    (call-interactively
-     (if (use-region-p)
-         #'my-codex-send-region
-       #'my-codex-send-current-file)))
+    (my-codex--with-subject-buffer
+     (lambda ()
+       (if (use-region-p)
+           (my-codex-send-region (region-beginning) (region-end))
+         (my-codex-send-current-file)))))
 
   (defun my-codex--region-available-p ()
     "Return non-nil when the region is active."
     (use-region-p))
 
   (defun my-codex--current-file-available-p ()
-    "Return non-nil when the current buffer visits a file."
-    (and buffer-file-name t))
+    "Return non-nil when the command subject visits a file."
+    (when-let ((buffer (my-codex--subject-buffer)))
+      (with-current-buffer buffer
+        (and buffer-file-name t))))
 
   (defun my-codex--subject-buffer ()
     "Return the buffer current agent commands should use as subject."

@@ -191,6 +191,17 @@ Preserve concrete file names, command names, and technical details. Do not edit 
 
 (declare-function my-codex--project-files "my-codex-git" (root))
 (declare-function my-codex--subject-buffer "my-codex" ())
+
+(defun my-codex--with-subject-buffer (function &rest args)
+  "Call FUNCTION with ARGS in the current my-codex subject buffer."
+  (let ((buffer (or (and (fboundp 'my-codex--subject-buffer)
+                         (my-codex--subject-buffer))
+                    (current-buffer))))
+    (unless (buffer-live-p buffer)
+      (user-error "No subject buffer available"))
+    (with-current-buffer buffer
+      (apply function args))))
+
 (defface my-codex-prompt-preview-reference-face
   '((t :inherit font-lock-constant-face))
   "Face used for references in prompt preview buffers.")
@@ -508,16 +519,19 @@ Display SENT-MESSAGE after the prompt is sent."
 (defun my-codex-send-current-file ()
   "Ask the agent to inspect the current file directly."
   (interactive)
-  (unless buffer-file-name
-    (user-error "Current buffer is not visiting a file"))
-  (let* ((root (my-codex-project-root))
-         (file (my-codex--project-relative-file buffer-file-name root)))
-    (my-codex--ensure-file-reference-current buffer-file-name)
-    (unless file
-      (user-error "Current file is outside the current project"))
-    (my-codex--preview-and-send-prompt
-     (format "Inspect `%s` directly and report findings. Do not edit unless asked\n"
-             file))))
+  (my-codex--with-subject-buffer
+   (lambda ()
+     (unless buffer-file-name
+       (user-error "Current buffer is not visiting a file"))
+     (let* ((root (my-codex-project-root))
+            (file (my-codex--project-relative-file buffer-file-name root)))
+       (my-codex--ensure-file-reference-current buffer-file-name)
+       (unless file
+         (user-error "Current file is outside the current project"))
+       (my-codex--preview-and-send-prompt
+        (format
+         "Inspect `%s` directly and report findings. Do not edit unless asked\n"
+         file))))))
 
 (defun my-codex--project-relative-file (file root)
   "Return FILE relative to ROOT, or nil when FILE is outside ROOT."
@@ -655,28 +669,30 @@ AGENT is the agent profile used to format their references."
   "Ask the agent to analyse test coverage of the current file.
 With prefix argument SELECT-TEST-FILE, prompt for a specific test file."
   (interactive "P")
-  (unless buffer-file-name
-    (user-error "Current buffer is not visiting a file"))
-  (let* ((root (my-codex-project-root))
-         (implementation-file buffer-file-name)
-         (test-file (when select-test-file
-                      (my-codex--read-test-file implementation-file root)))
-         (implementation-relative
-          (my-codex--project-relative-file implementation-file root))
-         (test-relative (when test-file
-                          (my-codex--project-relative-file test-file root))))
-    (my-codex--ensure-file-reference-current implementation-file
-                                             "implementation file")
-    (when test-file
-      (my-codex--ensure-file-reference-current test-file "test file"))
-    (unless implementation-relative
-      (user-error "Implementation file is outside the current project"))
-    (when (and test-file (not test-relative))
-      (user-error "Test file is outside the current project"))
-    (my-codex--preview-and-send-prompt
-     (my-codex--test-coverage-prompt
-      implementation-relative
-      test-relative))))
+  (my-codex--with-subject-buffer
+   (lambda ()
+     (unless buffer-file-name
+       (user-error "Current buffer is not visiting a file"))
+     (let* ((root (my-codex-project-root))
+            (implementation-file buffer-file-name)
+            (test-file (when select-test-file
+                         (my-codex--read-test-file implementation-file root)))
+            (implementation-relative
+             (my-codex--project-relative-file implementation-file root))
+            (test-relative (when test-file
+                             (my-codex--project-relative-file test-file root))))
+       (my-codex--ensure-file-reference-current implementation-file
+                                                "implementation file")
+       (when test-file
+         (my-codex--ensure-file-reference-current test-file "test file"))
+       (unless implementation-relative
+         (user-error "Implementation file is outside the current project"))
+       (when (and test-file (not test-relative))
+         (user-error "Test file is outside the current project"))
+       (my-codex--preview-and-send-prompt
+        (my-codex--test-coverage-prompt
+         implementation-relative
+         test-relative))))))
 
 (defun my-codex--symbol-at-point ()
   "Return the symbol at point, or raise a user error."
@@ -822,41 +838,44 @@ and CONTEXT-LINES controls the excerpt radius for modified xref buffers."
 (defun my-codex-explain-symbol-at-point ()
   "Ask the agent to explain the symbol at point with compact context."
   (interactive)
-  (unless buffer-file-name
-    (user-error "Current buffer is not visiting a file"))
-  (let* ((root (my-codex-project-root))
-         (file (or (my-codex--project-relative-file buffer-file-name root)
-                   (user-error "Current file is outside the current project")))
-         (line (line-number-at-pos))
-         (symbol (my-codex--symbol-at-point))
-         (context (when (buffer-modified-p)
-                    (my-codex--line-context-around-point
-                     my-codex-symbol-context-lines)))
-         (symbol-context
-          (string-join
-           (delq nil
-                 (list
-                  (format (concat "symbol_context:\n"
-                                  "  symbol: %s\n"
-                                  "  location: %s")
-                          (my-codex--yaml-string symbol)
-                          (my-codex--yaml-string
-                           (format "%s:%d" file line)))
-                  (when context
-                    (format "  excerpt: |\n%s"
-                            (my-codex--yaml-literal-block context 4)))))
-           "\n"))
-         (xref-context (my-codex--symbol-xref-context symbol root)))
-    (my-codex--preview-and-send-prompt
-     (string-join
-      (delq nil
-            (list
-             (concat "Explain the role of this symbol using the YAML "
-                     "context below.\n\n"
-                     symbol-context)
-             xref-context
-             "Inspect the file directly if needed. Do not edit files."))
-      "\n\n"))))
+  (my-codex--with-subject-buffer
+   (lambda ()
+     (unless buffer-file-name
+       (user-error "Current buffer is not visiting a file"))
+     (let* ((root (my-codex-project-root))
+            (file (or (my-codex--project-relative-file buffer-file-name root)
+                      (user-error
+                       "Current file is outside the current project")))
+            (line (line-number-at-pos))
+            (symbol (my-codex--symbol-at-point))
+            (context (when (buffer-modified-p)
+                       (my-codex--line-context-around-point
+                        my-codex-symbol-context-lines)))
+            (symbol-context
+             (string-join
+              (delq nil
+                    (list
+                     (format (concat "symbol_context:\n"
+                                     "  symbol: %s\n"
+                                     "  location: %s")
+                             (my-codex--yaml-string symbol)
+                             (my-codex--yaml-string
+                              (format "%s:%d" file line)))
+                     (when context
+                       (format "  excerpt: |\n%s"
+                               (my-codex--yaml-literal-block context 4)))))
+              "\n"))
+            (xref-context (my-codex--symbol-xref-context symbol root)))
+       (my-codex--preview-and-send-prompt
+        (string-join
+         (delq nil
+               (list
+                (concat "Explain the role of this symbol using the YAML "
+                        "context below.\n\n"
+                        symbol-context)
+                xref-context
+                "Inspect the file directly if needed. Do not edit files."))
+         "\n\n"))))))
 
 ;;;###autoload
 (defun my-codex-explain-region-as-error ()
@@ -895,15 +914,18 @@ and CONTEXT-LINES controls the excerpt radius for modified xref buffers."
    (if (use-region-p)
        (list (region-beginning) (region-end))
      (list nil nil)))
-  (let ((reference
-         (if (use-region-p)
-             (my-codex--region-file-reference beg end)
-           (let ((line (line-number-at-pos nil t)))
-             (format "%s line %d"
-                     (my-codex--current-file-reference)
-                     line)))))
-    (kill-new reference)
-    (message "Copied %s" reference)))
+  (my-codex--with-subject-buffer
+   (lambda ()
+     (let ((reference
+            (if (or (and beg end) (use-region-p))
+                (my-codex--region-file-reference (or beg (region-beginning))
+                                                 (or end (region-end)))
+              (let ((line (line-number-at-pos nil t)))
+                (format "%s line %d"
+                        (my-codex--current-file-reference)
+                        line)))))
+       (kill-new reference)
+       (message "Copied %s" reference)))))
 
 (defun my-codex--region-reference-p (beg end)
   "Return non-nil when region BEG to END should be sent by reference."

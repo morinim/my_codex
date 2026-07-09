@@ -168,7 +168,7 @@
     (should (my-codex--command-context-visible-p '(document)))
     (should-not (my-codex--command-context-visible-p '(code)))))
 
-(ert-deftest my-codex-command-available-checks-command-buffer ()
+(ert-deftest my-codex-command-available-checks-subject-buffer ()
   (let ((subject-buffer (generate-new-buffer " *my-codex-subject*")))
     (unwind-protect
         (with-temp-buffer
@@ -177,8 +177,8 @@
             (setq buffer-file-name "/tmp/plan.md"))
           (cl-letf (((symbol-function 'my-codex--subject-buffer)
                      (lambda () subject-buffer)))
-            (should-not (my-codex--command-available-p
-                         'my-codex--current-file-available-p))))
+            (should (my-codex--command-available-p
+                     'my-codex--current-file-available-p))))
       (kill-buffer subject-buffer))))
 
 (ert-deftest my-codex-command-available-preserves-agent-selection-checks ()
@@ -351,8 +351,11 @@
       (delete-file destination))))
 
 (ert-deftest my-codex-send-region-or-current-file-sends-active-region ()
+  (require 'my-codex-prompts)
   (let (called)
     (cl-letf (((symbol-function 'use-region-p) (lambda () t))
+              ((symbol-function 'region-beginning) (lambda () 1))
+              ((symbol-function 'region-end) (lambda () 2))
               ((symbol-function 'my-codex-send-region)
                (lambda (&rest _) (interactive) (setq called 'region)))
               ((symbol-function 'my-codex-send-current-file)
@@ -361,6 +364,7 @@
       (should (eq called 'region)))))
 
 (ert-deftest my-codex-send-region-or-current-file-sends-current-file-without-region ()
+  (require 'my-codex-prompts)
   (let (called)
     (cl-letf (((symbol-function 'use-region-p) (lambda () nil))
               ((symbol-function 'my-codex-send-region)
@@ -369,6 +373,25 @@
                (lambda () (interactive) (setq called 'file))))
       (my-codex-send-region-or-current-file)
       (should (eq called 'file)))))
+
+(ert-deftest my-codex-send-region-or-current-file-uses-subject-buffer ()
+  (require 'my-codex-prompts)
+  (let ((subject (generate-new-buffer " *my-codex-subject*"))
+        called)
+    (unwind-protect
+        (cl-letf (((symbol-function 'my-codex--subject-buffer)
+                   (lambda () subject))
+                  ((symbol-function 'use-region-p)
+                   (lambda () (eq (current-buffer) subject)))
+                  ((symbol-function 'region-beginning) (lambda () 1))
+                  ((symbol-function 'region-end) (lambda () 2))
+                  ((symbol-function 'my-codex-send-region)
+                   (lambda (&rest _) (interactive) (setq called 'region)))
+                  ((symbol-function 'my-codex-send-current-file)
+                   (lambda () (interactive) (setq called 'file))))
+          (my-codex-send-region-or-current-file)
+          (should (eq called 'region)))
+      (kill-buffer subject))))
 
 (ert-deftest my-codex-agent-selection-available-requires-agent-window ()
   (let ((my-codex--captured-selection "selected"))
