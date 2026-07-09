@@ -64,13 +64,37 @@ Clone the repository and add it to your Emacs load path:
 
 Press `F8` to open the agent command menu.
 
+### Common Workflows
+
+Review current changes:
+
+- `F8 r f` : review the current file's Git diff.
+- `F8 r s` : review staged changes.
+- `F8 c` : draft or reuse an agent-generated commit message, edit it, then commit.
+
+Ask about code:
+
+- Select a region, then press `F8 s` to send it to the agent.
+- Put point inside a function, then press `F8 x f` to review the current defun.
+- Put point on a symbol, then press `F8 x s` to explain it.
+
+Control token usage:
+
+- `F8 y` : copy a file-and-line reference instead of sending file contents.
+- `F8 S h` : start a fresh handoff session from a compact context transfer.
+- `F8 S k` : compact the current session context when supported by its agent profile.
+
+Use the session dashboard with `F8 S l` to see active and inactive agent
+sessions in one place. It shows agent, project, session, access mode, process
+state, Git branch/state, prompt count, buffer lines, age, and last activity.
+
 ### Session Management
 - `F8 o` / `F8 w` : start/show the default read-only or workspace-write session.
 - `F8 S o` / `F8 S w` : select an agent, then start its default read-only or write session.
 - `F8 S n` : start or show a named session with a selected agent and access mode.
 - `F8 S h` : ask the active session for a compact handoff and start a fresh named session containing only that handoff.
 - `F8 S k` : compact the active session context when supported by its agent profile.
-- `F8 S l` / `F8 S q` : list open sessions, or hide the selected session window.
+- `F8 S l` / `F8 S q` : open the session dashboard, or hide the selected session window.
 - `F8 S r` / `F8 q` : resume a previous session, or hide the active agent window.
 
 ### Prompts & Refactoring
