@@ -1238,19 +1238,6 @@ the extracted text.  ATTEMPTS tracks polling cycles."
   (when (memq (process-status process) '(exit signal))
     (cons (process-exit-status process) (process-buffer process))))
 
-(defun my-codex-buffer ()
-  "Return the current project's agent backend buffer, or raise an error."
-  (let* ((backend (my-codex--current-backend))
-         (buffer-name (my-codex--backend-buffer-name backend))
-         (buffer (get-buffer buffer-name)))
-    (unless buffer
-      (user-error "No %s buffer found" buffer-name))
-    (unless (my-codex-backend-live-p backend)
-      (user-error "No running %s process in %s"
-                  (my-codex--active-agent-label)
-                  buffer-name))
-    buffer))
-
 (defun my-codex--session-buffer ()
   "Return the current project's agent session buffer, or raise an error."
   (let* ((buffer-name (my-codex-current-buffer-name))

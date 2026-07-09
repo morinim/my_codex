@@ -53,7 +53,7 @@
               "END_COMMIT_MESSAGE\n")
       (should
        (equal
-        (my-codex-latest-commit-message-after (current-buffer) start)
+        (my-codex--latest-commit-message-after (current-buffer) start)
         "fix: extract latest commit message")))))
 
 (ert-deftest my-codex-latest-marked-output-after-ignores-before-marker ()
@@ -64,7 +64,7 @@
     (let ((start (copy-marker (point))))
       (insert "no generated output yet\n")
       (should-not
-       (my-codex-latest-commit-message-after (current-buffer) start)))))
+       (my-codex--latest-commit-message-after (current-buffer) start)))))
 
 (ert-deftest my-codex-latest-marked-output-after-ignores-overlapping-marker ()
   (with-temp-buffer
@@ -73,7 +73,7 @@
     (let ((start (copy-marker (point))))
       (insert "END_COMMIT_MESSAGE\n")
       (should-not
-       (my-codex-latest-commit-message-after (current-buffer) start)))))
+       (my-codex--latest-commit-message-after (current-buffer) start)))))
 
 (ert-deftest my-codex-wait-for-marked-output-clears-only-wait-marker ()
   (with-temp-buffer
@@ -129,7 +129,7 @@
               "END_COMMIT_MESSAGE\n")
       (should
        (equal
-        (my-codex-latest-commit-message-after (current-buffer) start)
+        (my-codex--latest-commit-message-after (current-buffer) start)
         "fix: latest message")))))
 
 (ert-deftest my-codex-latest-marked-output-after-waits-for-latest-block ()
@@ -141,7 +141,7 @@
               "BEGIN_COMMIT_MESSAGE\n"
               "fix: newer message\n")
       (should-not
-       (my-codex-latest-commit-message-after (current-buffer) start)))))
+       (my-codex--latest-commit-message-after (current-buffer) start)))))
 
 (ert-deftest my-codex-latest-marked-output-after-ignores-placeholders ()
   (with-temp-buffer
@@ -150,7 +150,7 @@
               "...\n"
               "END_COMMIT_MESSAGE\n")
       (should-not
-       (my-codex-latest-commit-message-after (current-buffer) start)))))
+       (my-codex--latest-commit-message-after (current-buffer) start)))))
 
 (ert-deftest my-codex-latest-marked-output-after-stops-at-latest-placeholder ()
   (with-temp-buffer
@@ -162,7 +162,7 @@
               "<commit message here>\n"
               "END_COMMIT_MESSAGE\n")
       (should-not
-       (my-codex-latest-commit-message-after (current-buffer) start)))))
+       (my-codex--latest-commit-message-after (current-buffer) start)))))
 
 (ert-deftest my-codex-latest-marked-output-after-ignores-echoed-instructions ()
   (with-temp-buffer
@@ -172,13 +172,13 @@
               "<commit message here>\n"
               "END_COMMIT_MESSAGE\n")
       (should-not
-       (my-codex-latest-commit-message-after (current-buffer) start))
+       (my-codex--latest-commit-message-after (current-buffer) start))
       (insert "BEGIN_COMMIT_MESSAGE\n"
               "fix: use generated message\n"
               "END_COMMIT_MESSAGE\n")
       (should
        (equal
-        (my-codex-latest-commit-message-after (current-buffer) start)
+        (my-codex--latest-commit-message-after (current-buffer) start)
         "fix: use generated message")))))
 
 (ert-deftest my-codex-latest-marked-output-after-ignores-prefixed-instructions ()
@@ -189,7 +189,7 @@
               "<commit message here>\n"
               "END_COMMIT_MESSAGE\n")
       (should-not
-       (my-codex-latest-commit-message-after (current-buffer) start)))))
+       (my-codex--latest-commit-message-after (current-buffer) start)))))
 
 (ert-deftest my-codex-latest-marked-output-after-handles-spaced-echoed-end ()
   (with-temp-buffer
@@ -203,7 +203,7 @@
               "END_COMMIT_MESSAGE\n")
       (should
        (equal
-        (my-codex-latest-commit-message-after (current-buffer) start)
+        (my-codex--latest-commit-message-after (current-buffer) start)
         "fix: use generated message")))))
 
 (ert-deftest my-codex-latest-marked-output-after-tolerates-terminal-spacing ()
@@ -214,7 +214,7 @@
               "E \r\nN\tD_COMMIT_MESSAGE\n")
       (should
        (equal
-        (my-codex-latest-commit-message-after (current-buffer) start)
+        (my-codex--latest-commit-message-after (current-buffer) start)
         "fix: tolerate terminal spacing")))))
 
 (ert-deftest my-codex-prompt-preset-transient-suffixes-empty-keeps-chooser ()
@@ -413,7 +413,7 @@
     (unwind-protect
         (let ((default-directory root))
           (set-window-parameter (selected-window) 'my-codex-term-buffer nil)
-          (cl-letf (((symbol-function 'my-codex-buffer)
+          (cl-letf (((symbol-function 'my-codex-active-session-buffer)
                      (lambda () (user-error "No buffer"))))
             (should (equal (my-codex--ask-prompt-label) "Codex"))))
       (set-window-parameter (selected-window) 'my-codex-term-buffer nil)

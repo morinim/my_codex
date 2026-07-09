@@ -28,7 +28,7 @@
        "  fix: trim message  \n\n  body text with extra spaces that wraps  \n")
       "fix: trim message\n\nbody text with extra spaces\nthat wraps"))))
 
-(ert-deftest my-codex-latest-commit-message-ignores-before-request-marker ()
+(ert-deftest my-codex--latest-commit-message-ignores-before-request-marker ()
   (let ((buffer (generate-new-buffer "*my-codex-test-session*")))
     (unwind-protect
         (with-current-buffer buffer
@@ -39,10 +39,10 @@
           (insert "request sent\n")
           (cl-letf (((symbol-function 'my-codex-current-buffer-name)
                      (lambda () (buffer-name buffer))))
-            (should-not (my-codex-latest-commit-message))))
+            (should-not (my-codex--latest-commit-message))))
       (kill-buffer buffer))))
 
-(ert-deftest my-codex-latest-commit-message-uses-request-markers ()
+(ert-deftest my-codex--latest-commit-message-uses-request-markers ()
   (let ((buffer (generate-new-buffer "*my-codex-test-session*")))
     (unwind-protect
         (with-current-buffer buffer
@@ -60,7 +60,7 @@
           (cl-letf (((symbol-function 'my-codex-current-buffer-name)
                      (lambda () (buffer-name buffer))))
             (should
-             (equal (my-codex-latest-commit-message)
+             (equal (my-codex--latest-commit-message)
                     "fix: use unique markers"))))
       (kill-buffer buffer))))
 

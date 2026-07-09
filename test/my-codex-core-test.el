@@ -715,7 +715,7 @@
               (my-codex-current-buffer-name)))))
       (delete-directory root t))))
 
-(ert-deftest my-codex-buffer-resolves-project-active-agent-session ()
+(ert-deftest my-codex-active-session-buffer-resolves-project-active-agent-session ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-buffer" t)))
         buffer)
     (unwind-protect
@@ -737,7 +737,7 @@
             (my-codex--mark-default-session
              buffer root 'workspace-write 'antigravity)
             (my-codex--set-active-agent 'antigravity root)
-            (should (eq (my-codex-buffer) buffer))))
+            (should (eq (my-codex-active-session-buffer t) buffer))))
       (when (buffer-live-p buffer)
         (kill-buffer buffer))
       (delete-directory root t))))

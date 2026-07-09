@@ -420,12 +420,6 @@ computed from the subject buffer unless the predicate is itself left-aware."
             (funcall predicate)
           (funcall predicate))))
 
-  (defun my-codex--document-region-available-p ()
-    "Return non-nil when the subject document has an active region."
-    (when-let ((buffer (my-codex--subject-buffer)))
-      (with-current-buffer buffer
-        (use-region-p))))
-
   (defun my-codex--catalogue-entry-context-visible-p (entry)
     "Return non-nil when command catalogue ENTRY matches subject context."
     (my-codex--command-context-visible-p (plist-get entry :contexts)))

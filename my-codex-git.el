@@ -532,7 +532,7 @@ When invoked from the agent terminal, use the file in the window to its left."
      "my-codex-git-commit-with-latest-message")
     signature))
 
-(defun my-codex-latest-commit-message-after
+(defun my-codex--latest-commit-message-after
     (buffer start-point &optional output-markers)
   "Return the commit message in BUFFER appearing after START-POINT, or nil."
   (let ((markers (or output-markers
@@ -543,7 +543,7 @@ When invoked from the agent terminal, use the file in the window to its left."
      (cdr markers)
      '("..." "<commit message here>"))))
 
-(defun my-codex-latest-commit-message ()
+(defun my-codex--latest-commit-message ()
   "Return latest requested commit message from current agent buffer.
 Return nil when no matching message is available."
   (when-let ((buffer (or (ignore-errors
@@ -553,7 +553,7 @@ Return nil when no matching message is available."
       (when-let* ((marker my-codex--commit-message-request-marker)
                   ((markerp marker))
                   ((eq (marker-buffer marker) buffer)))
-        (my-codex-latest-commit-message-after
+        (my-codex--latest-commit-message-after
          buffer marker my-codex--commit-message-request-output-markers)))))
 
 (defun my-codex--commit-message-buffer-name (root)
@@ -755,7 +755,7 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
                  (eq (marker-buffer marker) buffer)
                  (equal request-signature current-signature)))
       (if current-request-p
-          (if-let (message (my-codex-latest-commit-message-after
+          (if-let (message (my-codex--latest-commit-message-after
                             buffer marker
                             (with-current-buffer buffer
                               my-codex--commit-message-request-output-markers)))
