@@ -8,6 +8,10 @@
 ;; License, v. 2.0. If a copy of the MPL was not distributed with this
 ;; file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+;;; Commentary:
+
+;; Session link helpers for clickable Codex conversation references.
+
 ;;; Code:
 
 (require 'browse-url)
