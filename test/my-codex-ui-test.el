@@ -66,7 +66,7 @@
                 #'my-codex-top-sort))
     (my-codex-top-sort 0)
     (should (eq (caar tabulated-list-entries) 'two))
-    (should (eq (car header-line-format) ""))
+    (should (equal (car header-line-format) ""))
     (should (memq 'header-line-indent header-line-format))))
 
 (ert-deftest my-codex-top-mouse-sort-refreshes-custom-header ()
@@ -75,15 +75,14 @@
     (save-window-excursion
       (let ((window (selected-window)))
         (set-window-buffer window (current-buffer))
-        (cl-letf (((symbol-function 'event-start) (lambda (_) 'position))
-                  ((symbol-function 'posn-window) (lambda (_) window))
+        (cl-letf (((symbol-function 'event-start) (lambda (_) (list window)))
                   ((symbol-function 'tabulated-list-col-sort)
                    (lambda (_) (tabulated-list-init-header))))
           (my-codex-top-col-sort 'event))))
     (should (eq (lookup-key my-codex-top-sort-button-map
                             [header-line mouse-1])
                 #'my-codex-top-col-sort))
-    (should (eq (car header-line-format) ""))
+    (should (equal (car header-line-format) ""))
     (should (memq 'header-line-indent header-line-format))))
 
 (ert-deftest my-codex-top-column-resizing-refreshes-custom-header ()
@@ -99,10 +98,10 @@
                 #'my-codex-top-narrow-current-column))
     (my-codex-top-widen-current-column 2)
     (should (= (cadr (aref tabulated-list-format 0)) 8))
-    (should (eq (car header-line-format) ""))
+    (should (equal (car header-line-format) ""))
     (my-codex-top-narrow-current-column 1)
     (should (= (cadr (aref tabulated-list-format 0)) 7))
-    (should (eq (car header-line-format) ""))
+    (should (equal (car header-line-format) ""))
     (should (memq 'header-line-indent header-line-format))))
 
 (ert-deftest my-codex-top-git-info-reports-status-failure ()

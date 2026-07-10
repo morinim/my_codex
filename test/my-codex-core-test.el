@@ -8,6 +8,7 @@
 (require 'my-codex)
 (require 'my-codex-vterm)
 (require 'my-codex-eat)
+(defvar vterm-shell)
 
 (ert-deftest my-codex-require-keeps-optional-modules-lazy ()
   (let* ((script '(progn
@@ -462,7 +463,7 @@
               ((symbol-function 'transient-setup)
                (lambda (&rest arguments)
                  (setq setup-arguments arguments))))
-      (my-codex-session-transient)
+      (with-no-warnings (my-codex-session-transient))
       (should (equal setup-arguments
                      '(my-codex-session-transient nil nil :scope nil))))))
 

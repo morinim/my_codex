@@ -82,6 +82,7 @@
   (autoload (car autoload-entry) (cdr autoload-entry) nil t))
 (declare-function markdown-mode "markdown-mode")
 (declare-function projectile-toggle-between-implementation-and-test "projectile")
+(declare-function my-codex--enable-vterm-buffer-integration "my-codex-vterm")
 (defvar vterm-copy-mode)
 
 (cl-defmethod my-codex-backend-start

@@ -653,7 +653,8 @@ Use the current prompt target's agent when AGENT is nil."
 (defun my-codex--test-coverage-prompt (implementation-relative &optional test-relative
                                                                agent)
   "Return a cache-friendly coverage prompt.
-IMPLEMENTATION-RELATIVE and optional TEST-RELATIVE are project-relative file names.
+IMPLEMENTATION-RELATIVE and optional TEST-RELATIVE are project-relative
+file names.
 AGENT is the agent profile used to format their references."
   (string-join
    (list my-codex-test-coverage-prompt

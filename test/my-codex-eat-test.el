@@ -11,6 +11,8 @@
 
 (defvar explicit-shell-file-name)
 (defvar eat-term-scrollback-size)
+(defvar eat-buffer-name)
+(declare-function eat-self-input "eat")
 
 (defmacro my-codex-test-with-eat-shell (shell &rest body)
   "Bind Eat's default shell inputs so SHELL is selected while running BODY."

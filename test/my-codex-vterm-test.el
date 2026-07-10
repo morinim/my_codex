@@ -10,6 +10,7 @@
 (defvar vterm-copy-mode-hook)
 (defvar vterm-max-scrollback)
 (defvar vterm-mode-hook)
+(defvar vterm-copy-mode)
 
 (ert-deftest my-codex-ensure-vterm-scrollback-raises-low-value-locally ()
   (let ((was-bound (boundp 'vterm-max-scrollback))
@@ -85,8 +86,7 @@
          (vterm-copy-mode-map (make-sparse-keymap))
          (vterm-mode-hook nil)
          (vterm-copy-mode-hook nil)
-         (after-change-major-mode-hook nil)
-         (my-codex--vterm-copy-mode-lighter :unset))
+         (after-change-major-mode-hook nil))
     (keymap-set vterm-mode-map "<f8>" #'ignore)
     (keymap-set vterm-copy-mode-map "<f8>" #'ignore)
     (my-codex--enable-vterm-integration)

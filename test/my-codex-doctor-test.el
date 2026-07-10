@@ -6,6 +6,8 @@
 
 (require 'ert)
 (require 'my-codex-doctor)
+(defvar vterm-max-scrollback)
+(defvar explicit-shell-file-name)
 
 (ert-deftest my-codex-doctor-command-executable-token-handles-shell-prefixes ()
   (should
