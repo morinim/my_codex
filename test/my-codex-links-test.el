@@ -155,6 +155,57 @@
                     :end-line 34)))))))
       (delete-directory root t))))
 
+(ert-deftest my-codex-session-links-use-session-root-for-file-references ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-links" t)))
+        (other-root (file-name-as-directory
+                     (make-temp-file "my-codex-links-other" t))))
+    (unwind-protect
+        (progn
+          (make-directory (expand-file-name "src/kernel" root) t)
+          (write-region
+           "" nil
+           (expand-file-name "src/kernel/evolution_strategy.tcc" root)
+           nil 'silent)
+          (with-temp-buffer
+            (let ((my-codex-session-project-root root))
+              (insert "src/kernel/\n  evolution_strategy.tcc:211")
+              (cl-letf (((symbol-function 'my-codex-project-root)
+                         (lambda () other-root)))
+                (my-codex-session-links-mode 1)
+                (goto-char (point-min))
+                (should
+                 (eq (get-text-property
+                      (point)
+                      'my-codex-session-link-type)
+                     'file))
+                (should
+                 (equal
+                  (get-text-property
+                   (point)
+                   'my-codex-session-link-target)
+                  '(:file "src/kernel/evolution_strategy.tcc"
+                    :line 211
+                    :column nil
+                    :end-line nil)))))))
+      (delete-directory root t)
+      (delete-directory other-root t))))
+
+(ert-deftest my-codex-session-links-linkifies-unvalidated-file-reference ()
+  (with-temp-buffer
+    (insert "src/kernel/evolution_strategy.tcc:211")
+    (my-codex-session-links-mode 1)
+    (goto-char (point-min))
+    (should
+     (eq (get-text-property (point) 'my-codex-session-link-type)
+         'file))
+    (should
+     (equal
+      (get-text-property (point) 'my-codex-session-link-target)
+      '(:file "src/kernel/evolution_strategy.tcc"
+        :line 211
+        :column nil
+        :end-line nil)))))
+
 
 (provide 'my-codex-links-test)
 

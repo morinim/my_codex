@@ -117,10 +117,17 @@ TYPE is one of `url' or `file'.  TARGET is link-specific data."
       (_
        (user-error "No agent session link at point")))))
 
+(defun my-codex--session-link-project-root ()
+  "Return the project root used for session file links."
+  (file-name-as-directory
+   (file-truename
+    (or my-codex-session-project-root
+        (my-codex-project-root)))))
+
 (defun my-codex-open-file-reference (target)
   "Open file reference TARGET.
 TARGET is a plist containing :file, :line, :column, and :end-line."
-  (let* ((root (my-codex-project-root))
+  (let* ((root (my-codex--session-link-project-root))
          (file (plist-get target :file))
          (line (plist-get target :line))
          (column (plist-get target :column))
@@ -212,7 +219,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
 
 (defun my-codex--valid-file-reference-target-p (target)
   "Return non-nil if TARGET refers to a readable in-project file."
-  (let* ((root (file-truename (my-codex-project-root)))
+  (let* ((root (my-codex--session-link-project-root))
          (target (my-codex--normalise-file-reference-target target root))
          (file (plist-get target :file)))
     (and file
@@ -285,16 +292,15 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
                   (setq target
                         (my-codex--normalise-file-reference-target
                          target
-                         (file-truename (my-codex-project-root))))
-                  (when-let ((resolved-target
-                              (save-match-data
-                                (my-codex--resolve-file-reference-target
-                                 target match-beg))))
-                    (my-codex--add-session-link
-                     match-beg
-                     match-end
-                     'file
-                     resolved-target)))))))))))
+                         (my-codex--session-link-project-root)))
+                  (my-codex--add-session-link
+                   match-beg
+                   match-end
+                   'file
+                   (or (save-match-data
+                         (my-codex--resolve-file-reference-target
+                          target match-beg))
+                       target)))))))))))
 
 ;;;###autoload
 (define-minor-mode my-codex-session-links-mode

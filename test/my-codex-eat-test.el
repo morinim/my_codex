@@ -7,6 +7,7 @@
 (require 'ert)
 (require 'my-codex)
 (require 'my-codex-eat)
+(require 'my-codex-links)
 
 (defvar explicit-shell-file-name)
 (defvar eat-term-scrollback-size)
@@ -181,9 +182,274 @@
           (progn
             (my-codex--enable-eat-buffer-integration)
             (should (bound-and-true-p my-codex-eat-override-mode))
+            (should (eq (key-binding (kbd "RET"))
+                        #'my-codex-eat-open-link-or-fallback-at-point))
+            (should (eq (key-binding (kbd "<mouse-1>"))
+                        #'my-codex-eat-open-link-or-fallback-at-event))
             (should (eq (key-binding (kbd "<f8>"))
                         #'my-codex-transient-preserve-selection)))
         (my-codex--disable-eat-buffer-integration)))))
+
+(ert-deftest my-codex-eat-ret-opens-link-at-point ()
+  (let (opened-url)
+    (with-temp-buffer
+      (insert "https://example.invalid")
+      (let ((major-mode 'eat-mode)
+            (my-codex-session-id "test-session"))
+        (cl-letf (((symbol-function 'browse-url)
+                   (lambda (url &rest _args)
+                     (setq opened-url url))))
+          (my-codex-session-links-mode 1)
+          (my-codex--enable-eat-buffer-integration)
+          (goto-char (point-min))
+          (my-codex-eat-open-link-or-fallback-at-point)
+          (should (equal opened-url "https://example.invalid")))))))
+
+(ert-deftest my-codex-eat-update-linkifies-output-with-inhibited-hooks ()
+  (with-temp-buffer
+    (let ((my-codex-session-id "test-session"))
+      (my-codex-session-links-mode 1)
+      (let ((inhibit-modification-hooks t))
+        (insert "https://example.invalid"))
+      (goto-char (point-min))
+      (should-not (get-text-property (point) 'my-codex-session-link-type))
+      (my-codex--eat-linkify-after-update)
+      (should
+       (eq (get-text-property (point) 'my-codex-session-link-type)
+           'url)))))
+
+(ert-deftest my-codex-eat-update-linkifies-before-session-metadata ()
+  (with-temp-buffer
+    (my-codex-session-links-mode 1)
+    (let ((inhibit-modification-hooks t))
+      (insert "https://example.invalid"))
+    (goto-char (point-min))
+    (should-not (get-text-property (point) 'my-codex-session-link-type))
+    (my-codex--eat-linkify-after-update)
+    (should
+     (eq (get-text-property (point) 'my-codex-session-link-type)
+         'url))))
+
+(ert-deftest my-codex-eat-update-linkifies-in-place-redraw ()
+  (with-temp-buffer
+    (let ((my-codex-session-id "test-session"))
+      (insert "xxxxxxxxxxxxxxxxxxxxxxx")
+      (my-codex-session-links-mode 1)
+      (let ((inhibit-modification-hooks t))
+        (delete-region (point-min) (point-max))
+        (insert "https://example.invalid"))
+      (goto-char (point-min))
+      (should-not (get-text-property (point) 'my-codex-session-link-type))
+      (my-codex--eat-linkify-after-update)
+      (should
+       (eq (get-text-property (point) 'my-codex-session-link-type)
+           'url)))))
+
+(ert-deftest my-codex-eat-update-applies-visible-link-overlay ()
+  (with-temp-buffer
+    (let ((my-codex-session-id "test-session"))
+      (my-codex-session-links-mode 1)
+      (let ((inhibit-modification-hooks t))
+        (insert (propertize "https://example.invalid" 'face 'shadow)))
+      (my-codex--eat-linkify-after-update)
+      (goto-char (point-min))
+      (let ((overlay (cl-find-if
+                      (lambda (overlay)
+                        (overlay-get overlay 'my-codex-eat-link))
+                      (overlays-at (point)))))
+        (should overlay)
+        (should (eq (overlay-get overlay 'face) 'link))
+        (should (eq (overlay-get overlay 'keymap)
+                    my-codex-session-link-map)))
+      (let ((inhibit-modification-hooks t))
+        (delete-region (point-min) (point-max))
+        (insert (propertize "xxxxxxxxxxxxxxxxxxxxxxx" 'face 'shadow)))
+      (my-codex--eat-linkify-after-update)
+      (goto-char (point-min))
+      (should (eq (get-text-property (point) 'face) 'shadow))
+      (should-not (cl-find-if
+                   (lambda (overlay)
+                     (overlay-get overlay 'my-codex-eat-link))
+                   (overlays-at (point))))
+      (should-not (get-text-property (point) 'my-codex-session-link-type)))))
+
+(ert-deftest my-codex-eat-update-clears-overlays-when-links-disabled ()
+  (with-temp-buffer
+    (let ((my-codex-session-id "test-session"))
+      (insert "https://example.invalid")
+      (my-codex-session-links-mode 1)
+      (my-codex--enable-eat-session-links)
+      (my-codex--eat-linkify-after-update)
+      (goto-char (point-min))
+      (should
+       (cl-find-if
+        (lambda (overlay)
+          (overlay-get overlay 'my-codex-eat-link))
+        (overlays-at (point))))
+      (my-codex-session-links-mode -1)
+      (should-not
+       (cl-find-if
+        (lambda (overlay)
+          (overlay-get overlay 'my-codex-eat-link))
+        (overlays-at (point)))))))
+
+(ert-deftest my-codex-eat-integration-deferred-load-respects-disabled-mode ()
+  (let ((my-codex-eat-integration-mode nil)
+        installed)
+    (cl-letf (((symbol-function 'my-codex--enable-eat-output-linkification)
+               (lambda () (setq installed t))))
+      (my-codex--enable-eat-output-linkification-when-active)
+      (should-not installed))))
+
+(ert-deftest my-codex-eat-integration-enables-session-link-updates ()
+  (cl-letf (((symbol-function 'eat--process-output-queue)
+             (lambda (_buffer))))
+    (unwind-protect
+        (with-temp-buffer
+          (let ((major-mode 'eat-mode)
+                (my-codex-session-id "test-session"))
+            (my-codex-session-links-mode 1)
+            (my-codex--enable-eat-buffer-integration)
+            (should
+             (advice-member-p #'my-codex--eat-process-output-queue-advice
+                              'eat--process-output-queue))))
+      (advice-remove 'eat--process-output-queue
+                     #'my-codex--eat-process-output-queue-advice))))
+
+(ert-deftest my-codex-eat-session-links-install-output-advice ()
+  (cl-letf (((symbol-function 'eat--process-output-queue)
+             (lambda (_buffer))))
+    (unwind-protect
+        (with-temp-buffer
+          (my-codex--enable-eat-session-links)
+          (should
+           (advice-member-p #'my-codex--eat-process-output-queue-advice
+                            'eat--process-output-queue)))
+      (advice-remove 'eat--process-output-queue
+                     #'my-codex--eat-process-output-queue-advice))))
+
+(ert-deftest my-codex-eat-process-output-advice-linkifies-buffer ()
+  (let ((buffer (generate-new-buffer " *my-codex-eat-advice*")))
+    (unwind-protect
+        (with-current-buffer buffer
+          (let ((my-codex-session-id "test-session"))
+            (my-codex-session-links-mode 1)
+            (let ((inhibit-modification-hooks t))
+              (insert "https://example.invalid"))
+            (goto-char (point-min))
+            (should-not
+             (get-text-property (point) 'my-codex-session-link-type))
+            (my-codex--eat-process-output-queue-advice buffer)
+            (should
+             (eq (get-text-property (point) 'my-codex-session-link-type)
+                 'url))))
+      (kill-buffer buffer))))
+
+(ert-deftest my-codex-eat-linkifies-existing-buffer-content ()
+  (with-temp-buffer
+    (let ((my-codex-session-id "test-session"))
+      (insert "src/kernel/evolution_strategy.tcc:211")
+      (my-codex-session-links-mode 1)
+      (my-codex--eat-linkify-after-update)
+      (goto-char (point-min))
+      (should
+       (eq (get-text-property (point) 'my-codex-session-link-type)
+           'file))
+      (should
+       (cl-find-if
+        (lambda (overlay)
+          (overlay-get overlay 'my-codex-eat-link))
+        (overlays-at (point)))))))
+
+(ert-deftest my-codex-eat-ret-falls-back-away-from-link ()
+  (let (fallback-called)
+    (with-temp-buffer
+      (let ((map (make-sparse-keymap))
+            (major-mode 'eat-mode)
+            (my-codex-session-id "test-session"))
+        (define-key map (kbd "RET")
+                    (lambda ()
+                      (interactive)
+                      (setq fallback-called t)))
+        (use-local-map map)
+        (my-codex--enable-eat-buffer-integration)
+        (my-codex-eat-open-link-or-fallback-at-point)
+        (should fallback-called)))))
+
+(ert-deftest my-codex-eat-mouse-fallback-preserves-eat-arguments ()
+  (let ((clicked-buffer (generate-new-buffer " *my-codex-clicked-eat*"))
+        (selected-buffer (generate-new-buffer " *my-codex-selected-eat*"))
+        fallback-args
+        fallback-buffer)
+    (cl-letf (((symbol-function 'eat-self-input)
+               (lambda (n &optional e)
+                 (setq fallback-args (list n e))
+                 (setq fallback-buffer (current-buffer)))))
+      (unwind-protect
+          (save-window-excursion
+            (let ((clicked-window (split-window-right)))
+              (set-window-buffer (selected-window) selected-buffer)
+              (set-window-buffer clicked-window clicked-buffer)
+              (with-current-buffer selected-buffer
+                (let ((map (make-sparse-keymap)))
+                  (define-key map [mouse-1]
+                              (lambda (&rest _args)
+                                (setq fallback-buffer (current-buffer))))
+                  (use-local-map map)))
+              (with-current-buffer clicked-buffer
+                (insert "abc")
+                (add-text-properties
+                 1 2
+                 `(my-codex-session-link-type url
+                   keymap ,my-codex-session-link-map))
+                (goto-char 1)
+                (let ((map (make-sparse-keymap))
+                      (major-mode 'eat-mode)
+                      (my-codex-session-id "test-session"))
+                  (define-key map [mouse-1] #'eat-self-input)
+                  (use-local-map map)
+                  (my-codex--enable-eat-buffer-integration)))
+              (let ((event (list 'mouse-1
+                                 (list clicked-window 3 '(0 . 0)
+                                       0 nil 3 nil nil))))
+                (with-current-buffer selected-buffer
+                  (my-codex-eat-open-link-or-fallback-at-event event))
+                (should (equal fallback-args (list 1 event)))
+                (should (eq fallback-buffer clicked-buffer)))))
+        (kill-buffer clicked-buffer)
+        (kill-buffer selected-buffer)))))
+
+(ert-deftest my-codex-eat-mouse-fallback-passes-event-to-generic-command ()
+  (let ((clicked-buffer (generate-new-buffer " *my-codex-clicked-generic*"))
+        (selected-buffer (generate-new-buffer " *my-codex-selected-generic*"))
+        fallback-event
+        fallback-buffer)
+    (unwind-protect
+        (save-window-excursion
+          (let ((clicked-window (split-window-right)))
+            (set-window-buffer (selected-window) selected-buffer)
+            (set-window-buffer clicked-window clicked-buffer)
+            (with-current-buffer clicked-buffer
+              (insert "abc")
+              (let ((map (make-sparse-keymap))
+                    (major-mode 'eat-mode)
+                    (my-codex-session-id "test-session"))
+                (define-key map [mouse-1]
+                            (lambda (event)
+                              (interactive "e")
+                              (setq fallback-event event)
+                              (setq fallback-buffer (current-buffer))))
+                (use-local-map map)
+                (my-codex--enable-eat-buffer-integration)))
+            (let ((event (list 'mouse-1
+                               (list clicked-window 2 '(0 . 0)
+                                     0 nil 2 nil nil))))
+              (with-current-buffer selected-buffer
+                (my-codex-eat-open-link-or-fallback-at-event event))
+              (should (eq fallback-event event))
+              (should (eq fallback-buffer clicked-buffer)))))
+      (kill-buffer clicked-buffer)
+      (kill-buffer selected-buffer))))
 
 (provide 'my-codex-eat-test)
 
