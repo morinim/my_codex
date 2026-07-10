@@ -106,6 +106,15 @@ state, Git branch/state, prompt count, buffer lines, age, and last activity.
 - `F8 x s` / `F8 e` : explain the symbol at point or selected error.
 - `F8 y` : copy a file-and-line reference for the selected region or current line.
 
+### Document Workflow (Markdown/Org contexts)
+Only active in document buffers (e.g. Markdown, Org, txt):
+- `F8 d b` : use the current document or region as the primary task brief.
+- `F8 d i` : ask the active agent to implement the selected plan.
+- `F8 d r` : ask the active agent to review the plan.
+- `F8 d q` : extract open questions from the document.
+- `F8 d s` : ask the active agent to summarise the document.
+- `F8 Right` : inspect the current document instead of code files.
+
 ### Git & GitHub Workflow
 - `F8 g r a` / `F8 g r s` / `F8 g r f` : review all changes, staged changes, or the current file's Git diff.
 - `F8 g v` / `F8 g V` : view the current or staged Git diff locally.
@@ -202,6 +211,15 @@ Attribution:
 ## Licence
 
 [Mozilla Public License v2.0][mpl2], also available in [LICENSE][license].
+
+## References
+
+> Now code is free!
+>
+> No it isn't: the consequences of your actions will eventually hit you and if you think that any amount of code is good now... you just delayed the punishment.
+
+- [Critical Thinking Habits for Coding with AI](https://www.oreilly.com/library/view/critical-thinking-habits/0642572243326/)
+
 
 [agy]: https://antigravity.google/product/antigravity-cli
 [aihero-grillme]: https://www.aihero.dev/skills-grill-me
