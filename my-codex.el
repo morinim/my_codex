@@ -10,7 +10,7 @@
 
 ;; This file is not part of GNU Emacs.
 
-;; This Source Code Form is subject to the terms of the Mozilla Public
+;; This Source Code Fo rm is subject to the terms of the Mozilla Public
 ;; License, v. 2.0. If a copy of the MPL was not distributed with this
 ;; file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
@@ -442,8 +442,9 @@ computed from the subject buffer unless the predicate is itself left-aware."
        ('my-codex-tools-transient '(:group "Tools" :path "T"))
        ('my-codex-examine-transient '(:group "Examine code" :path "x"))
        ('my-codex-document-transient '(:group "Document" :path "d"))
-       ('my-codex-git-review-transient '(:group "Review diff" :path "r"))
+       ('my-codex-git-review-transient '(:group "Review diff" :path "g r"))
        ('my-codex-git-transient '(:group "Inspect diff" :path "g"))
+       ('my-codex-github-transient '(:group "GitHub" :path "t"))
        ('my-codex-diagnostics-transient '(:group "Diagnostics")))))
 
   (defconst my-codex-command-catalogue
@@ -452,7 +453,7 @@ computed from the subject buffer unless the predicate is itself left-aware."
      '((:command my-codex-read-only :key "o" :label "Read-only" :group "Session" :menu "Show/start read-only" :help "Show the configured agent in read-only mode")
       (:command my-codex-workspace :key "w" :label "Workspace" :group "Session" :menu "Show/start workspace-write" :help "Show the configured agent with workspace write access")
       (:command my-codex-session-transient :key "S" :label "Sessions" :group "Session" :menu "Session commands" :help "Open default and future agent session commands")
-      (:command my-codex-git-review-transient :key "r" :label "Review diff..." :group "Git" :menu "Review Git diff" :help "Open Git diff review commands")
+      (:command my-codex-git-review-transient :key "r" :label "Review diff..." :group "Git" :prefix my-codex-git-transient :menu "Review Git diff" :help "Open Git diff review commands")
       (:command my-codex-hide-window :key "q" :label "Hide agent" :group "Session" :menu "Hide agent window" :help "Hide the visible agent window")
       (:command my-codex-toggle-focus :key "<tab>" :label "Toggle focus" :group "Session" :menu "Toggle focus" :menu-key "TAB" :help "Toggle focus between the agent and the previous window")
       (:command my-codex-toggle-focus :key "TAB")
@@ -461,7 +462,7 @@ computed from the subject buffer unless the predicate is itself left-aware."
       (:command my-codex-send-region :key "s" :label "Region" :group "Send" :menu "Send selected region" :available my-codex--region-available-p :transient nil :help "Send the selected region to the active agent")
       (:command my-codex-send-region-or-current-file :key "<right>" :label "Region or file" :group "Send" :menu "Send region or inspect current file" :menu-key "Right" :contexts (code unknown) :help "Send the selected region, or ask the active agent to inspect the current file")
       (:command my-codex-send-region-or-current-file :key "<right>" :label "Region or doc" :group "Send" :menu "Send region or inspect current document" :menu-key "Right" :contexts (document) :help "Send the selected region, or ask the active agent to inspect the current document")
-      (:command my-codex-plan-refactor-region :key "R" :label "Refactor plan" :group "Send" :menu "Plan refactor for selected region" :contexts (code unknown) :available my-codex--region-available-p :help "Ask the active agent for a low-risk refactoring plan")
+      (:command my-codex-plan-refactor-region :key "r" :label "Refactor plan" :group "Send" :menu "Plan refactor for selected region" :contexts (code unknown) :available my-codex--region-available-p :help "Ask the active agent for a low-risk refactoring plan")
       (:command my-codex-insert-selection-into-code :key "<left>" :label "Insert selection" :group "Send" :menu "Insert selection" :menu-key "Left" :available my-codex--agent-selection-available-p :help "Insert the captured agent selection into the edit buffer")
       (:command my-codex-examine-transient :key "x" :label "Examine..." :group "Send" :menu "Examine subject" :contexts (code unknown) :help "Open code explanation, review, and coverage commands")
       (:command my-codex-document-transient :key "d" :label "Document..." :group "Send" :menu "Document commands" :contexts (document) :help "Open document task, plan review, and summary commands")
@@ -500,8 +501,9 @@ computed from the subject buffer unless the predicate is itself left-aware."
       (:command my-codex-show-git-staged-diff :key "V" :label "View staged diff" :prefix my-codex-git-transient :menu "View staged Git diff" :help "Show the staged Git diff in a diff-mode buffer")
       (:command my-codex-ediff-current-file-against-head :key "d" :label "Ediff current file" :prefix my-codex-git-transient :menu "Ediff current file against HEAD" :available my-codex--current-or-left-file-available-p :help "Review the current file's uncommitted changes against HEAD")
       (:command my-codex-ediff-changed-file-against-head :key "D" :label "Ediff changed file" :prefix my-codex-git-transient :menu "Ediff changed file against HEAD" :help "Choose a tracked changed file and review it against HEAD")
-      (:command my-codex-list-open-issues :key "t" :label "List issues" :group "GitHub" :menu "List issues" :help "List open GitHub issues for the current repository in a buffer")
-      (:command my-codex-summarize-session-to-github-issue :key "I" :label "Draft issue" :group "GitHub" :menu "Draft issue" :help "Ask the active agent to draft a GitHub issue, then edit it before creating it with gh")
+      (:command my-codex-github-transient :key "t" :label "GitHub..." :group "GitHub" :menu "GitHub commands" :help "Open GitHub issue and actions menu")
+      (:command my-codex-list-open-issues :key "l" :label "List issues" :prefix my-codex-github-transient :menu "List issues" :help "List open GitHub issues for the current repository in a buffer")
+      (:command my-codex-summarize-session-to-github-issue :key "d" :label "Draft issue" :prefix my-codex-github-transient :menu "Draft issue" :help "Ask the active agent to draft a GitHub issue, then edit it before creating it with gh")
       (:command my-codex-explain-diagnostic-at-point :key "p" :label "At point" :prefix my-codex-diagnostics-transient)
       (:command my-codex-explain-buffer-diagnostics :key "a" :label "All" :prefix my-codex-diagnostics-transient)))
     "Commands used to generate the prefix keymap and command menus.")
@@ -643,6 +645,10 @@ When RESOLVE is non-nil, also require availability predicates to be defined."
 ;;;###autoload (autoload 'my-codex-git-transient "my-codex" nil t)
 (my-codex--define-catalogue-transient my-codex-git-transient
   "Show local Git diff commands.")
+
+;;;###autoload (autoload 'my-codex-github-transient "my-codex" nil t)
+(my-codex--define-catalogue-transient my-codex-github-transient
+  "Show GitHub issue and actions menu.")
 
 ;;;###autoload (autoload 'my-codex-transient "my-codex" nil t)
 (my-codex--define-catalogue-transient my-codex-transient

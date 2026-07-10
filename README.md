@@ -68,8 +68,8 @@ Press `F8` to open the agent command menu.
 
 Review current changes:
 
-- `F8 r f` : review the current file's Git diff.
-- `F8 r s` : review staged changes.
+- `F8 g r f` : review the current file's Git diff.
+- `F8 g r s` : review staged changes.
 - `F8 c` : draft or reuse an agent-generated commit message, edit it, then commit.
 
 Ask about code:
@@ -99,7 +99,7 @@ state, Git branch/state, prompt count, buffer lines, age, and last activity.
 
 ### Prompts & Refactoring
 - `F8 a` / `F8 A` : ask a free-form question or open the customizable prompt preset menu.
-- `F8 s` / `F8 R` : send the selected region, or draft a low-risk refactoring plan for it.
+- `F8 s` / `F8 r` : send the selected region, or draft a low-risk refactoring plan for it.
 - `F8 Right` : send the selected region when active, otherwise inspect the current file.
 - `F8 Left` / `F8 TAB` : insert agent text into code, or toggle focus between code and agent.
 - `F8 x f` / `F8 x F` / `F8 x c` : review the current defun, inspect the current file, or analyse test coverage. The agent finds relevant tests; use `C-u F8 x c` to select one explicitly.
@@ -107,12 +107,12 @@ state, Git branch/state, prompt count, buffer lines, age, and last activity.
 - `F8 y` : copy a file-and-line reference for the selected region or current line.
 
 ### Git & GitHub Workflow
-- `F8 r a` / `F8 r s` / `F8 r f` : review all changes, staged changes, or the current file's Git diff.
+- `F8 g r a` / `F8 g r s` / `F8 g r f` : review all changes, staged changes, or the current file's Git diff.
 - `F8 g v` / `F8 g V` : view the current or staged Git diff locally.
 - `F8 g d` / `F8 g D` : ediff the current or a changed file against `HEAD`.
 - `F8 c` : draft or reuse an agent-generated commit message, edit it, then commit.
 - `F8 M` : summarize the session to Markdown notes.
-- `F8 t` / `F8 I` : list open GitHub issues, or draft a GitHub issue from the session.
+- `F8 t l` / `F8 t d` : list open GitHub issues, or draft a GitHub issue from the session.
 
 ### Diagnostics, Build & Instructions
 - `F8 i` : open project instruction files (e.g., `AGENTS.md`, `CODEX.md`, `.codex/instructions.md`).

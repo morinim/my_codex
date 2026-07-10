@@ -283,14 +283,19 @@
 
 (ert-deftest my-codex-command-catalogue-groups-review-and-git-bindings ()
   (should (eq (keymap-lookup my-codex-map "r")
-              'my-codex-git-review-transient))
+              'my-codex-plan-refactor-region))
   (should (eq (keymap-lookup my-codex-map "g")
               'my-codex-git-transient))
-  (dolist (key '("v" "V" "D"))
+  (should (eq (keymap-lookup my-codex-map "t")
+              'my-codex-github-transient))
+  (dolist (key '("v" "V" "D" "l"))
     (should-not (keymap-lookup my-codex-map key)))
   (dolist (entry '((my-codex-resume my-codex-session-transient "r")
-                   (my-codex-send-git-diff my-codex-git-review-transient "a")
-                   (my-codex-show-git-diff my-codex-git-transient "v")))
+                    (my-codex-send-git-diff my-codex-git-review-transient "a")
+                    (my-codex-show-git-diff my-codex-git-transient "v")
+                    (my-codex-git-review-transient my-codex-git-transient "r")
+                    (my-codex-list-open-issues my-codex-github-transient "l")
+                    (my-codex-summarize-session-to-github-issue my-codex-github-transient "d")))
     (pcase-let ((`(,command ,prefix ,key) entry))
       (should
        (cl-find-if
