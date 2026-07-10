@@ -218,6 +218,7 @@ Attribution:
 >
 > No it isn't: the consequences of your actions will eventually hit you and if you think that any amount of code is good now... you just delayed the punishment.
 
+- [The Pragmatic Programmer](https://en.wikipedia.org/wiki/The_Pragmatic_Programmer) - a timeless classic, even more relevant in the age of AI coding.
 - [Critical Thinking Habits for Coding with AI](https://www.oreilly.com/library/view/critical-thinking-habits/0642572243326/)
 
 
