@@ -268,6 +268,21 @@
           (should (equal (oref preset-suffix description) "Refactor")))
       (transient-quit-all))))
 
+(ert-deftest my-codex-prompt-preset-transient-includes-secondary-agent ()
+  (let ((my-codex-prompt-presets nil))
+    (transient-setup 'my-codex-ask-preset-transient)
+    (unwind-protect
+        (let ((secondary-suffix
+               (seq-find
+                (lambda (suffix)
+                  (and (slot-exists-p suffix 'command)
+                       (eq (oref suffix command)
+                           'my-codex-ask-secondary-remark)))
+                transient--suffixes)))
+          (should secondary-suffix)
+          (should (equal (oref secondary-suffix key) "s")))
+      (transient-quit-all))))
+
 (ert-deftest my-codex-display-buffer-action-alist-returns-action-alist ()
   (let ((my-codex-display-buffer-action
          '((display-buffer-in-side-window)

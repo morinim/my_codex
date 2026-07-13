@@ -98,7 +98,8 @@ state, Git branch/state, prompt count, buffer lines, age, and last activity.
 - `F8 S r` / `F8 q` : resume a previous session, or hide the active agent window.
 
 ### Prompts & Refactoring
-- `F8 a` / `F8 A` : ask a free-form question or open the customizable prompt preset menu.
+- `F8 a` / `F8 A` : ask a free-form question or open the Ask menu.
+- `F8 A s` : ask a secondary agent; the Ask menu also contains customizable prompt presets.
 - `F8 s` / `F8 r` : send the selected region, or draft a low-risk refactoring plan for it.
 - `F8 Right` : send the selected region when active, otherwise inspect the current file.
 - `F8 Left` / `F8 TAB` : insert agent text into code, or toggle focus between code and agent.

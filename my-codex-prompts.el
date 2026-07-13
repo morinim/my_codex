@@ -1459,9 +1459,12 @@ When a region is active, include exact file and line context for it."
 
 ;;;###autoload
 (transient-define-prefix my-codex-ask-preset-transient ()
-  "Ask the agent using a prompt preset."
+  "Show additional ways to ask agents."
   [:description my-codex--transient-target-description]
+  ["Ask"
+   ("s" "Secondary agent" my-codex-ask-secondary-remark)]
   [:class transient-column
+   :description "Presets"
    :setup-children my-codex--prompt-preset-transient-suffixes
    ""]
   (interactive)

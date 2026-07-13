@@ -263,11 +263,20 @@
                         :key (lambda (item) (plist-get item :command)))))
     (should (equal (plist-get entry :contexts) '(code unknown)))))
 
-(ert-deftest my-codex-command-catalogue-preset-menu-is-code-context ()
+(ert-deftest my-codex-command-catalogue-ask-menu-is-unrestricted ()
   (let ((entry (cl-find 'my-codex-ask-preset-transient
                         my-codex-command-catalogue
                         :key (lambda (item) (plist-get item :command)))))
-    (should (equal (plist-get entry :contexts) '(code unknown)))))
+    (should-not (plist-get entry :contexts))))
+
+(ert-deftest my-codex-command-catalogue-nests-secondary-under-ask-menu ()
+  (let ((entry (cl-find 'my-codex-ask-secondary-remark
+                        my-codex-command-catalogue
+                        :key (lambda (item) (plist-get item :command)))))
+    (should (eq (plist-get entry :prefix)
+                'my-codex-ask-preset-transient))
+    (should (equal (plist-get entry :key) "s"))
+    (should-not (keymap-lookup my-codex-map "m"))))
 
 (ert-deftest my-codex-command-catalogue-explain-error-hides-document-context ()
   (let ((entry (cl-find 'my-codex-explain-region-as-error
