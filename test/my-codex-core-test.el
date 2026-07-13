@@ -941,7 +941,7 @@
                               &optional session-name agent access-mode)
                        (setq started
                              (list
-                              (my-codex--backend-buffer-name backend)
+                              (my-codex-backend-buffer-name backend)
                               project-root command session-name
                               agent access-mode))))
                     ((symbol-function 'display-buffer)
@@ -982,7 +982,7 @@
                               &optional session-name agent access-mode)
                        (setq started
                              (list
-                              (my-codex--backend-buffer-name backend)
+                              (my-codex-backend-buffer-name backend)
                               project-root command session-name
                               agent access-mode))))
                     ((symbol-function 'display-buffer)

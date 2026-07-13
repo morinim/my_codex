@@ -127,7 +127,7 @@
   (let* ((agent (or agent my-codex-agent))
          (access-mode
           (or access-mode (my-codex--session-access-mode command agent)))
-         (buffer-name (my-codex--backend-buffer-name backend))
+         (buffer-name (my-codex-backend-buffer-name backend))
          (buffer (my-codex--start-eat-buffer buffer-name project-root)))
     (with-current-buffer buffer
       (my-codex--ensure-eat-scrollback)
@@ -163,7 +163,7 @@
   "Send PROMPT through BACKEND's Eat buffer."
   (let ((buffer (or (my-codex--backend-buffer backend)
                     (user-error "No %s buffer found"
-                                (my-codex--backend-buffer-name backend)))))
+                                (my-codex-backend-buffer-name backend)))))
     (with-current-buffer buffer
       (unless (get-buffer-process buffer)
         (user-error "No running Eat process in %s" (buffer-name buffer)))

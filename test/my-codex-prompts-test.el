@@ -751,7 +751,7 @@
                     ((symbol-function 'my-codex-backend-send)
                      (lambda (backend prompt)
                        (setq sent
-                             (list (my-codex--backend-buffer-name backend)
+                             (list (my-codex-backend-buffer-name backend)
                                    prompt)))))
             (my-codex-send-prompt "hello" target)
             (should
@@ -894,7 +894,7 @@
                     ((symbol-function 'my-codex-backend-send)
                      (lambda (backend prompt)
                        (setq sent
-                             (list (my-codex--backend-buffer-name backend)
+                             (list (my-codex-backend-buffer-name backend)
                                    prompt)))))
             (my-codex-send-prompt "hello")
             (should

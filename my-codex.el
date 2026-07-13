@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.100.1
+;; Version: 0.100.2
 ;; Package-Requires: ((emacs "29.1") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -94,7 +94,7 @@
          (access-mode
           (or access-mode (my-codex--session-access-mode command agent)))
          (default-directory project-root)
-         (buffer-name (my-codex--backend-buffer-name backend))
+         (buffer-name (my-codex-backend-buffer-name backend))
          (buffer (get-buffer-create buffer-name)))
     (with-current-buffer buffer
       (unless (derived-mode-p 'vterm-mode)
@@ -193,10 +193,9 @@
   (interactive (list (my-codex--read-agent)))
   (my-codex--show-default-session agent 'workspace-write))
 
-(defun my-codex--session-action-context (action &optional require-live)
-  "Return (BUFFER AGENT INPUT) for ACTION in the active session.
-When REQUIRE-LIVE is non-nil, require a running session process."
-  (let* ((buffer (my-codex-active-session-buffer require-live))
+(defun my-codex--session-action-context (action)
+  "Return (BUFFER AGENT INPUT) for ACTION in the active live session."
+  (let* ((buffer (my-codex-active-session-buffer t))
          (agent (with-current-buffer buffer my-codex-session-agent))
          (input (and agent (my-codex--session-action agent action))))
     (unless input
@@ -206,12 +205,12 @@ When REQUIRE-LIVE is non-nil, require a running session process."
 
 (defun my-codex--session-action-available-p (action)
   "Return non-nil when ACTION is supported by the active live session."
-  (and (ignore-errors (my-codex--session-action-context action t)) t))
+  (and (ignore-errors (my-codex--session-action-context action)) t))
 
 (defun my-codex--run-session-action (action)
   "Run ACTION in the active session."
   (pcase-let ((`(,buffer ,_agent ,input)
-               (my-codex--session-action-context action t)))
+               (my-codex--session-action-context action)))
     (my-codex-send-prompt input buffer)))
 
 (defun my-codex--compact-session-available-p ()
@@ -418,9 +417,7 @@ Open the generated notes in an editable Markdown buffer when they are ready."
 Most commands execute in the selected buffer, so availability must not be
 computed from the subject buffer unless the predicate is itself left-aware."
     (or (null predicate)
-        (if (eq predicate 'my-codex--agent-selection-available-p)
-            (funcall predicate)
-          (funcall predicate))))
+        (funcall predicate)))
 
   (defun my-codex--catalogue-entry-context-visible-p (entry)
     "Return non-nil when command catalogue ENTRY matches subject context."

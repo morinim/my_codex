@@ -602,13 +602,9 @@ This operation must not change backend or session state.")
 
 (autoload 'vterm-send-string "vterm")
 (autoload 'vterm-send-return "vterm")
-(defun my-codex--backend-buffer-name (backend)
-  "Return BACKEND's buffer name."
-  (my-codex-backend-buffer-name backend))
-
 (defun my-codex--backend-buffer (backend)
   "Return BACKEND's buffer, or nil when it does not exist."
-  (get-buffer (my-codex--backend-buffer-name backend)))
+  (get-buffer (my-codex-backend-buffer-name backend)))
 
 (defun my-codex--make-backend (buffer-name &optional backend)
   "Return BACKEND for BUFFER-NAME.
@@ -695,7 +691,7 @@ Existing session buffers keep their recorded terminal backend."
   "Send PROMPT through BACKEND's vterm buffer."
   (let ((buffer (or (my-codex--backend-buffer backend)
                     (user-error "No %s buffer found"
-                                (my-codex--backend-buffer-name backend)))))
+                                (my-codex-backend-buffer-name backend)))))
     (with-current-buffer buffer
       (goto-char (point-max))
       (vterm-send-string prompt t)
