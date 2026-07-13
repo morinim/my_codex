@@ -326,6 +326,7 @@ When STAGED is non-nil, return the staged diff buffer name."
 When STAGED is non-nil, show the staged diff."
   (let* ((root (my-codex-project-root))
          (default-directory root))
+    (my-codex--warn-about-unsaved-project-buffers)
     (my-codex--ensure-git-repository)
     (setq root (my-codex--git-toplevel))
     (let* ((default-directory root)
@@ -341,6 +342,11 @@ When STAGED is non-nil, show the staged diff."
           (erase-buffer)
           (unless (eq 0 (apply #'process-file "git" nil t nil args))
             (user-error "Unable to inspect Git diff"))
+          (when (= (buffer-size) 0)
+            (user-error
+             (if staged
+                 "No staged Git changes"
+               "No unstaged tracked changes; unsaved and untracked files are not included")))
           (goto-char (min previous-point (point-max)))
           (diff-mode)
           (setq buffer-read-only t)))

@@ -396,7 +396,8 @@
           (kill-buffer buffer))))))
 
 (ert-deftest my-codex-show-git-diff-populates-diff-mode-buffer ()
-  (let ((root (file-name-as-directory (make-temp-file "my-codex-diff" t))))
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-diff" t)))
+        warned)
     (let ((default-directory root))
       (my-codex-test--init-git-repository)
       (my-codex-test--write-file "tracked.txt" "old\n")
@@ -406,9 +407,12 @@
         (unwind-protect
             (cl-letf (((symbol-function 'my-codex-project-root)
                        (lambda () root))
+                      ((symbol-function 'my-codex--warn-about-unsaved-project-buffers)
+                       (lambda () (setq warned t)))
                       ((symbol-function 'display-buffer)
                        (lambda (buffer &rest _args) buffer)))
               (my-codex-show-git-diff)
+              (should warned)
               (with-current-buffer buffer-name
                 (should (derived-mode-p 'diff-mode))
                 (should buffer-read-only)
@@ -417,6 +421,18 @@
                 (should (string-match-p "^\\+new" (buffer-string)))))
           (when-let ((buffer (get-buffer buffer-name)))
             (kill-buffer buffer)))))))
+
+(ert-deftest my-codex-show-git-diff-reports-empty-worktree-diff ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-diff" t))))
+    (let ((default-directory root))
+      (my-codex-test--init-git-repository)
+      (cl-letf (((symbol-function 'my-codex-project-root) (lambda () root))
+                ((symbol-function 'display-buffer)
+                 (lambda (&rest _) (ert-fail "Displayed an empty diff"))))
+        (let ((error (should-error (my-codex-show-git-diff)
+                                   :type 'user-error)))
+          (should (string-match-p "No unstaged tracked changes"
+                                  (error-message-string error))))))))
 
 (ert-deftest my-codex-show-git-staged-diff-populates-diff-mode-buffer ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-diff" t))))
@@ -438,6 +454,18 @@
                 (should (string-match-p "^\\+staged" (buffer-string)))))
           (when-let ((buffer (get-buffer buffer-name)))
             (kill-buffer buffer)))))))
+
+(ert-deftest my-codex-show-git-staged-diff-reports-empty-staged-diff ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-diff" t))))
+    (let ((default-directory root))
+      (my-codex-test--init-git-repository)
+      (cl-letf (((symbol-function 'my-codex-project-root) (lambda () root))
+                ((symbol-function 'display-buffer)
+                 (lambda (&rest _) (ert-fail "Displayed an empty diff"))))
+        (let ((error (should-error (my-codex-show-git-staged-diff)
+                                   :type 'user-error)))
+          (should (string-match-p "No staged Git changes"
+                                  (error-message-string error))))))))
 
 (ert-deftest my-codex-project-overview-sends-orientation-instructions ()
   (let (prompt)
