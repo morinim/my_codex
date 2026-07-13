@@ -334,14 +334,13 @@ AGENT identifies the agent profile used for buffer names and metadata."
         (my-codex--resize-edit-window-for-right-layout edit-window term-window)
         (my-codex--enable-edit-fill-column-indicator edit-window term-window)
         (select-window term-window)
-        (when (and existing-buf
-                   (my-codex-backend-live-p backend))
-          (set-window-buffer term-window existing-buf)
-          (when (window-live-p edit-window)
-            (set-window-parameter
-             edit-window 'my-codex-term-buffer existing-buf)))
-        (unless (and existing-buf
-                     (my-codex-backend-live-p backend))
+        (if (and existing-buf
+                 (my-codex-backend-live-p backend))
+            (progn
+              (set-window-buffer term-window existing-buf)
+              (when (window-live-p edit-window)
+                (set-window-parameter
+                 edit-window 'my-codex-term-buffer existing-buf)))
           (let ((started-buffer
                  (my-codex-backend-start
                   backend project-root codex-command
