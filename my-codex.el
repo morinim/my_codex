@@ -33,11 +33,8 @@
 (require 'subr-x)
 (require 'transient)
 
-(autoload 'vterm-mode "vterm" nil t)
 (autoload 'vterm-send-string "vterm")
 (autoload 'vterm-send-return "vterm")
-(autoload 'vterm-yank "vterm" nil t)
-(autoload 'vterm-copy-mode "vterm" nil t)
 (autoload 'my-codex-session-links-mode "my-codex-links" nil t)
 (autoload 'my-codex-vterm-integration-mode "my-codex-vterm" nil t)
 (autoload 'my-codex-eat-integration-mode "my-codex-eat" nil t)
@@ -84,8 +81,6 @@
 (declare-function markdown-mode "markdown-mode")
 (declare-function projectile-toggle-between-implementation-and-test "projectile")
 (declare-function my-codex--enable-vterm-buffer-integration "my-codex-vterm")
-(defvar vterm-copy-mode)
-
 (cl-defmethod my-codex-backend-start
   ((backend my-codex-vterm-backend) project-root command
    &optional session-name agent access-mode)
