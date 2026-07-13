@@ -336,7 +336,10 @@ AGENT identifies the agent profile used for buffer names and metadata."
         (select-window term-window)
         (when (and existing-buf
                    (my-codex-backend-live-p backend))
-          (set-window-buffer term-window existing-buf))
+          (set-window-buffer term-window existing-buf)
+          (when (window-live-p edit-window)
+            (set-window-parameter
+             edit-window 'my-codex-term-buffer existing-buf)))
         (unless (and existing-buf
                      (my-codex-backend-live-p backend))
           (let ((started-buffer

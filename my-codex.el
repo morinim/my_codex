@@ -66,6 +66,7 @@
            (my-codex-summarise-document . "my-codex-prompts")
            (my-codex-open-project-instructions . "my-codex-prompts")
            (my-codex-ask . "my-codex-prompts")
+           (my-codex-ask-secondary-remark . "my-codex-prompts")
            (my-codex-ask-preset-transient . "my-codex-prompts")
            (my-codex-send-project-overview . "my-codex-git")
            (my-codex-send-git-diff . "my-codex-git")
@@ -102,6 +103,11 @@
       (setq-local show-trailing-whitespace nil)
       (when my-codex-enable-session-links
         (my-codex-session-links-mode 1))
+      (if session-name
+          (my-codex--mark-named-session
+           buffer session-name project-root access-mode agent 'vterm)
+        (my-codex--mark-default-session
+         buffer project-root access-mode agent 'vterm))
       (let ((proc (get-buffer-process buffer)))
         (unless (process-live-p proc)
           (user-error "Failed to start vterm process in %s" buffer-name))
@@ -110,11 +116,6 @@
         (goto-char (point-max))
         (vterm-send-string (my-codex--shell-command-and-exit command))
         (vterm-send-return)))
-    (if session-name
-        (my-codex--mark-named-session
-         buffer session-name project-root access-mode agent 'vterm)
-      (my-codex--mark-default-session
-       buffer project-root access-mode agent 'vterm))
     (when (bound-and-true-p my-codex-vterm-integration-mode)
       (with-current-buffer buffer
         (my-codex--enable-vterm-buffer-integration)))
@@ -459,6 +460,7 @@ computed from the subject buffer unless the predicate is itself left-aware."
       (:command my-codex-toggle-focus :key "<tab>" :label "Toggle focus" :group "Session" :menu "Toggle focus" :menu-key "TAB" :help "Toggle focus between the agent and the previous window")
       (:command my-codex-toggle-focus :key "TAB")
       (:command my-codex-ask :key "a" :label "Ask" :group "Send" :menu "Ask agent..." :help "Prompt for a question and send it to the active agent")
+      (:command my-codex-ask-secondary-remark :key "m" :label "Ask secondary" :group "Send" :menu "Ask secondary agent..." :help "Ask another agent the same question in a secondary session")
       (:command my-codex-ask-preset-transient :key "A" :label "Preset menu" :group "Send" :menu "Preset menu" :contexts (code unknown) :help "Open the prompt preset menu")
       (:command my-codex-send-region :key "s" :label "Region" :group "Send" :menu "Send selected region" :available my-codex--region-available-p :transient nil :help "Send the selected region to the active agent")
       (:command my-codex-send-region-or-current-file :key "<right>" :label "Region or file" :group "Send" :menu "Send region or inspect current file" :menu-key "Right" :contexts (code unknown) :help "Send the selected region, or ask the active agent to inspect the current file")

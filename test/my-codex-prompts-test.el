@@ -419,6 +419,282 @@
       (set-window-parameter (selected-window) 'my-codex-term-buffer nil)
       (delete-directory root t))))
 
+(ert-deftest my-codex-read-secondary-agent-excludes-primary ()
+  (let ((my-codex-agent-profiles
+         '((codex :label "Codex")
+           (antigravity :label "Antigravity")
+           (claude :label "Claude")))
+        candidates)
+    (cl-letf (((symbol-function 'completing-read)
+               (lambda (_prompt choices &rest _args)
+                 (setq candidates choices)
+                 "antigravity")))
+      (should (eq (my-codex--read-secondary-agent 'codex) 'antigravity))
+      (should (equal candidates '("antigravity" "claude"))))))
+
+(ert-deftest my-codex-read-secondary-agent-skips-read-for-sole-candidate ()
+  (let ((my-codex-agent-profiles
+         '((codex :label "Codex")
+           (antigravity :label "Antigravity"))))
+    (cl-letf (((symbol-function 'completing-read)
+               (lambda (&rest _args)
+                 (error "Should not read agent"))))
+      (should (eq (my-codex--read-secondary-agent 'codex) 'antigravity)))))
+
+(ert-deftest my-codex-read-secondary-agent-defaults-to-configured-primary ()
+  (let ((my-codex-agent 'codex)
+        (my-codex-agent-profiles
+         '((codex :label "Codex")
+           (antigravity :label "Antigravity")
+           (claude :label "Claude")))
+        (my-codex--project-active-agents (make-hash-table :test #'equal))
+        candidates)
+    (puthash (file-name-as-directory (file-truename default-directory))
+             'antigravity
+             my-codex--project-active-agents)
+    (cl-letf (((symbol-function 'completing-read)
+               (lambda (_prompt choices &rest _args)
+                 (setq candidates choices)
+                 "antigravity")))
+      (should (eq (my-codex--read-secondary-agent) 'antigravity))
+      (should (equal candidates '("antigravity" "claude"))))))
+
+(ert-deftest my-codex-command-with-initial-prompt-merges-agy-prompt ()
+  (let ((command (my-codex--command-with-initial-prompt
+                  'antigravity
+                  "agy --sandbox -i \"System policy.\""
+                  "User question.")))
+    (should (string-match-p "\\`agy --sandbox -i " command))
+    (should (string-match-p "System\\\\ policy\\." command))
+    (should (string-match-p "User\\\\ question\\." command))))
+
+(ert-deftest my-codex-command-with-initial-prompt-keeps-codex-args-for-antigravity ()
+  (let ((command (my-codex--command-with-initial-prompt
+                  'antigravity
+                  "codex --sandbox read-only"
+                  "User question.")))
+    (should (string-match-p "\\`codex --sandbox read-only " command))
+    (should (string-match-p "User\\\\ question\\." command))
+    (should-not (string-match-p "--prompt-interactive" command))))
+
+(ert-deftest my-codex-command-with-initial-prompt-keeps-env-codex-args-for-antigravity ()
+  (let ((command (my-codex--command-with-initial-prompt
+                  'antigravity
+                  "env FOO=1 codex --sandbox read-only"
+                  "User question.")))
+    (should (string-match-p "\\`env .* codex --sandbox read-only " command))
+    (should (string-match-p "User\\\\ question\\." command))
+    (should-not (string-match-p "--prompt-interactive" command))))
+
+(ert-deftest my-codex-command-with-initial-prompt-ignores-env-option-value ()
+  (let ((command (my-codex--command-with-initial-prompt
+                  'antigravity
+                  "env -u codex agy --sandbox"
+                  "User question.")))
+    (should (string-match-p "\\`env -u codex agy --sandbox " command))
+    (should (string-match-p "--prompt-interactive" command))
+    (should (string-match-p "User\\\\ question\\." command))))
+
+(ert-deftest my-codex-command-with-initial-prompt-preserves-shell-syntax-for-agy ()
+  (let ((command (my-codex--command-with-initial-prompt
+                  'antigravity
+                  "cd /repo && agy --sandbox"
+                  "User question.")))
+    (should (string-match-p "\\`cd /repo && agy --sandbox " command))
+    (should (string-match-p "--prompt-interactive" command))
+    (should (string-match-p "User\\\\ question\\." command))
+    (should-not (string-match-p "\\\\&\\\\&" command))))
+
+(ert-deftest my-codex-command-with-initial-prompt-preserves-shell-syntax-for-codex ()
+  (let ((command (my-codex--command-with-initial-prompt
+                  'codex
+                  "cd /repo && codex --sandbox read-only"
+                  "User question.")))
+    (should (string-match-p "\\`cd /repo && codex --sandbox read-only " command))
+    (should (string-match-p "User\\\\ question\\." command))
+    (should-not (string-match-p "\\\\&\\\\&" command))))
+
+(ert-deftest my-codex-command-with-initial-prompt-keeps-shell-codex-args-for-antigravity ()
+  (let ((command (my-codex--command-with-initial-prompt
+                  'antigravity
+                  "cd /repo && codex --sandbox read-only"
+                  "User question.")))
+    (should (string-match-p "\\`cd /repo && codex --sandbox read-only " command))
+    (should (string-match-p "User\\\\ question\\." command))
+    (should-not (string-match-p "--prompt-interactive" command))
+    (should-not (string-match-p "\\\\&\\\\&" command))))
+
+(ert-deftest my-codex-command-with-initial-prompt-ignores-codex-option-value ()
+  (let ((command (my-codex--command-with-initial-prompt
+                  'antigravity
+                  "cd /repo && agy --profile codex"
+                  "User question.")))
+    (should (string-match-p "\\`cd /repo && agy --profile codex " command))
+    (should (string-match-p "--prompt-interactive" command))
+    (should (string-match-p "User\\\\ question\\." command))
+    (should-not (string-match-p "\\\\&\\\\&" command))))
+
+(ert-deftest my-codex-ask-secondary-remark-uses-secondary-prompt-label ()
+  (let* ((root (file-name-as-directory (make-temp-file "my-codex-remark" t)))
+         (my-codex-agent-profiles
+          '((codex
+             :label "Codex"
+             :buffer-prefix "codex"
+             :commands ((read-only . "codex-ro")))
+            (antigravity
+             :label "Antigravity"
+             :buffer-prefix "agy"
+             :commands ((read-only . "agy-ro")))))
+         (primary (get-buffer-create "*my-codex-primary-remark*"))
+         read-prompt)
+    (unwind-protect
+        (let ((default-directory root))
+          (my-codex--mark-named-session
+           primary "primary" root 'workspace-write 'codex)
+          (set-window-parameter (selected-window) 'my-codex-term-buffer primary)
+          (cl-letf (((symbol-function 'get-buffer-process)
+                     (lambda (buffer) (eq buffer primary)))
+                    ((symbol-function 'process-live-p)
+                     (lambda (process) process))
+                    ((symbol-function 'read-string)
+                     (lambda (prompt &rest _args)
+                       (setq read-prompt prompt)
+                       "How should this be designed?"))
+                    ((symbol-function 'my-codex--read-secondary-agent)
+                     (lambda (&optional _primary-agent) 'antigravity))
+                    ((symbol-function 'my-codex-two-column-layout-with-command)
+                     (lambda (_command _focus session agent access)
+                       (my-codex--mark-named-session
+                        (get-buffer-create
+                         (my-codex-session-buffer-name session agent))
+                        session root access agent)))
+                    ((symbol-function 'my-codex--request-marked-output)
+                     (lambda (&rest _args))))
+            (call-interactively #'my-codex-ask-secondary-remark)
+            (should (equal read-prompt "Ask secondary agent: "))))
+      (set-window-parameter (selected-window) 'my-codex-term-buffer nil)
+      (when (buffer-live-p primary)
+        (kill-buffer primary))
+      (when-let ((secondary (get-buffer
+                             (my-codex-session-buffer-name
+                              my-codex-secondary-remark-session-name
+                              'antigravity))))
+        (kill-buffer secondary))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-ask-secondary-remark-asks-secondary-only ()
+  (let* ((root (file-name-as-directory (make-temp-file "my-codex-remark" t)))
+         (my-codex-agent-profiles
+          '((codex
+             :label "Codex"
+             :buffer-prefix "codex"
+             :commands ((read-only . "codex-ro")))
+            (antigravity
+             :label "Antigravity"
+             :buffer-prefix "agy"
+             :commands ((read-only . "agy-ro")))))
+         (my-codex-secondary-remark-session-name "remark")
+         (primary (get-buffer-create "*my-codex-primary-remark*"))
+         started waited sent)
+    (unwind-protect
+        (let ((default-directory root))
+          (my-codex--mark-named-session
+           primary "primary" root 'workspace-write 'codex)
+          (set-window-parameter (selected-window) 'my-codex-term-buffer primary)
+          (cl-letf (((symbol-function 'get-buffer-process)
+                     (lambda (buffer) (eq buffer primary)))
+                    ((symbol-function 'process-live-p)
+                     (lambda (process) process))
+                    ((symbol-function 'my-codex-two-column-layout-with-command)
+                     (lambda (command focus session agent access)
+                       (setq started (list command focus session agent access))
+                       (my-codex--mark-named-session
+                        (get-buffer-create
+                         (my-codex-session-buffer-name session agent))
+                        session root access agent)))
+                    ((symbol-function 'my-codex--wait-for-marked-output)
+                     (lambda (&rest args)
+                       (setq waited args)))
+                    ((symbol-function 'my-codex-send-prompt)
+                     (lambda (prompt target)
+                       (setq sent (list prompt target)))))
+            (my-codex-ask-secondary-remark "How should this be designed?"
+                                           'antigravity)
+            (should (string-match-p "\\`agy-ro --prompt-interactive "
+                                    (car started)))
+            (should (string-match-p
+                     "How\\\\ should\\\\ this\\\\ be\\\\ designed\\\\\\?"
+                     (car started)))
+            (should-not (string-match-p "BEGIN_SECONDARY_REMARK_"
+                                        (car started)))
+            (should (equal (cdr started)
+                           '(nil "remark" antigravity read-only)))
+            (should-not waited)
+            (should-not sent)))
+      (set-window-parameter (selected-window) 'my-codex-term-buffer nil)
+      (when (buffer-live-p primary)
+        (kill-buffer primary))
+      (when-let ((secondary (get-buffer
+                             (my-codex-session-buffer-name
+                              "remark" 'antigravity))))
+        (kill-buffer secondary))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-ask-secondary-remark-sends-to-existing-secondary ()
+  (let* ((root (file-name-as-directory (make-temp-file "my-codex-remark" t)))
+         (my-codex-agent-profiles
+          '((codex
+             :label "Codex"
+             :buffer-prefix "codex"
+             :commands ((read-only . "codex-ro")))
+            (antigravity
+             :label "Antigravity"
+             :buffer-prefix "agy"
+             :commands ((read-only . "agy-ro")))))
+         (my-codex-secondary-remark-session-name "remark")
+         (primary (get-buffer-create "*my-codex-primary-remark*"))
+         secondary
+         started sent waited)
+    (unwind-protect
+        (let ((default-directory root))
+          (setq secondary
+                (get-buffer-create
+                 (my-codex-session-buffer-name "remark" 'antigravity)))
+          (my-codex--mark-named-session
+           primary "primary" root 'workspace-write 'codex)
+          (my-codex--mark-named-session
+           secondary "remark" root 'read-only 'antigravity)
+          (set-window-parameter (selected-window) 'my-codex-term-buffer primary)
+          (cl-letf (((symbol-function 'get-buffer-process)
+                     (lambda (buffer) (memq buffer (list primary secondary))))
+                    ((symbol-function 'process-live-p)
+                     (lambda (process) process))
+                    ((symbol-function 'my-codex-two-column-layout-with-command)
+                     (lambda (command focus session agent access)
+                       (setq started (list command focus session agent access))))
+                    ((symbol-function 'my-codex--wait-for-marked-output)
+                     (lambda (&rest args)
+                       (setq waited args)))
+                    ((symbol-function 'my-codex-send-prompt)
+                     (lambda (prompt target)
+                       (setq sent (list prompt target)))))
+            (my-codex-ask-secondary-remark "How should this be designed?"
+                                           'antigravity)
+            (should (equal (cdr started)
+                           '(nil "remark" antigravity read-only)))
+            (should (eq (cadr sent) secondary))
+            (should (string-match-p "How should this be designed?"
+                                    (car sent)))
+            (should-not (string-match-p "BEGIN_SECONDARY_REMARK_"
+                                        (car sent)))
+            (should-not waited)))
+      (set-window-parameter (selected-window) 'my-codex-term-buffer nil)
+      (when (buffer-live-p primary)
+        (kill-buffer primary))
+      (when (buffer-live-p secondary)
+        (kill-buffer secondary))
+      (delete-directory root t))))
+
 (ert-deftest my-codex-preview-and-send-prompt-preserves-target-without-preview ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-send" t)))
         (target (get-buffer-create "*my-codex-no-preview-target*"))

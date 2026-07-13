@@ -135,6 +135,11 @@
       (when my-codex-enable-session-links
         (my-codex-session-links-mode 1)
         (my-codex--enable-eat-session-links))
+      (if session-name
+          (my-codex--mark-named-session
+           buffer session-name project-root access-mode agent 'eat)
+        (my-codex--mark-default-session
+         buffer project-root access-mode agent 'eat))
       (let ((proc (get-buffer-process buffer)))
         (unless (process-live-p proc)
           (user-error "Failed to start Eat process in %s" buffer-name))
@@ -143,11 +148,6 @@
         (goto-char (point-max))
         (process-send-string proc (my-codex--eat-command-and-exit command))
         (process-send-string proc "\n")))
-    (if session-name
-        (my-codex--mark-named-session
-         buffer session-name project-root access-mode agent 'eat)
-      (my-codex--mark-default-session
-       buffer project-root access-mode agent 'eat))
     (when (bound-and-true-p my-codex-eat-integration-mode)
       (with-current-buffer buffer
         (my-codex--enable-eat-buffer-integration)))
