@@ -303,6 +303,33 @@
       (my-codex--enable-eat-output-linkification-when-active)
       (should-not installed))))
 
+(ert-deftest my-codex-eat-output-boundary-workaround-ignores-end-of-chunk ()
+  (let ((output "\e[ "))
+    (should-not
+     (my-codex--eat-term-process-output-advice
+      (lambda (_terminal string)
+        (signal 'args-out-of-range (list string (length string))))
+      'terminal output))))
+
+(ert-deftest my-codex-eat-output-boundary-workaround-preserves-other-errors ()
+  (let ((output "\e[ "))
+    (should-error
+     (my-codex--eat-term-process-output-advice
+      (lambda (_terminal string)
+        (signal 'args-out-of-range (list string 1)))
+     'terminal output)
+     :type 'args-out-of-range)))
+
+(ert-deftest my-codex-eat-output-boundary-workaround-preserves-range-errors ()
+  (let ((output "\e[ "))
+    (should-error
+     (my-codex--eat-term-process-output-advice
+      (lambda (_terminal string)
+        (signal 'args-out-of-range
+                (list string (length string) (1+ (length string)))))
+      'terminal output)
+     :type 'args-out-of-range)))
+
 (ert-deftest my-codex-eat-integration-enables-session-link-updates ()
   (cl-letf (((symbol-function 'eat--process-output-queue)
              (lambda (_buffer))))

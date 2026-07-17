@@ -27,6 +27,7 @@
 (defvar eat-terminal)
 (defvar eat-term-scrollback-size)
 (declare-function eat-term-input-event "eat" (terminal n event &optional ref-pos))
+(declare-function eat-term-process-output "eat" (terminal output))
 (declare-function eat-term-send-string "eat" (terminal string))
 (declare-function eat-term-send-string-as-yank "eat" (terminal args))
 
@@ -203,7 +204,26 @@
 (defun my-codex--enable-eat-output-linkification-when-active ()
   "Enable Eat output linkification when Eat integration is active."
   (when my-codex-eat-integration-mode
+    (my-codex--enable-eat-output-boundary-workaround)
     (my-codex--enable-eat-output-linkification)))
+
+(defun my-codex--eat-term-process-output-advice (fn terminal output)
+  "Call FN with TERMINAL and OUTPUT, tolerating Eat's chunk-boundary bug."
+  (condition-case err
+      (funcall fn terminal output)
+    (args-out-of-range
+     (unless (and (= (length err) 3)
+                  (equal (nth 1 err) output)
+                  (equal (nth 2 err) (length output)))
+       (signal (car err) (cdr err))))))
+
+(defun my-codex--enable-eat-output-boundary-workaround ()
+  "Work around Eat 0.9.4 reading past an incomplete output chunk."
+  (when (fboundp 'eat-term-process-output)
+    (unless (advice-member-p #'my-codex--eat-term-process-output-advice
+                             'eat-term-process-output)
+      (advice-add 'eat-term-process-output :around
+                  #'my-codex--eat-term-process-output-advice))))
 
 (defun my-codex--enable-eat-session-links ()
   "Enable session link refreshes for Eat terminal updates."
@@ -317,6 +337,9 @@ with Eat overrides disabled."
 
 (defun my-codex--disable-eat-integration ()
   "Disable my-codex helpers for Eat."
+  (when (fboundp 'eat-term-process-output)
+    (advice-remove 'eat-term-process-output
+                   #'my-codex--eat-term-process-output-advice))
   (when (fboundp 'eat--process-output-queue)
     (advice-remove 'eat--process-output-queue
                    #'my-codex--eat-process-output-queue-advice))

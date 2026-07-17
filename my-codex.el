@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.100.2
+;; Version: 0.101.1
 ;; Package-Requires: ((emacs "29.1") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
