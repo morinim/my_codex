@@ -410,6 +410,23 @@
            (my-codex--flycheck-diagnostic-at-point
             (list normalised)))))))
 
+(ert-deftest my-codex-flymake-diagnostic-does-not-serialise-backend-closure ()
+  (require 'flymake)
+  (with-temp-buffer
+    (insert "problem\n")
+    (let* ((secret "captured-secret")
+           (backend (lambda (&rest _) secret))
+           (diagnostic
+            (flymake-make-diagnostic
+             (current-buffer) 1 8 :error "problem")))
+      (cl-letf (((symbol-function 'flymake-diagnostic-backend)
+                 (lambda (_diagnostic) backend)))
+        (let ((normalised
+               (my-codex--normalise-flymake-diagnostic diagnostic)))
+          (should (equal (plist-get normalised :source) "Flymake"))
+          (should-not
+           (string-match-p secret (plist-get normalised :source))))))))
+
 (ert-deftest my-codex-flymake-diagnostic-uses-live-overlay-bounds ()
   (require 'flymake)
   (with-temp-buffer
