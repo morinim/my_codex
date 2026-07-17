@@ -9,6 +9,7 @@
 
 (defvar flycheck-current-errors)
 (defvar flycheck-mode)
+(defvar flymake-mode)
 
 (defmacro my-codex-test--with-mock-flycheck (diagnostics &rest body)
   "Run BODY with mocked Flycheck DIAGNOSTICS."
@@ -365,6 +366,178 @@
         (should sent)
         (should (string-match-p "source: Flycheck" sent))
         (should (string-match-p "message: \"broken\"" sent))))))
+
+(ert-deftest my-codex-flymake-diagnostics-normalises-diagnostic ()
+  (require 'flymake)
+  (with-temp-buffer
+    (insert "one\ntwo problem\nthree\n")
+    (setq buffer-file-name "/repo/example.el")
+    (let* ((flymake-mode t)
+           (beg (save-excursion
+                  (goto-char (point-min))
+                  (forward-line 1)
+                  (forward-char 4)
+                  (point)))
+           (diagnostic
+            (flymake-make-diagnostic
+             (current-buffer) beg (+ beg 7) :warning "problem")))
+      (cl-letf (((symbol-function 'flymake-diagnostics)
+                 (lambda (&rest _) (list diagnostic)))
+                ((symbol-function 'flymake-diagnostic-backend)
+                 (lambda (_diagnostic) 'mock-backend)))
+        (let ((normalised (car (my-codex--flymake-diagnostics))))
+          (should (equal (plist-get normalised :file) buffer-file-name))
+          (should (= (plist-get normalised :line) 2))
+          (should (= (plist-get normalised :column) 5))
+          (should (= (plist-get normalised :end-column) 12))
+          (should (eq (plist-get normalised :severity) 'warning))
+          (should (equal (plist-get normalised :source) "mock-backend"))
+          (should (equal (plist-get normalised :message) "problem")))))))
+
+(ert-deftest my-codex-flymake-diagnostic-keeps-non-file-locus-selectable ()
+  (require 'flymake)
+  (with-temp-buffer
+    (insert "problem\n")
+    (let* ((diagnostic
+            (flymake-make-diagnostic
+             (current-buffer) 1 8 :error "problem"))
+           (normalised
+            (my-codex--normalise-flymake-diagnostic diagnostic)))
+      (should-not (plist-get normalised :file))
+      (goto-char 3)
+      (should
+       (eq normalised
+           (my-codex--flycheck-diagnostic-at-point
+            (list normalised)))))))
+
+(ert-deftest my-codex-flymake-diagnostic-uses-live-overlay-bounds ()
+  (require 'flymake)
+  (with-temp-buffer
+    (insert "old moved\n")
+    (let* ((diagnostic
+            (flymake-make-diagnostic
+             (current-buffer) 1 4 :warning "moved"))
+           (overlay (make-overlay 5 10)))
+      (unwind-protect
+          (cl-letf (((symbol-function 'flymake--diag-overlay)
+                     (lambda (_diagnostic) overlay)))
+            (let ((normalised
+                   (my-codex--normalise-flymake-diagnostic diagnostic)))
+              (should (= (plist-get normalised :column) 5))
+              (should (= (plist-get normalised :end-column) 10))
+              (goto-char 7)
+              (should
+               (eq normalised
+                   (my-codex--flycheck-diagnostic-at-point
+                    (list normalised))))))
+        (delete-overlay overlay)))))
+
+(ert-deftest my-codex-diagnostics-limit-preserves-obsolete-setting ()
+  (let* ((script
+          '(progn
+             (setq my-codex-flycheck-diagnostics-limit 17)
+             (require 'my-codex-diagnostics)
+             (prin1 my-codex-diagnostics-limit)))
+         (output
+          (with-temp-buffer
+            (let ((status
+                   (call-process invocation-name nil t nil
+                                 "--batch" "-Q" "-L" default-directory
+                                 "--eval" (prin1-to-string script))))
+              (unless (zerop status)
+                (error "Nested Emacs failed: %s" (buffer-string)))
+              (buffer-string)))))
+    (should (equal output "17"))))
+
+(ert-deftest my-codex-flymake-severity-honours-custom-types ()
+  (require 'flymake)
+  (let ((warning-type (make-symbol "custom-warning"))
+        (error-type (make-symbol "custom-error")))
+    (put warning-type 'flymake-category 'flymake-warning)
+    (put error-type 'severity (warning-numeric-level :error))
+    (should (eq (my-codex--flymake-severity warning-type) 'warning))
+    (should (eq (my-codex--flymake-severity error-type) 'error))))
+
+(ert-deftest my-codex-flymake-severity-honours-compatibility-alist ()
+  (require 'flymake)
+  (let* ((warning-type (make-symbol "configured-warning"))
+         (note-type (make-symbol "configured-note"))
+         (flymake-diagnostic-types-alist
+          `((,warning-type
+             (severity . ,(warning-numeric-level :warning)))
+            (,note-type
+             (flymake-category . flymake-note)))))
+    (should (eq (my-codex--flymake-severity warning-type) 'warning))
+    (should (eq (my-codex--flymake-severity note-type) 'note))))
+
+(ert-deftest my-codex-diagnostic-at-point-prefers-overlapping-range ()
+  (with-temp-buffer
+    (insert "one\ntwo\nthree\n")
+    (goto-char (point-min))
+    (forward-line 1)
+    (let ((diagnostics
+           '((:line 2 :column 1 :message "nearest")
+             (:line 1 :column 2 :end-line 3 :end-column 2
+              :message "overlapping"))))
+      (should
+       (equal
+        (plist-get
+         (my-codex--flycheck-diagnostic-at-point diagnostics)
+         :message)
+        "overlapping")))))
+
+(ert-deftest my-codex-diagnostic-at-point-excludes-range-end ()
+  (with-temp-buffer
+    (insert "abcdef\n")
+    (goto-char (point-min))
+    (forward-char 3)
+    (let ((diagnostics
+           '((:line 1 :column 1 :end-line 1 :end-column 4
+              :message "previous")
+             (:line 1 :column 4 :end-line 1 :end-column 7
+              :message "current"))))
+      (should
+       (equal
+        (plist-get
+         (my-codex--flycheck-diagnostic-at-point diagnostics)
+         :message)
+        "current")))))
+
+(ert-deftest my-codex-diagnostics-provider-auto-prefers-flycheck ()
+  (let ((my-codex-diagnostics-provider 'auto))
+    (cl-letf (((symbol-function 'my-codex--flycheck-available-p)
+               (lambda () t))
+              ((symbol-function 'my-codex--flymake-available-p)
+               (lambda () t)))
+      (should (eq (my-codex--active-diagnostics-provider) 'flycheck)))))
+
+(ert-deftest my-codex-diagnostics-provider-auto-falls-back-to-flymake ()
+  (let ((my-codex-diagnostics-provider 'auto))
+    (cl-letf (((symbol-function 'my-codex--flycheck-available-p)
+               (lambda () nil))
+              ((symbol-function 'my-codex--flymake-available-p)
+               (lambda () t)))
+      (should (eq (my-codex--active-diagnostics-provider) 'flymake)))))
+
+(ert-deftest my-codex-explain-buffer-diagnostics-sends-flymake-prompt ()
+  (let ((my-codex-diagnostics-provider 'flymake)
+        sent)
+    (cl-letf (((symbol-function 'my-codex--flymake-available-p)
+               (lambda () t))
+              ((symbol-function 'my-codex--flymake-diagnostics)
+               (lambda ()
+                 '((:file "/repo/example.el"
+                    :line 2 :column 3 :severity error
+                    :source "mock-backend" :message "broken"))))
+              ((symbol-function 'my-codex-project-root)
+               (lambda () "/repo/"))
+              ((symbol-function 'my-codex--preview-and-send-prompt)
+               (lambda (prompt) (setq sent prompt))))
+      (my-codex-explain-buffer-diagnostics)
+      (should (string-match-p "Analyse these Flymake diagnostics" sent))
+      (should (string-match-p "source: Flymake" sent))
+      (should (string-match-p "checker: \"mock-backend\"" sent))
+      (should (string-match-p "message: \"broken\"" sent)))))
 
 
 (provide 'my-codex-diagnostics-test)

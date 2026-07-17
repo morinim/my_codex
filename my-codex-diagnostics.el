@@ -1,4 +1,4 @@
-;;; my-codex-diagnostics.el --- Flycheck diagnostic prompts for my-codex -*- lexical-binding: t; -*-
+;;; my-codex-diagnostics.el --- Diagnostic prompts for my-codex -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2026 Manlio Morini
 
@@ -10,19 +10,34 @@
 
 ;;; Commentary:
 
-;; Flycheck diagnostic collection for Codex prompts.
+;; Flycheck and Flymake diagnostic collection for agent prompts.
 
 ;;; Code:
 
 (require 'seq)
 (require 'subr-x)
+(require 'warnings)
 (require 'my-codex-prompts)
 
 (defvar flycheck-current-errors)
 (defvar flycheck-mode)
+(defvar flymake-mode)
 
-(defcustom my-codex-flycheck-diagnostics-limit 100
-  "Maximum number of Flycheck diagnostics to include in one agent prompt."
+(defcustom my-codex-diagnostics-provider 'auto
+  "Diagnostic provider used by my-codex commands.
+When `auto', prefer an active Flycheck session, then Flymake."
+  :type '(choice (const :tag "Automatically select" auto)
+                 (const flycheck)
+                 (const flymake))
+  :group 'my-codex)
+
+(define-obsolete-variable-alias
+  'my-codex-flycheck-diagnostics-limit
+  'my-codex-diagnostics-limit
+  "0.101.0")
+
+(defcustom my-codex-diagnostics-limit 100
+  "Maximum number of diagnostics to include in one agent prompt."
   :type 'natnum
   :group 'my-codex)
 
@@ -41,6 +56,40 @@ When nil, diagnostics context is not capped by token budget."
 (declare-function flycheck-error-level "flycheck" (err))
 (declare-function flycheck-error-line "flycheck" (err))
 (declare-function flycheck-error-message "flycheck" (err))
+(declare-function flymake-diagnostic-backend "flymake" (diag))
+(declare-function flymake-diagnostic-beg "flymake" (diag))
+(declare-function flymake-diagnostic-buffer "flymake" (diag))
+(declare-function flymake-diagnostic-end "flymake" (diag))
+(declare-function flymake-diagnostic-text "flymake" (diag))
+(declare-function flymake-diagnostic-type "flymake" (diag))
+(declare-function flymake-diagnostics "flymake" (&optional beg end))
+(declare-function flymake--diag-overlay "flymake" (diag))
+(declare-function flymake--severity "flymake" (type))
+
+(defun my-codex--diagnostic-value (diagnostic property &optional fallback)
+  "Return DIAGNOSTIC PROPERTY, or FALLBACK property when absent."
+  (if (plist-member diagnostic property)
+      (plist-get diagnostic property)
+    (and fallback (plist-get diagnostic fallback))))
+
+(defun my-codex--diagnostic-file (diagnostic root)
+  "Return DIAGNOSTIC file name relative to ROOT when possible."
+  (let ((file (or (plist-get diagnostic :file) buffer-file-name)))
+    (cond
+     ((and file root (file-in-directory-p file root))
+      (file-relative-name file root))
+     (file file)
+     (t (buffer-name)))))
+
+(defun my-codex--normalise-flycheck-diagnostic (diagnostic)
+  "Convert Flycheck DIAGNOSTIC to the internal representation."
+  (list :file (or (flycheck-error-filename diagnostic) buffer-file-name)
+        :line (flycheck-error-line diagnostic)
+        :column (flycheck-error-column diagnostic)
+        :severity (flycheck-error-level diagnostic)
+        :source (flycheck-error-checker diagnostic)
+        :id (flycheck-error-id diagnostic)
+        :message (flycheck-error-message diagnostic)))
 
 (defun my-codex--flycheck-available-p ()
   "Return non-nil when Flycheck diagnostics are available in this buffer."
@@ -58,52 +107,48 @@ When nil, diagnostics context is not capped by token budget."
                            #'flycheck-error-<)))
     (unless diagnostics
       (user-error "No Flycheck diagnostics in this buffer"))
-    diagnostics))
+    (mapcar #'my-codex--normalise-flycheck-diagnostic diagnostics)))
 
 (defun my-codex--flycheck-diagnostic-file (diagnostic root)
   "Return DIAGNOSTIC file name relative to ROOT when possible."
-  (let ((file (or (flycheck-error-filename diagnostic)
-                  buffer-file-name)))
-    (cond
-     ((and file root (file-in-directory-p file root))
-      (file-relative-name file root))
-     (file file)
-     (t (buffer-name)))))
+  (my-codex--diagnostic-file diagnostic root))
 
 (defun my-codex--flycheck-diagnostic-entry (diagnostic)
   "Return a YAML-ish entry for Flycheck DIAGNOSTIC."
-  (let ((id (flycheck-error-id diagnostic)))
+  (let ((id (plist-get diagnostic :id)))
     (string-join
      (delq nil
            (list
             (format "      - line: %s"
-                    (or (flycheck-error-line diagnostic) "unknown"))
+                    (or (plist-get diagnostic :line) "unknown"))
             (format "        column: %s"
-                    (or (flycheck-error-column diagnostic) "unknown"))
+                    (or (plist-get diagnostic :column) "unknown"))
             (format "        severity: %s"
                     (my-codex--yaml-string
-                     (format "%s" (flycheck-error-level diagnostic))))
+                     (format "%s" (my-codex--diagnostic-value
+                                    diagnostic :severity :level))))
             (format "        checker: %s"
                     (my-codex--yaml-string
-                     (format "%s" (flycheck-error-checker diagnostic))))
+                     (format "%s" (my-codex--diagnostic-value
+                                    diagnostic :source :checker))))
             (when id
               (format "        id: %s"
                       (my-codex--yaml-string (format "%s" id))))
             (format "        message: %s"
                     (my-codex--yaml-string
-                     (or (flycheck-error-message diagnostic) "")))))
+                     (or (plist-get diagnostic :message) "")))))
      "\n")))
 
 (defun my-codex--flycheck-diagnostic-key (diagnostic root)
   "Return a duplicate-detection key for DIAGNOSTIC under ROOT."
   (list
-   (my-codex--flycheck-diagnostic-file diagnostic root)
-   (flycheck-error-line diagnostic)
-   (flycheck-error-column diagnostic)
-   (flycheck-error-level diagnostic)
-   (flycheck-error-checker diagnostic)
-   (flycheck-error-id diagnostic)
-   (flycheck-error-message diagnostic)))
+   (my-codex--diagnostic-file diagnostic root)
+   (plist-get diagnostic :line)
+   (plist-get diagnostic :column)
+   (my-codex--diagnostic-value diagnostic :severity :level)
+   (my-codex--diagnostic-value diagnostic :source :checker)
+   (plist-get diagnostic :id)
+   (plist-get diagnostic :message)))
 
 (defun my-codex--flycheck-unique-diagnostics (diagnostics root)
   "Return DIAGNOSTICS with exact duplicates removed."
@@ -119,11 +164,11 @@ When nil, diagnostics context is not capped by token budget."
 (defun my-codex--flycheck-group-key (diagnostic root)
   "Return a repeated-message grouping key for DIAGNOSTIC under ROOT."
   (list
-   (my-codex--flycheck-diagnostic-file diagnostic root)
-   (flycheck-error-level diagnostic)
-   (flycheck-error-checker diagnostic)
-   (flycheck-error-id diagnostic)
-   (flycheck-error-message diagnostic)))
+   (my-codex--diagnostic-file diagnostic root)
+   (my-codex--diagnostic-value diagnostic :severity :level)
+   (my-codex--diagnostic-value diagnostic :source :checker)
+   (plist-get diagnostic :id)
+   (plist-get diagnostic :message)))
 
 (defun my-codex--flycheck-group-diagnostics (diagnostics root)
   "Return compact repeated-message groups for DIAGNOSTICS under ROOT."
@@ -135,11 +180,13 @@ When nil, diagnostics context is not capped by token budget."
         (if group
             (push diagnostic (plist-get group :diagnostics))
           (setq group
-                (list :file (my-codex--flycheck-diagnostic-file diagnostic root)
-                      :level (flycheck-error-level diagnostic)
-                      :checker (flycheck-error-checker diagnostic)
-                      :id (flycheck-error-id diagnostic)
-                      :message (flycheck-error-message diagnostic)
+                (list :file (my-codex--diagnostic-file diagnostic root)
+                      :level (my-codex--diagnostic-value
+                              diagnostic :severity :level)
+                      :checker (my-codex--diagnostic-value
+                                diagnostic :source :checker)
+                      :id (plist-get diagnostic :id)
+                      :message (plist-get diagnostic :message)
                       :diagnostics (list diagnostic)))
           (puthash key group table)
           (push group groups))))
@@ -186,37 +233,153 @@ When nil, diagnostics context is not capped by token budget."
                (mapcar
                 (lambda (diagnostic)
                   (format "          - line: %s\n            column: %s"
-                          (or (flycheck-error-line diagnostic) "unknown")
-                          (or (flycheck-error-column diagnostic) "unknown")))
+                          (or (plist-get diagnostic :line) "unknown")
+                          (or (plist-get diagnostic :column) "unknown")))
                 diagnostics)
                "\n")))
        "\n"))))
 
 (defun my-codex--flycheck-diagnostic-at-point (diagnostics)
-  "Return the most relevant Flycheck diagnostic at point from DIAGNOSTICS."
+  "Return the most relevant diagnostic at point from DIAGNOSTICS."
   (let* ((line (line-number-at-pos nil t))
-         (column (current-column))
+         (column (1+ (current-column)))
+         (same-file-p
+          (lambda (diagnostic)
+            (let ((file (my-codex--diagnostic-value
+                         diagnostic :file :filename)))
+              (or (not file)
+                  (and buffer-file-name
+                       (string= (expand-file-name file)
+                                (expand-file-name buffer-file-name)))))))
+         (overlapping
+          (seq-filter
+           (lambda (diagnostic)
+             (let ((start-line (plist-get diagnostic :line))
+                   (start-column (or (plist-get diagnostic :column) 1))
+                   (end-line (plist-get diagnostic :end-line))
+                   (end-column (plist-get diagnostic :end-column)))
+               (and end-line
+                    (funcall same-file-p diagnostic)
+                    (or (> line start-line)
+                        (and (= line start-line) (>= column start-column)))
+                    (or (< line end-line)
+                        (and (= line end-line)
+                             (< column (or end-column column)))))))
+           diagnostics))
          (line-diagnostics
           (seq-filter
            (lambda (diagnostic)
-             (and (equal (flycheck-error-line diagnostic) line)
-                  (let ((file (flycheck-error-filename diagnostic)))
-                    (or (not file)
-                        (and buffer-file-name
-                             (string= (expand-file-name file)
-                                      (expand-file-name buffer-file-name)))))))
+             (and (equal (plist-get diagnostic :line) line)
+                  (funcall same-file-p diagnostic)))
            diagnostics)))
-    (unless line-diagnostics
-      (user-error "No Flycheck diagnostic at point"))
-    (car
-     (sort
-      line-diagnostics
-      (lambda (left right)
-        (let ((left-distance
-               (abs (- (or (flycheck-error-column left) 1) (1+ column))))
-              (right-distance
-               (abs (- (or (flycheck-error-column right) 1) (1+ column)))))
-          (< left-distance right-distance)))))))
+    (unless (or overlapping line-diagnostics)
+      (user-error "No diagnostic at point"))
+    (or (car overlapping)
+        (car
+         (sort
+          line-diagnostics
+          (lambda (left right)
+            (let ((left-distance
+                   (abs (- (or (plist-get left :column) 1) column)))
+                  (right-distance
+                   (abs (- (or (plist-get right :column) 1) column))))
+              (< left-distance right-distance))))))))
+
+(defun my-codex--flymake-available-p ()
+  "Return non-nil when Flymake is active in the current buffer."
+  (and (bound-and-true-p flymake-mode)
+       (require 'flymake nil t)))
+
+(defun my-codex--flymake-severity (type)
+  "Return the generic severity represented by Flymake diagnostic TYPE."
+  (let ((severity (flymake--severity type)))
+    (cond
+     ((>= severity (warning-numeric-level :error)) 'error)
+     ((>= severity (warning-numeric-level :warning)) 'warning)
+     (t 'note))))
+
+(defun my-codex--flymake-diagnostic-bounds (diagnostic)
+  "Return current buffer bounds for Flymake DIAGNOSTIC."
+  (let ((overlay (and (fboundp 'flymake--diag-overlay)
+                      (flymake--diag-overlay diagnostic))))
+    (if (and (overlayp overlay) (overlay-buffer overlay))
+        (cons (overlay-start overlay) (overlay-end overlay))
+      (let ((beg (flymake-diagnostic-beg diagnostic)))
+        (cons beg (or (flymake-diagnostic-end diagnostic) beg))))))
+
+(defun my-codex--normalise-flymake-diagnostic (diagnostic)
+  "Convert Flymake DIAGNOSTIC to the internal representation."
+  (let* ((locus (flymake-diagnostic-buffer diagnostic))
+         (buffer (if (bufferp locus) locus (current-buffer)))
+         (bounds (my-codex--flymake-diagnostic-bounds diagnostic))
+         (beg (car bounds))
+         (end (cdr bounds))
+         (file (if (stringp locus) locus
+                 (buffer-local-value 'buffer-file-name buffer))))
+    (with-current-buffer buffer
+      (save-restriction
+        (widen)
+        (list
+         :file file
+         :line (line-number-at-pos beg t)
+         :column (save-excursion
+                   (goto-char beg)
+                   (1+ (current-column)))
+         :end-line (line-number-at-pos end t)
+         :end-column (save-excursion
+                       (goto-char end)
+                       (1+ (current-column)))
+         :severity (my-codex--flymake-severity
+                    (flymake-diagnostic-type diagnostic))
+         :source (if (fboundp 'flymake-diagnostic-backend)
+                     (format "%s" (flymake-diagnostic-backend diagnostic))
+                   "Flymake")
+         :message (flymake-diagnostic-text diagnostic))))))
+
+(defun my-codex--flymake-diagnostics ()
+  "Return current Flymake diagnostics sorted by location."
+  (unless (my-codex--flymake-available-p)
+    (user-error "Flymake is not active in this buffer"))
+  (let ((diagnostics
+         (mapcar #'my-codex--normalise-flymake-diagnostic
+                 (flymake-diagnostics))))
+    (unless diagnostics
+      (user-error "No Flymake diagnostics in this buffer"))
+    (sort diagnostics
+          (lambda (left right)
+            (or (< (or (plist-get left :line) most-positive-fixnum)
+                   (or (plist-get right :line) most-positive-fixnum))
+                (and (equal (plist-get left :line) (plist-get right :line))
+                     (< (or (plist-get left :column) most-positive-fixnum)
+                        (or (plist-get right :column)
+                            most-positive-fixnum))))))))
+
+(defun my-codex--active-diagnostics-provider ()
+  "Return the diagnostic provider selected for the current buffer."
+  (pcase my-codex-diagnostics-provider
+    ('flycheck
+     (unless (my-codex--flycheck-available-p)
+       (user-error "Flycheck is not active in this buffer"))
+     'flycheck)
+    ('flymake
+     (unless (my-codex--flymake-available-p)
+       (user-error "Flymake is not active in this buffer"))
+     'flymake)
+    ('auto
+     (cond
+      ((my-codex--flycheck-available-p) 'flycheck)
+      ((my-codex--flymake-available-p) 'flymake)
+      (t (user-error "Neither Flycheck nor Flymake is active in this buffer"))))
+    (_ (user-error "Unknown diagnostic provider: %s"
+                   my-codex-diagnostics-provider))))
+
+(defun my-codex--current-diagnostics ()
+  "Return (PROVIDER . DIAGNOSTICS) for the current buffer."
+  (let ((provider (my-codex--active-diagnostics-provider)))
+    (cons provider
+          (pcase provider
+            ('flycheck (my-codex--flycheck-diagnostics))
+            ('flymake (my-codex--flymake-diagnostics))))))
 
 (defun my-codex--flycheck-groups-by-file (groups)
   "Return compact diagnostic GROUPS grouped by file."
@@ -297,10 +460,12 @@ When SELECTED is nil, return one diagnostic if even one exceeds the budget."
                              candidate-group))))))
     selected))
 
-(defun my-codex--flycheck-diagnostics-prompt (diagnostics)
-  "Return an agent prompt for Flycheck DIAGNOSTICS."
+(defun my-codex--flycheck-diagnostics-prompt (diagnostics &optional provider)
+  "Return an agent prompt for DIAGNOSTICS from PROVIDER."
   (let* ((root (my-codex-project-root))
-         (limit my-codex-flycheck-diagnostics-limit)
+         (provider (or provider 'flycheck))
+         (provider-label (capitalize (symbol-name provider)))
+         (limit my-codex-diagnostics-limit)
          (total (length diagnostics))
          (unique (my-codex--flycheck-unique-diagnostics diagnostics root))
          (unique-total (length unique))
@@ -316,12 +481,12 @@ When SELECTED is nil, return one diagnostic if even one exceeds the budget."
          (omitted (- total included))
          (truncated (> omitted 0)))
     (format
-     (concat "Analyse these Flycheck diagnostics as a batch.\n\n"
+     (concat "Analyse these %s diagnostics as a batch.\n\n"
              "Identify common root causes, cascade errors, missing imports/"
              "includes/types/configuration, and the smallest likely fix that "
              "would remove the largest number of diagnostics. Do not propose "
              "one fix per diagnostic unless they are genuinely unrelated.\n\n"
-             "source: Flycheck\n"
+             "source: %s\n"
              "diagnostic_count: %d\n"
              "unique_diagnostic_count: %d\n"
              "included_count: %d\n"
@@ -330,6 +495,8 @@ When SELECTED is nil, return one diagnostic if even one exceeds the budget."
              "context_tokens: %d\n"
              "truncated: %s\n"
              "diagnostics:\n%s")
+     provider-label
+     provider-label
      total
      unique-total
      included
@@ -341,35 +508,43 @@ When SELECTED is nil, return one diagnostic if even one exceeds the budget."
      (if truncated "true" "false")
      diagnostics-context)))
 
-(defun my-codex--flycheck-diagnostic-at-point-prompt (diagnostic)
-  "Return an agent prompt for a single Flycheck DIAGNOSTIC."
+(defun my-codex--flycheck-diagnostic-at-point-prompt
+    (diagnostic &optional provider)
+  "Return an agent prompt for DIAGNOSTIC from PROVIDER."
   (let* ((root (my-codex-project-root))
+         (provider-label
+          (capitalize (symbol-name (or provider 'flycheck))))
          (file (my-codex--flycheck-diagnostic-file diagnostic root)))
     (format
-     (concat "Explain this Flycheck diagnostic and suggest the most likely "
+     (concat "Explain this %s diagnostic and suggest the most likely "
              "fix. Inspect the file directly if needed. Do not edit files.\n\n"
-             "source: Flycheck\n"
+             "source: %s\n"
              "file: %s\n"
              "diagnostic:\n%s")
+     provider-label
+     provider-label
      (my-codex--yaml-string file)
      (my-codex--flycheck-diagnostic-entry diagnostic))))
 
 ;;;###autoload
 (defun my-codex-explain-diagnostic-at-point ()
-  "Ask the agent to explain the Flycheck diagnostic at point."
+  "Ask the agent to explain the diagnostic at point."
   (interactive)
-  (my-codex--preview-and-send-prompt
-   (my-codex--flycheck-diagnostic-at-point-prompt
-    (my-codex--flycheck-diagnostic-at-point
-     (my-codex--flycheck-diagnostics)))))
+  (pcase-let ((`(,provider . ,diagnostics)
+               (my-codex--current-diagnostics)))
+    (my-codex--preview-and-send-prompt
+     (my-codex--flycheck-diagnostic-at-point-prompt
+      (my-codex--flycheck-diagnostic-at-point diagnostics)
+      provider))))
 
 ;;;###autoload
 (defun my-codex-explain-buffer-diagnostics ()
-  "Ask the agent to analyse current buffer Flycheck diagnostics as a batch."
+  "Ask the agent to analyse current buffer diagnostics as a batch."
   (interactive)
-  (my-codex--preview-and-send-prompt
-   (my-codex--flycheck-diagnostics-prompt
-    (my-codex--flycheck-diagnostics))))
+  (pcase-let ((`(,provider . ,diagnostics)
+               (my-codex--current-diagnostics)))
+    (my-codex--preview-and-send-prompt
+     (my-codex--flycheck-diagnostics-prompt diagnostics provider))))
 
 (provide 'my-codex-diagnostics)
 
