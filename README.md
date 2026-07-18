@@ -17,7 +17,7 @@
 └───────────────┴───────────────┘
 ```
 
-`my-codex.el` runs the Google Antigravity CLI (`agy`) or OpenAI Codex CLI (`codex`) inside an Emacs terminal backend. `vterm` is the default backend on systems that support it; `eat` is the default on Windows.
+`my-codex.el` runs the Google Antigravity CLI (`agy`) or OpenAI Codex CLI (`codex`) inside an Emacs terminal backend. Codex is the default agent. `vterm` is the default backend on non-Windows systems; `eat` is the default on Windows.
 
 > [!NOTE]
 > The package is named `my-codex.el` because it initially supported only the OpenAI Codex CLI. It has since been expanded to support Google Antigravity as a first-class agent.
@@ -26,11 +26,11 @@ It keeps your code on the left and the active agent CLI on the right, providing 
 
 ## Features
 
-- **Multi-Agent CLI Support**: start, resume, and manage sessions with Google Antigravity or OpenAI Codex, with granular workspace write-access control.
+- **Multi-Agent CLI Support**: start, resume, and manage read-only or workspace-write sessions with Google Antigravity or OpenAI Codex.
 - **Side-by-Side Layout**: code on the left, interactive agent terminal on the right.
 - **Context-Aware Prompts**: send regions, files, Git diffs, Flymake or Flycheck diagnostics, compiler errors, or project structure overviews directly to the agent.
-- **Refactoring & Coverage**: draft low-risk refactoring plans for file ranges and analyze implementation files against tests for missing coverage.
-- **Integration Tools**: export session transcripts, summarize conversations into Markdown notes, and draft commits or GitHub issues directly from Emacs.
+- **Refactoring & Coverage**: draft low-risk refactoring plans for file ranges and analyse implementation files against tests for missing coverage.
+- **Integration Tools**: export session transcripts, summarise conversations into Markdown notes, and draft commits or GitHub issues directly from Emacs.
 - **Interactive UI**: insert agent output back into your code, and open clickable file references and URLs directly from the terminal.
 - **Diagnostics**: verify Emacs, agent binaries, the selected terminal backend, and Git availability using the `my-codex-doctor` health check.
 
@@ -42,17 +42,33 @@ costs and retained context.
 ## Requirements
 
 - Emacs 29.1 or newer.
-- [`vterm`][vterm] for the default terminal backend on supported systems.
-- [Eat][eat] for Windows, or when selected with `my-codex-terminal-backend`.
 - [`transient`][transient].
-- Google [Antigravity CLI][agy] and/or OpenAI [Codex CLI][codex].
-- Git (for Git commands) and GitHub CLI `gh` (for issue creation).
+- One terminal backend: [`vterm`][vterm] (the non-Windows default) or
+  [Eat][eat] (the Windows default).
+- At least one configured agent CLI. Built-in profiles support Google
+  [Antigravity CLI][agy] and OpenAI [Codex CLI][codex].
+
+Git is required for Git commands. GitHub CLI `gh` is required for listing or
+creating GitHub issues; neither is required for core agent sessions.
 
 `vterm` is optional at package-install time and is loaded lazily only when a vterm-backed agent session is started. Eat is loaded only when the Eat backend is selected.
 
 ## Installation
 
-Clone the repository and add it to your Emacs load path:
+Install `transient` and one terminal backend using the Emacs package manager. These commands assume your configured package archives provide the packages:
+
+```text
+M-x package-install RET transient RET
+M-x package-install RET vterm RET
+```
+
+Install Eat instead of vterm on Windows, or when you intend to select the Eat backend:
+
+```text
+M-x package-install RET eat RET
+```
+
+Then clone the repository and add it to your Emacs load path:
 
 ```elisp
 (add-to-list 'load-path "~/.emacs.d/lisp/my_codex")
@@ -60,35 +76,22 @@ Clone the repository and add it to your Emacs load path:
 (my-codex-global-mode 1)
 ```
 
-## Key Bindings & Usage
+## Usage
 
 Press `F8` to open the agent command menu.
 
-### Common Workflows
+Sessions are project-specific. Each agent can have one default session and any
+number of named sessions per project. Read-only sessions instruct the agent not
+to change the workspace; workspace-write sessions allow changes. Resume invokes
+the configured default agent's CLI resume command, while a handoff starts a new
+named session from compact context produced by the active session. A running
+session keeps the access mode with which it was started; showing it again does
+not restart it with a different mode.
 
-Review current changes:
-
-- `F8 g r f` : review the current file's Git diff.
-- `F8 g r s` : review staged changes.
-- `F8 c` : draft or reuse an agent-generated commit message, edit it, then commit.
-
-Ask about code:
-
-- Select a region, then press `F8 s` to send it to the agent.
-- Put point inside a function, then press `F8 x f` to review the current defun.
-- Put point on a symbol, then press `F8 x s` to explain it.
-
-Control token usage:
-
-- `F8 y` : copy a file-and-line reference instead of sending file contents.
-- `F8 S h` : start a fresh handoff session from a compact context transfer.
-- `F8 S k` : compact the current session context when supported by its agent profile.
-
-Use the session dashboard with `F8 S l` to see active and inactive agent
-sessions in one place. It shows agent, project, session, access mode, process
-state, Git branch/state, prompt count, buffer lines, age, and last activity.
+## Command Reference
 
 ### Session Management
+
 - `F8 o` / `F8 w` : start/show the default read-only or workspace-write session.
 - `F8 S o` / `F8 S w` : select an agent, then start its default read-only or write session.
 - `F8 S n` : start or show a named session with a selected agent and access mode.
@@ -97,9 +100,17 @@ state, Git branch/state, prompt count, buffer lines, age, and last activity.
 - `F8 S l` / `F8 S q` : open the session dashboard, or hide the selected session window.
 - `F8 S r` / `F8 q` : resume a previous session, or hide the active agent window.
 
+The session dashboard (`F8 S l`) lists running and stopped sessions across
+projects. It shows the agent, project, session, access mode, process state, Git
+branch/state, prompt count, buffer lines, age, and last activity. Within the
+dashboard, use `RET` to visit a session, `e` to select its edit window, `D` for
+Dired, `b` to build, `R` to rename, `d` for the project diff, `k` to kill one
+session, `K` to kill stopped sessions, and `g` to refresh Git information.
+
 ### Prompts & Refactoring
+
 - `F8 a` / `F8 A` : ask a free-form question or open the Ask menu.
-- `F8 A s` : ask a secondary agent; the Ask menu also contains customizable prompt presets.
+- `F8 A s` : ask a secondary agent; the Ask menu also contains customisable prompt presets.
 - `F8 s` / `F8 r` : send the selected region, or draft a low-risk refactoring plan for it.
 - `F8 Right` : send the selected region when active, otherwise inspect the current file.
 - `F8 Left` / `F8 TAB` : insert agent text into code, or toggle focus between code and agent.
@@ -108,6 +119,7 @@ state, Git branch/state, prompt count, buffer lines, age, and last activity.
 - `F8 y` : copy a file-and-line reference for the selected region or current line.
 
 ### Document Workflow (Markdown/Org contexts)
+
 Only active in document buffers (e.g. Markdown, Org, txt):
 - `F8 d b` : use the current document or region as the primary task brief.
 - `F8 d i` : ask the active agent to implement the selected plan.
@@ -117,27 +129,46 @@ Only active in document buffers (e.g. Markdown, Org, txt):
 - `F8 Right` : inspect the current document instead of code files.
 
 ### Git & GitHub Workflow
+
 - `F8 g r a` / `F8 g r s` / `F8 g r f` : review all changes, staged changes, or the current file's Git diff.
 - `F8 g v` / `F8 g V` : view the current or staged Git diff locally.
 - `F8 g d` / `F8 g D` : ediff the current or a changed file against `HEAD`.
 - `F8 c` : draft or reuse an agent-generated commit message, edit it, then commit.
-- `F8 M` : summarize the session to Markdown notes.
+- `F8 M` : summarise the session to Markdown notes.
 - `F8 t l` / `F8 t d` : list open GitHub issues, or draft a GitHub issue from the session.
 
 ### Diagnostics, Build & Instructions
+
 - `F8 i` : open project instruction files (e.g., `AGENTS.md`, `CODEX.md`, `.codex/instructions.md`).
-- `F8 T` : open infrequent tools, including project overview, diagnostics, session export, and doctor.
+- `F8 T p` : send a compact project overview to the active agent.
+- `F8 T X` : export the active session transcript to Markdown.
+- `F8 T E p` / `F8 T E a` : explain the diagnostic at point, or all buffer diagnostics.
+- `F8 T !` : run the doctor health check.
 - `F7` : run the project build command.
 
 ## Customisation
 
 Configure options via `M-x customize-group RET my-codex RET`.
 
+The defaults are Codex, vterm on non-Windows systems or Eat on Windows, an agent
+window target width of 80 columns, prompt previews disabled, saved project
+regions sent by reference where safe, a warning above approximately 4,000
+tokens, and warnings for unsaved project buffers.
+
 ```elisp
-;; Set the default agent profile
+;; Use Antigravity instead of Codex.
 (setq my-codex-agent 'antigravity)
 
-;; Define or replace an agent profile
+;; Select Eat explicitly on a non-Windows system.
+(setq my-codex-terminal-backend 'eat)
+
+;; Override layout, build, and prompt defaults.
+(setq my-codex-right-width 100)
+(setq my-codex-project-build-command "./setup_build")
+(setq my-codex-enable-prompt-preview t)
+(setq my-codex-region-send-policy 'prefer-inline)
+
+;; Define or replace an agent profile.
 (my-codex-define-agent
  'example
  :label "Example"
@@ -148,16 +179,6 @@ Configure options via `M-x customize-group RET my-codex RET`.
  :instruction-files '("EXAMPLE.md")
  :instruction-strategy 'root-all
  :file-reference-format "%s")
-
-;; Layout & build commands
-(setq my-codex-right-width 80)
-(setq my-codex-project-build-command "./setup_build")
-
-;; Prompt & warning thresholds
-(setq my-codex-enable-prompt-preview t)
-(setq my-codex-region-send-policy 'prefer-reference)
-(setq my-codex-prompt-warning-tokens 4000)
-(setq my-codex-warn-about-unsaved-project-buffers t)
 ```
 
 ## Updating CLI binaries
