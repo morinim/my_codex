@@ -423,9 +423,7 @@
                  (lambda (_diagnostic) backend)))
         (let ((normalised
                (my-codex--normalise-flymake-diagnostic diagnostic)))
-          (should (equal (plist-get normalised :source) "Flymake"))
-          (should-not
-           (string-match-p secret (plist-get normalised :source))))))))
+          (should (equal (plist-get normalised :source) "Flymake")))))))
 
 (ert-deftest my-codex-flymake-diagnostic-uses-live-overlay-bounds ()
   (require 'flymake)

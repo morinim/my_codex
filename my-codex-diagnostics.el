@@ -307,13 +307,6 @@ When nil, diagnostics context is not capped by token budget."
       (let ((beg (flymake-diagnostic-beg diagnostic)))
         (cons beg (or (flymake-diagnostic-end diagnostic) beg))))))
 
-(defun my-codex--flymake-diagnostic-source (diagnostic)
-  "Return a safe source label for Flymake DIAGNOSTIC."
-  (if (fboundp 'flymake-diagnostic-backend)
-      (let ((backend (flymake-diagnostic-backend diagnostic)))
-        (if (symbolp backend) (symbol-name backend) "Flymake"))
-    "Flymake"))
-
 (defun my-codex--normalise-flymake-diagnostic (diagnostic)
   "Convert Flymake DIAGNOSTIC to the internal representation."
   (let* ((locus (flymake-diagnostic-buffer diagnostic))
@@ -338,7 +331,11 @@ When nil, diagnostics context is not capped by token budget."
                        (1+ (current-column)))
          :severity (my-codex--flymake-severity
                     (flymake-diagnostic-type diagnostic))
-         :source (my-codex--flymake-diagnostic-source diagnostic)
+         :source (if-let* (((fboundp 'flymake-diagnostic-backend))
+                           (backend (flymake-diagnostic-backend diagnostic))
+                           ((symbolp backend)))
+                     (symbol-name backend)
+                   "Flymake")
          :message (flymake-diagnostic-text diagnostic))))))
 
 (defun my-codex--flymake-diagnostics ()
