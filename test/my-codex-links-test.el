@@ -155,6 +155,126 @@
                     :end-line 34)))))))
       (delete-directory root t))))
 
+(ert-deftest my-codex-session-links-does-not-prepend-wrapped-prose ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-links" t))))
+    (unwind-protect
+        (progn
+          (write-region
+           "" nil
+           (expand-file-name "my-codex-diagnostics.el" root)
+           nil 'silent)
+          (with-temp-buffer
+            (insert "One further simplification in\n"
+                    "  my-codex-diagnostics.el:334")
+            (cl-letf (((symbol-function 'my-codex-project-root)
+                       (lambda () root)))
+              (my-codex-session-links-mode 1)
+              (goto-char (point-min))
+              (search-forward "in\n")
+              (backward-char 3)
+              (should-not
+               (get-text-property
+                (point) 'my-codex-session-link-type))
+              (search-forward "my-codex-diagnostics.el")
+              (should
+               (eq (get-text-property
+                    (1- (point)) 'my-codex-session-link-type)
+                   'file))
+              (should
+               (equal
+                (get-text-property
+                 (1- (point)) 'my-codex-session-link-target)
+                '(:file "my-codex-diagnostics.el"
+                  :line 334
+                  :column nil
+                  :end-line nil))))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-session-links-does-not-prepend-sentence-prose ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-links" t))))
+    (unwind-protect
+        (progn
+          (write-region
+           "" nil
+           (expand-file-name "file.el" root)
+           nil 'silent)
+          (with-temp-buffer
+            (insert "See this.\n  file.el:10")
+            (cl-letf (((symbol-function 'my-codex-project-root)
+                       (lambda () root)))
+              (my-codex-session-links-mode 1)
+              (goto-char (point-min))
+              (search-forward "this")
+              (should-not
+               (get-text-property
+                (1- (point)) 'my-codex-session-link-type))
+              (search-forward "file.el")
+              (should
+               (equal
+                (get-text-property
+                 (1- (point)) 'my-codex-session-link-target)
+                '(:file "file.el"
+                  :line 10
+                  :column nil
+                  :end-line nil))))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-session-links-preserves-unresolved-wrapped-path ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-links" t))))
+    (unwind-protect
+        (progn
+          (write-region
+           "" nil
+           (expand-file-name "loop.md" root)
+           nil 'silent)
+          (with-temp-buffer
+            (insert "docs/\n  loop.md:19")
+            (cl-letf (((symbol-function 'my-codex-project-root)
+                       (lambda () root)))
+              (my-codex-session-links-mode 1)
+              (goto-char (point-min))
+              (should
+               (eq (get-text-property
+                    (point) 'my-codex-session-link-type)
+                   'file))
+              (should
+               (equal
+                (get-text-property
+                 (point) 'my-codex-session-link-target)
+                '(:file "docs/loop.md"
+                  :line 19
+                  :column nil
+                  :end-line nil))))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-session-links-detects-late-wrapped-slash ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-links" t))))
+    (unwind-protect
+        (progn
+          (write-region
+           "" nil
+           (expand-file-name "loop.md" root)
+           nil 'silent)
+          (with-temp-buffer
+            (insert "doc\n  s/\n  loop.md:19")
+            (cl-letf (((symbol-function 'my-codex-project-root)
+                       (lambda () root)))
+              (my-codex-session-links-mode 1)
+              (goto-char (point-min))
+              (should
+               (eq (get-text-property
+                    (point) 'my-codex-session-link-type)
+                   'file))
+              (should
+               (equal
+                (get-text-property
+                 (point) 'my-codex-session-link-target)
+                '(:file "docs/loop.md"
+                  :line 19
+                  :column nil
+                  :end-line nil))))))
+      (delete-directory root t))))
+
 (ert-deftest my-codex-session-links-use-session-root-for-file-references ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-links" t)))
         (other-root (file-name-as-directory

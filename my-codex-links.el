@@ -288,19 +288,46 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
                                          'my-codex-session-link-type)
                 (let ((target (my-codex--file-reference-target-at-match))
                       (match-beg (match-beginning 0))
-                      (match-end (match-end 0)))
+                      (match-end (match-end 0))
+                      (matched-file (match-string-no-properties 1)))
                   (setq target
                         (my-codex--normalise-file-reference-target
                          target
                          (my-codex--session-link-project-root)))
-                  (my-codex--add-session-link
-                   match-beg
-                   match-end
-                   'file
-                   (or (save-match-data
-                         (my-codex--resolve-file-reference-target
-                          target match-beg))
-                       target)))))))))))
+                  (let* ((newline
+                          (string-match "\n[^\n]*\\'" matched-file))
+                         (wrapped-prefix
+                          (and newline (substring matched-file 0 newline)))
+                         (path-like-prefix
+                          (and wrapped-prefix
+                               (or (string-match-p "/" wrapped-prefix)
+                                   (string-match-p
+                                    "[-_@+]\\'" wrapped-prefix))))
+                         (resolved-target
+                          (save-match-data
+                            (my-codex--resolve-file-reference-target
+                             target match-beg)))
+                         (overlap
+                          (text-property-not-all
+                           match-beg match-end
+                           'my-codex-session-link-type nil))
+                         (valid-overlap
+                          (and overlap
+                               (eq (get-text-property
+                                    overlap 'my-codex-session-link-type)
+                                   'file)
+                               (my-codex--valid-file-reference-target-p
+                                (get-text-property
+                                 overlap
+                                 'my-codex-session-link-target)))))
+                    (unless (and valid-overlap
+                                 (not resolved-target)
+                                 (not path-like-prefix))
+                      (my-codex--add-session-link
+                       match-beg
+                       match-end
+                       'file
+                       (or resolved-target target)))))))))))))
 
 ;;;###autoload
 (define-minor-mode my-codex-session-links-mode
