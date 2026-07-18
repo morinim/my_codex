@@ -331,11 +331,11 @@ When nil, diagnostics context is not capped by token budget."
                        (1+ (current-column)))
          :severity (my-codex--flymake-severity
                     (flymake-diagnostic-type diagnostic))
-         :source (if-let* (((fboundp 'flymake-diagnostic-backend))
-                           (backend (flymake-diagnostic-backend diagnostic))
-                           ((symbolp backend)))
-                     (symbol-name backend)
-                   "Flymake")
+         :source
+         (let ((backend (flymake-diagnostic-backend diagnostic)))
+           (if (and backend (symbolp backend))
+               (symbol-name backend)
+             "Flymake"))
          :message (flymake-diagnostic-text diagnostic))))))
 
 (defun my-codex--flymake-diagnostics ()
