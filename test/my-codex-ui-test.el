@@ -217,17 +217,11 @@
 
 (ert-deftest my-codex-top-rename-session-refreshes-session-title ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-top" t)))
-        (session-buffer (get-buffer-create "*codex-top-rename*"))
-        collision-buffer)
+        (session-buffer (get-buffer-create "*codex-top-rename*")))
     (unwind-protect
         (progn
           (my-codex--mark-named-session
            session-buffer "before" root 'workspace-write)
-          (setq collision-buffer
-                (get-buffer-create
-                 (with-current-buffer session-buffer
-                   (my-codex-session-buffer-name
-                    "after" my-codex-session-agent))))
           (cl-letf (((symbol-function 'get-buffer-process)
                        (lambda (buffer)
                          (eq buffer session-buffer)))
@@ -246,9 +240,11 @@
                 (search-forward "*codex-top-rename*")
                 (beginning-of-line)
                 (my-codex-top-rename-session)))
-          (should (string-suffix-p "<2>" (buffer-name session-buffer)))
           (with-current-buffer session-buffer
             (should (equal my-codex-session-name "after"))
+            (should (equal (buffer-name)
+                           (my-codex-session-buffer-name
+                            "after" my-codex-session-agent)))
             (should (string-match-p "Codex · WORKSPACE WRITE · after"
                                     header-line-format))
             (let ((footer (my-codex--session-footer)))
@@ -263,10 +259,42 @@
       (delete-directory root t)
       (when (buffer-live-p session-buffer)
         (kill-buffer session-buffer))
-      (when (buffer-live-p collision-buffer)
-        (kill-buffer collision-buffer))
       (when-let ((buffer (get-buffer "*Agents Top*")))
         (kill-buffer buffer)))))
+
+(ert-deftest my-codex-top-rejects-renaming-to-existing-session ()
+  (let* ((root (file-name-as-directory (make-temp-file "my-codex-top" t)))
+         (source (get-buffer-create "*codex-top-rename-source*"))
+         (target-name (let ((default-directory root))
+                        (my-codex-session-buffer-name "target" 'codex)))
+         (target (get-buffer-create target-name))
+         source-name source-id source-title)
+    (unwind-protect
+        (progn
+          (my-codex--mark-named-session
+           source "source" root 'workspace-write 'codex)
+          (my-codex--mark-named-session
+           target "target" root 'workspace-write 'codex)
+          (with-current-buffer source
+            (setq source-name (buffer-name)
+                  source-id my-codex-session-id
+                  source-title header-line-format))
+          (cl-letf (((symbol-function 'tabulated-list-get-id)
+                     (lambda () (buffer-name source)))
+                    ((symbol-function 'read-string)
+                     (lambda (&rest _) "target")))
+            (should-error (my-codex-top-rename-session)
+                          :type 'user-error))
+          (with-current-buffer source
+            (should (equal (buffer-name) source-name))
+            (should (equal my-codex-session-name "source"))
+            (should (equal my-codex-session-id source-id))
+            (should (equal header-line-format source-title))))
+      (delete-directory root t)
+      (when (buffer-live-p source)
+        (kill-buffer source))
+      (when (buffer-live-p target)
+        (kill-buffer target)))))
 
 (ert-deftest my-codex-top-rejects-renaming-default-session ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-default" t)))

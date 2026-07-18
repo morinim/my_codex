@@ -468,10 +468,18 @@ STATE is one of the strings `clean', `dirty', or `error'."
                (root my-codex-session-project-root)
                (new-id (my-codex--session-id root new-name agent))
                (new-buf-name (my-codex-session-buffer-name new-name agent)))
+          (when (seq-some
+                 (lambda (other)
+                   (and (not (eq other buffer))
+                        (with-current-buffer other
+                          (or (equal (buffer-name other) new-buf-name)
+                              (equal my-codex-session-id new-id)))))
+                 (my-codex--all-session-buffers))
+            (user-error "Session %s already exists" new-name))
+          (rename-buffer new-buf-name nil)
           (setq-local my-codex-session-name new-name)
           (setq-local my-codex-session-id new-id)
-          (my-codex--refresh-session-title)
-          (rename-buffer new-buf-name t)))
+          (my-codex--refresh-session-title)))
       (revert-buffer))))
 
 ;;;###autoload
