@@ -17,32 +17,51 @@
 (require 'my-codex-core)
 
 (autoload 'my-codex-session-links-mode "my-codex-links" nil t)
+(autoload 'my-codex--line-bounds "my-codex-links" nil nil)
 (autoload 'my-codex--linkify-session-region "my-codex-links" nil t)
 (autoload 'my-codex-open-session-link-at-position "my-codex-links" nil t)
 (defvar my-codex-session-link-map)
 (defvar my-codex-eat-integration-mode)
 (declare-function eat "eat" (&optional program new-session))
-(declare-function eat--process-output-queue "eat" (buffer))
 (defvar eat-buffer-name)
 (defvar eat-terminal)
 (defvar eat-term-scrollback-size)
+(declare (special eat-update-hook))
+(declare-function eat-term-display-beginning "eat" (terminal))
+(declare-function eat-term-end "eat" (terminal))
 (declare-function eat-term-input-event "eat" (terminal n event &optional ref-pos))
 (declare-function eat-term-process-output "eat" (terminal output))
 (declare-function eat-term-send-string "eat" (terminal string))
 (declare-function eat-term-send-string-as-yank "eat" (terminal args))
 
-(defvar-local my-codex--eat-link-overlays nil
-  "Overlays making my-codex links visible in Eat buffers.")
+(defconst my-codex--eat-link-refresh-delay 0.05
+  "Seconds to coalesce Eat link refreshes.")
 
-(defun my-codex--eat-clear-link-overlays ()
-  "Remove Eat link overlays in the current buffer."
-  (mapc #'delete-overlay my-codex--eat-link-overlays)
-  (setq my-codex--eat-link-overlays nil))
+(defvar-local my-codex--eat-link-refresh-enabled nil
+  "Non-nil when Eat link refresh hooks are installed.")
 
-(defun my-codex--eat-apply-link-overlays ()
-  "Apply visible Eat link overlays in the current buffer."
-  (let ((pos (point-min))
-        (end (point-max))
+(defvar-local my-codex--eat-link-refresh-timer nil
+  "Timer for a pending Eat link refresh.")
+
+(defvar-local my-codex--eat-link-refresh-beginning nil
+  "Marker at the beginning of pending Eat link changes.")
+
+(defvar-local my-codex--eat-link-refresh-end nil
+  "Marker at the end of pending Eat link changes.")
+
+(defvar-local my-codex--eat-previous-display-beginning nil
+  "Marker at Eat's display beginning before its latest update.")
+
+(defun my-codex--eat-clear-link-overlays (&optional beg end)
+  "Remove Eat link overlays between BEG and END.
+When either bound is nil, use the corresponding buffer boundary."
+  (remove-overlays (or beg (point-min)) (or end (point-max))
+                   'my-codex-eat-link t))
+
+(defun my-codex--eat-apply-link-overlays (&optional beg end)
+  "Apply visible Eat link overlays between BEG and END."
+  (let ((pos (or beg (point-min)))
+        (end (or end (point-max)))
         next)
     (while (< pos end)
       (setq next (next-single-property-change
@@ -55,7 +74,7 @@
           (overlay-put overlay 'help-echo "mouse-1 or RET: open link")
           (overlay-put overlay 'keymap my-codex-session-link-map)
           (overlay-put overlay 'priority 1000)
-          (push overlay my-codex--eat-link-overlays)))
+          (overlay-put overlay 'evaporate t)))
       (setq pos next))))
 
 (defun my-codex--eat-shell-name ()
@@ -181,31 +200,136 @@
 
 (defvar my-codex-eat-override-mode)
 
-(defun my-codex--eat-linkify-after-update ()
-  "Linkify rendered Eat output in the current my-codex session."
-  (my-codex--eat-clear-link-overlays)
-  (when (bound-and-true-p my-codex-session-links-mode)
-    (my-codex--linkify-session-region (point-min) (point-max))
-    (my-codex--eat-apply-link-overlays)))
+(defun my-codex--eat-linkify-after-update (&optional beg end)
+  "Linkify rendered Eat output between BEG and END.
+When either bound is nil, use the corresponding buffer boundary."
+  (let ((beg (or beg (point-min)))
+        (end (or end (point-max))))
+    (pcase-let ((`(,rbeg . ,rend) (my-codex--line-bounds beg end)))
+      (my-codex--eat-clear-link-overlays rbeg rend)
+      (when (bound-and-true-p my-codex-session-links-mode)
+        (my-codex--linkify-session-region beg end)
+        (my-codex--eat-apply-link-overlays rbeg rend)))))
 
-(defun my-codex--eat-clear-overlays-when-links-disabled ()
-  "Clear Eat link overlays when session links are disabled."
-  (unless (bound-and-true-p my-codex-session-links-mode)
+(defun my-codex--eat-current-display-beginning ()
+  "Return the current Eat display beginning, or `point-min'."
+  (if (and (bound-and-true-p eat-terminal)
+           (fboundp 'eat-term-display-beginning))
+      (max (point-min)
+           (min (point-max)
+                (eat-term-display-beginning eat-terminal)))
+    (point-min)))
+
+(defun my-codex--eat-current-display-end ()
+  "Return the current Eat display end, or `point-max'."
+  (if (and (bound-and-true-p eat-terminal)
+           (fboundp 'eat-term-end))
+      (max (point-min)
+           (min (point-max) (eat-term-end eat-terminal)))
+    (point-max)))
+
+(defun my-codex--eat-release-marker (marker)
+  "Detach MARKER from its buffer when it is a marker."
+  (when (markerp marker)
+    (set-marker marker nil)))
+
+(defun my-codex--eat-cancel-link-refresh ()
+  "Cancel and forget a pending Eat link refresh."
+  (when (timerp my-codex--eat-link-refresh-timer)
+    (cancel-timer my-codex--eat-link-refresh-timer))
+  (setq my-codex--eat-link-refresh-timer nil)
+  (my-codex--eat-release-marker my-codex--eat-link-refresh-beginning)
+  (my-codex--eat-release-marker my-codex--eat-link-refresh-end)
+  (setq my-codex--eat-link-refresh-beginning nil)
+  (setq my-codex--eat-link-refresh-end nil))
+
+(defun my-codex--eat-refresh-links (buffer)
+  "Refresh pending session links in Eat BUFFER."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (setq my-codex--eat-link-refresh-timer nil)
+      (let ((beg (and (markerp my-codex--eat-link-refresh-beginning)
+                      (marker-position my-codex--eat-link-refresh-beginning)))
+            (end (and (markerp my-codex--eat-link-refresh-end)
+                      (marker-position my-codex--eat-link-refresh-end))))
+        (my-codex--eat-release-marker my-codex--eat-link-refresh-beginning)
+        (my-codex--eat-release-marker my-codex--eat-link-refresh-end)
+        (setq my-codex--eat-link-refresh-beginning nil)
+        (setq my-codex--eat-link-refresh-end nil)
+        (when (and beg end
+                   (bound-and-true-p my-codex-session-links-mode))
+          (my-codex--eat-linkify-after-update beg end))))))
+
+(defun my-codex--eat-schedule-link-refresh ()
+  "Coalesce a link refresh for the current Eat display."
+  (when (bound-and-true-p my-codex-session-links-mode)
+    (let* ((display-beg (my-codex--eat-current-display-beginning))
+           (previous-beg
+            (and (markerp my-codex--eat-previous-display-beginning)
+                 (marker-position my-codex--eat-previous-display-beginning)))
+           (beg (min display-beg (or previous-beg display-beg)))
+           (end (my-codex--eat-current-display-end)))
+      (if (markerp my-codex--eat-previous-display-beginning)
+          (set-marker my-codex--eat-previous-display-beginning display-beg)
+        (setq my-codex--eat-previous-display-beginning
+              (copy-marker display-beg)))
+      (if (markerp my-codex--eat-link-refresh-beginning)
+          (when (< beg (marker-position
+                        my-codex--eat-link-refresh-beginning))
+            (set-marker my-codex--eat-link-refresh-beginning beg))
+        (setq my-codex--eat-link-refresh-beginning (copy-marker beg)))
+      (if (markerp my-codex--eat-link-refresh-end)
+          (when (> end (marker-position my-codex--eat-link-refresh-end))
+            (set-marker my-codex--eat-link-refresh-end end))
+        (setq my-codex--eat-link-refresh-end (copy-marker end t)))
+      (unless my-codex--eat-link-refresh-timer
+        (setq my-codex--eat-link-refresh-timer
+              (run-with-timer my-codex--eat-link-refresh-delay nil
+                              #'my-codex--eat-refresh-links
+                              (current-buffer)))))))
+
+(defun my-codex--eat-session-links-mode-changed ()
+  "Update Eat link refresh state after session links mode changes."
+  (my-codex--eat-cancel-link-refresh)
+  (my-codex--eat-release-marker my-codex--eat-previous-display-beginning)
+  (setq my-codex--eat-previous-display-beginning nil)
+  (if (bound-and-true-p my-codex-session-links-mode)
+      (progn
+        (my-codex--eat-linkify-after-update)
+        (setq my-codex--eat-previous-display-beginning
+              (copy-marker (my-codex--eat-current-display-beginning))))
     (my-codex--eat-clear-link-overlays)))
 
+(defun my-codex--eat-update-hook-supported-p ()
+  "Return non-nil when Eat owns and provides `eat-update-hook'."
+  (and (featurep 'eat)
+       (boundp 'eat-update-hook)
+       (get 'eat-update-hook 'custom-type)))
+
+(defun my-codex--eat-process-output-queue-advice (buffer)
+  "Refresh BUFFER after an Eat output queue update.
+This is retained for Eat versions without `eat-update-hook'."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (my-codex--eat-linkify-after-update))))
+
 (defun my-codex--enable-eat-output-linkification ()
-  "Enable Eat output linkification advice when Eat is loaded."
+  "Enable the legacy Eat output advice when no update hook is available."
   (when (fboundp 'eat--process-output-queue)
     (unless (advice-member-p #'my-codex--eat-process-output-queue-advice
                              'eat--process-output-queue)
-      (advice-add 'eat--process-output-queue
-                  :after #'my-codex--eat-process-output-queue-advice))))
+      (advice-add 'eat--process-output-queue :after
+                  #'my-codex--eat-process-output-queue-advice))))
 
 (defun my-codex--enable-eat-output-linkification-when-active ()
-  "Enable Eat output linkification when Eat integration is active."
+  "Enable legacy Eat output linkification when integration is active."
   (when my-codex-eat-integration-mode
-    (my-codex--enable-eat-output-boundary-workaround)
     (my-codex--enable-eat-output-linkification)))
+
+(defun my-codex--enable-eat-workarounds-when-active ()
+  "Enable Eat compatibility workarounds when integration is active."
+  (when my-codex-eat-integration-mode
+    (my-codex--enable-eat-output-boundary-workaround)))
 
 (defun my-codex--eat-term-process-output-advice (fn terminal output)
   "Call FN with TERMINAL and OUTPUT, tolerating Eat's chunk-boundary bug."
@@ -227,16 +351,27 @@
 
 (defun my-codex--enable-eat-session-links ()
   "Enable session link refreshes for Eat terminal updates."
-  (my-codex--enable-eat-output-linkification)
-  (add-hook 'my-codex-session-links-mode-hook
-            #'my-codex--eat-clear-overlays-when-links-disabled
-            nil t))
+  (unless my-codex--eat-link-refresh-enabled
+    (setq my-codex--eat-link-refresh-enabled t)
+    (if (my-codex--eat-update-hook-supported-p)
+        (add-hook 'eat-update-hook #'my-codex--eat-schedule-link-refresh nil t)
+      (my-codex--enable-eat-output-linkification))
+    (add-hook 'my-codex-session-links-mode-hook
+              #'my-codex--eat-session-links-mode-changed nil t)
+    (add-hook 'kill-buffer-hook #'my-codex--eat-cancel-link-refresh nil t)
+    (my-codex--eat-session-links-mode-changed)))
 
-(defun my-codex--eat-process-output-queue-advice (buffer)
-  "Linkify BUFFER after Eat has rendered pending output."
-  (when (buffer-live-p buffer)
-    (with-current-buffer buffer
-      (my-codex--eat-linkify-after-update))))
+(defun my-codex--disable-eat-session-links ()
+  "Disable session link refreshes in the current Eat buffer."
+  (remove-hook 'eat-update-hook #'my-codex--eat-schedule-link-refresh t)
+  (remove-hook 'my-codex-session-links-mode-hook
+               #'my-codex--eat-session-links-mode-changed t)
+  (remove-hook 'kill-buffer-hook #'my-codex--eat-cancel-link-refresh t)
+  (my-codex--eat-cancel-link-refresh)
+  (my-codex--eat-release-marker my-codex--eat-previous-display-beginning)
+  (setq my-codex--eat-previous-display-beginning nil)
+  (setq my-codex--eat-link-refresh-enabled nil)
+  (my-codex--eat-clear-link-overlays))
 
 (defun my-codex--eat-session-link-at-position-p (pos)
   "Return non-nil when POS is on a my-codex session link."
@@ -315,22 +450,18 @@ with Eat overrides disabled."
   "Enable my-codex helpers in the current agent Eat buffer."
   (when (and my-codex-session-id
              (eq major-mode 'eat-mode))
-    (when (bound-and-true-p my-codex-session-links-mode)
-      (my-codex--enable-eat-session-links))
+    (my-codex--enable-eat-session-links)
     (my-codex-eat-override-mode 1)))
 
 (defun my-codex--disable-eat-buffer-integration ()
   "Disable my-codex helpers in the current Eat buffer."
-  (remove-hook 'my-codex-session-links-mode-hook
-               #'my-codex--eat-clear-overlays-when-links-disabled
-               t)
-  (my-codex--eat-clear-link-overlays)
+  (my-codex--disable-eat-session-links)
   (my-codex-eat-override-mode -1))
 
 (defun my-codex--enable-eat-integration ()
   "Enable my-codex helpers for Eat."
   (with-eval-after-load 'eat
-    (my-codex--enable-eat-output-linkification-when-active))
+    (my-codex--enable-eat-workarounds-when-active))
   (dolist (buffer (buffer-list))
     (with-current-buffer buffer
       (my-codex--enable-eat-buffer-integration))))

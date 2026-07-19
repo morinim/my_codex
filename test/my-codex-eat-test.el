@@ -220,6 +220,18 @@
        (eq (get-text-property (point) 'my-codex-session-link-type)
            'url)))))
 
+(ert-deftest my-codex-eat-link-refresh-coalesces-timers ()
+  (with-temp-buffer
+    (let ((my-codex-session-links-mode t)
+          (eat-terminal nil))
+      (cl-letf (((symbol-function 'run-with-timer)
+                 (lambda (&rest _args) (run-at-time 60 nil #'ignore))))
+        (my-codex--eat-schedule-link-refresh)
+        (let ((timer my-codex--eat-link-refresh-timer))
+          (my-codex--eat-schedule-link-refresh)
+          (should (eq timer my-codex--eat-link-refresh-timer))))
+      (my-codex--eat-cancel-link-refresh))))
+
 (ert-deftest my-codex-eat-update-linkifies-before-session-metadata ()
   (with-temp-buffer
     (my-codex-session-links-mode 1)
@@ -356,6 +368,21 @@
                             'eat--process-output-queue)))
       (advice-remove 'eat--process-output-queue
                      #'my-codex--eat-process-output-queue-advice))))
+
+(ert-deftest my-codex-eat-hookless-loaded-eat-uses-output-advice ()
+  (let ((eat-update-hook nil))
+    (cl-letf (((symbol-function 'featurep)
+               (lambda (feature) (eq feature 'eat)))
+              ((symbol-function 'eat--process-output-queue)
+               (lambda (_buffer))))
+      (unwind-protect
+          (with-temp-buffer
+            (my-codex--enable-eat-session-links)
+            (should
+             (advice-member-p #'my-codex--eat-process-output-queue-advice
+                              'eat--process-output-queue)))
+        (advice-remove 'eat--process-output-queue
+                       #'my-codex--eat-process-output-queue-advice)))))
 
 (ert-deftest my-codex-eat-process-output-advice-linkifies-buffer ()
   (let ((buffer (generate-new-buffer " *my-codex-eat-advice*")))
