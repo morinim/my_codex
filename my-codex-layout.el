@@ -245,6 +245,19 @@
       (unless (memq buffer active-buffers)
         (my-codex--restore-edit-fill-column-indicator buffer)))))
 
+(defun my-codex--remove-edit-fill-column-indicator-hook-if-unused ()
+  "Stop monitoring window changes when no buffers or windows are managed."
+  (unless (or my-codex--edit-fill-column-indicator-buffers
+              (seq-some
+               (lambda (frame)
+                 (seq-some
+                  (lambda (window)
+                    (window-parameter window 'my-codex-edit-window))
+                  (window-list frame 'no-minibuf)))
+               (frame-list)))
+    (remove-hook 'window-buffer-change-functions
+                 #'my-codex--refresh-edit-fill-column-indicator-windows)))
+
 (defun my-codex--refresh-edit-fill-column-indicator-windows (frame)
   "Apply Codex fill-column indicators to marked edit windows in FRAME."
   (dolist (window (window-list frame 'no-minibuf))
@@ -264,7 +277,8 @@
           (set-window-parameter window 'my-codex-edit-buffer nil)
           (set-window-parameter window 'my-codex-edit-window nil)
           (set-window-parameter window 'my-codex-term-buffer nil)))))
-  (my-codex--restore-inactive-edit-fill-column-indicator-buffers))
+  (my-codex--restore-inactive-edit-fill-column-indicator-buffers)
+  (my-codex--remove-edit-fill-column-indicator-hook-if-unused))
 
 (defun my-codex--set-edit-fill-column-indicator-window (window)
   "Mark WINDOW as the Codex edit window and update its indicator."
@@ -360,6 +374,21 @@ AGENT identifies the agent profile used for buffer names and metadata."
             (select-window term-window)
           (when (window-live-p edit-window)
             (select-window edit-window)))))))
+
+(defun my-codex-layout-unload-function ()
+  "Restore display state managed by `my-codex-layout'."
+  (remove-hook 'window-buffer-change-functions
+               #'my-codex--refresh-edit-fill-column-indicator-windows)
+  (dolist (buffer (copy-sequence
+                   my-codex--edit-fill-column-indicator-buffers))
+    (my-codex--restore-edit-fill-column-indicator buffer))
+  (dolist (frame (frame-list))
+    (dolist (window (window-list frame 'no-minibuf))
+      (when (window-parameter window 'my-codex-edit-window)
+        (set-window-parameter window 'my-codex-edit-buffer nil)
+        (set-window-parameter window 'my-codex-edit-window nil)
+        (set-window-parameter window 'my-codex-term-buffer nil))))
+  nil)
 
 (provide 'my-codex-layout)
 

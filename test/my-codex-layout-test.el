@@ -75,6 +75,60 @@
       (should-error (my-codex-associated-edit-window)
                     :type 'user-error))))
 
+(ert-deftest my-codex-layout-removes-window-buffer-hook-when-unused ()
+  (let ((window-buffer-change-functions nil)
+        (my-codex--edit-fill-column-indicator-buffers nil))
+    (my-codex-layout-test--with-windows
+        (edit-window agent-window edit-buffer agent-buffer)
+      (my-codex--enable-edit-fill-column-indicator
+       edit-window agent-window)
+      (should (memq #'my-codex--refresh-edit-fill-column-indicator-windows
+                    window-buffer-change-functions))
+      (delete-window agent-window)
+      (my-codex--refresh-edit-fill-column-indicator-windows
+       (selected-frame))
+      (should-not my-codex--edit-fill-column-indicator-buffers)
+      (should-not
+       (memq #'my-codex--refresh-edit-fill-column-indicator-windows
+             window-buffer-change-functions)))))
+
+(ert-deftest my-codex-layout-keeps-window-buffer-hook-for-marked-window ()
+  (let ((window-buffer-change-functions
+         (list #'my-codex--refresh-edit-fill-column-indicator-windows))
+        (my-codex--edit-fill-column-indicator-buffers nil)
+        (marked-window 'marked-window))
+    (cl-letf (((symbol-function 'frame-list) (lambda () '(other-frame)))
+              ((symbol-function 'window-list)
+               (lambda (&rest _args) (list marked-window)))
+              ((symbol-function 'window-parameter)
+               (lambda (window parameter)
+                 (and (eq window marked-window)
+                      (eq parameter 'my-codex-edit-window)))))
+      (my-codex--remove-edit-fill-column-indicator-hook-if-unused))
+    (should (memq #'my-codex--refresh-edit-fill-column-indicator-windows
+                  window-buffer-change-functions))))
+
+(ert-deftest my-codex-layout-unload-restores-managed-display-state ()
+  (let ((window-buffer-change-functions nil)
+        (my-codex--edit-fill-column-indicator-buffers nil))
+    (my-codex-layout-test--with-windows
+        (edit-window agent-window edit-buffer agent-buffer)
+      (with-current-buffer edit-buffer
+        (display-fill-column-indicator-mode -1))
+      (my-codex--enable-edit-fill-column-indicator
+       edit-window agent-window)
+      (my-codex-layout-unload-function)
+      (should-not my-codex--edit-fill-column-indicator-buffers)
+      (should-not
+       (memq #'my-codex--refresh-edit-fill-column-indicator-windows
+             window-buffer-change-functions))
+      (should-not
+       (buffer-local-value 'display-fill-column-indicator-mode
+                           edit-buffer))
+      (should-not (window-parameter edit-window 'my-codex-edit-buffer))
+      (should-not (window-parameter edit-window 'my-codex-edit-window))
+      (should-not (window-parameter edit-window 'my-codex-term-buffer)))))
+
 (ert-deftest my-codex-toggle-focus-switches-both-ways ()
   (my-codex-layout-test--with-windows
       (edit-window agent-window edit-buffer agent-buffer)
