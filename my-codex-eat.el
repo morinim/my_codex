@@ -26,7 +26,6 @@
 (defvar eat-buffer-name)
 (defvar eat-terminal)
 (defvar eat-term-scrollback-size)
-(declare (special eat-update-hook))
 (declare-function eat-term-display-beginning "eat" (terminal))
 (declare-function eat-term-end "eat" (terminal))
 (declare-function eat-term-input-event "eat" (terminal n event &optional ref-pos))
@@ -320,11 +319,6 @@ This is retained for Eat versions without `eat-update-hook'."
                              'eat--process-output-queue)
       (advice-add 'eat--process-output-queue :after
                   #'my-codex--eat-process-output-queue-advice))))
-
-(defun my-codex--enable-eat-output-linkification-when-active ()
-  "Enable legacy Eat output linkification when integration is active."
-  (when my-codex-eat-integration-mode
-    (my-codex--enable-eat-output-linkification)))
 
 (defun my-codex--enable-eat-workarounds-when-active ()
   "Enable Eat compatibility workarounds when integration is active."

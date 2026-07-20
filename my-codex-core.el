@@ -415,7 +415,7 @@ unlimited."
   :type 'natnum
   :group 'my-codex)
 
-(defvar-local my-codex--generated-artifact-wait-timer nil
+(defvar-local my-codex--generated-artefact-wait-timer nil
   "Active timer waiting for a generated session artefact.")
 
 (defvar-local my-codex--handoff-wait-timer nil
@@ -626,10 +626,6 @@ Existing session buffers keep their recorded terminal backend."
    (when-let ((buffer (get-buffer buffer-name)))
      (with-current-buffer buffer
        my-codex-session-terminal-backend))))
-
-(defun my-codex--current-backend ()
-  "Return the backend for the current project default agent session."
-  (my-codex--backend-for-buffer-name (my-codex-current-buffer-name)))
 
 (defun my-codex--agent-profile (agent)
   "Return the profile for AGENT, or raise an error."

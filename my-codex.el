@@ -5,12 +5,12 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.101.1
+;; Version: 0.102.0
 ;; Package-Requires: ((emacs "29.1") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
 
-;; This Source Code Fo rm is subject to the terms of the Mozilla Public
+;; This Source Code Form is subject to the terms of the Mozilla Public
 ;; License, v. 2.0. If a copy of the MPL was not distributed with this
 ;; file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
@@ -27,9 +27,7 @@
 (require 'my-codex-core)
 (require 'my-codex-layout)
 (require 'cl-lib)
-(require 'ediff)
 (require 'easymenu)
-(require 'project)
 (require 'subr-x)
 (require 'transient)
 
@@ -75,11 +73,9 @@
            (my-codex-ediff-changed-file-against-head . "my-codex-git")
            (my-codex-git-commit-with-latest-message . "my-codex-git")
            (my-codex-list-open-issues . "my-codex-github")
-           (my-codex-summarize-session-to-github-issue . "my-codex-github")
+           (my-codex-summarise-session-to-github-issue . "my-codex-github")
            (my-codex-doctor . "my-codex-doctor")))
   (autoload (car autoload-entry) (cdr autoload-entry) nil t))
-(declare-function markdown-mode "markdown-mode")
-(declare-function projectile-toggle-between-implementation-and-test "projectile")
 (declare-function my-codex--enable-vterm-buffer-integration "my-codex-vterm")
 (cl-defmethod my-codex-backend-start
   ((backend my-codex-vterm-backend) project-root command
@@ -330,8 +326,8 @@ the new session."
              (my-codex--active-agent-label root))))
 
 ;;;###autoload
-(defun my-codex-summarize-session-to-markdown ()
-  "Ask the agent to summarize the current conversation as Markdown notes.
+(defun my-codex-summarise-session-to-markdown ()
+  "Ask the agent to summarise the current conversation as Markdown notes.
 Open the generated notes in an editable Markdown buffer when they are ready."
   (interactive)
   (require 'my-codex-prompts)
@@ -350,8 +346,8 @@ Open the generated notes in an editable Markdown buffer when they are ready."
      :ready-message "Agent session summary is ready for editing."
      :poll-interval my-codex-generated-output-poll-interval
      :poll-attempts my-codex-generated-output-poll-attempts
-     :timer-var 'my-codex--generated-artifact-wait-timer)
-    (message "Asked %s to summarize the session; waiting to open editor."
+     :timer-var 'my-codex--generated-artefact-wait-timer)
+    (message "Asked %s to summarise the session; waiting to open editor."
              (my-codex--active-agent-label root))))
 
 (eval-and-compile
@@ -467,7 +463,7 @@ computed from the subject buffer unless the predicate is itself left-aware."
       (:command my-codex-explain-region-as-error :key "e" :label "Explain error" :group "Context" :menu "Explain selected error" :contexts (code terminal unknown) :available my-codex--region-available-p :help "Ask the active agent to explain the selected compiler/test error")
       (:command my-codex-copy-region-reference :key "y" :label "Copy reference" :group "Context" :menu "Copy region or line reference" :available my-codex--current-file-available-p :help "Copy a compact file-and-line reference for the selected region or current line")
       (:command my-codex-open-project-instructions :key "i" :label "Project instructions" :group "Context" :menu "Open project instructions" :help "Open AGENTS.md, CODEX.md, or .codex/instructions.md")
-      (:command my-codex-summarize-session-to-markdown :key "M" :label "Summarize session" :group "Context" :menu "Summarize session to Markdown" :help "Ask the active agent to summarize the conversation as Markdown notes")
+      (:command my-codex-summarise-session-to-markdown :key "M" :label "Summarise session" :group "Context" :menu "Summarise session to Markdown" :help "Ask the active agent to summarise the conversation as Markdown notes")
       (:command my-codex-tools-transient :key "T" :label "Tools" :group "Context")
       (:command my-codex-default-read-only :key "o" :label "Read-only" :group "Default session" :prefix my-codex-session-transient :menu "Show/start default read-only" :help "Show the default agent session in read-only mode")
       (:command my-codex-default-workspace :key "w" :label "Workspace" :group "Default session" :prefix my-codex-session-transient :menu "Show/start default workspace-write" :help "Show the default agent session with workspace write access")
@@ -499,7 +495,7 @@ computed from the subject buffer unless the predicate is itself left-aware."
       (:command my-codex-ediff-changed-file-against-head :key "D" :label "Ediff changed file" :prefix my-codex-git-transient :menu "Ediff changed file against HEAD" :help "Choose a tracked changed file and review it against HEAD")
       (:command my-codex-github-transient :key "t" :label "GitHub..." :group "GitHub" :menu "GitHub commands" :help "Open GitHub issue and actions menu")
       (:command my-codex-list-open-issues :key "l" :label "List issues" :prefix my-codex-github-transient :menu "List issues" :help "List open GitHub issues for the current repository in a buffer")
-      (:command my-codex-summarize-session-to-github-issue :key "d" :label "Draft issue" :prefix my-codex-github-transient :menu "Draft issue" :help "Ask the active agent to draft a GitHub issue, then edit it before creating it with gh")
+      (:command my-codex-summarise-session-to-github-issue :key "d" :label "Draft issue" :prefix my-codex-github-transient :menu "Draft issue" :help "Ask the active agent to draft a GitHub issue, then edit it before creating it with gh")
       (:command my-codex-explain-diagnostic-at-point :key "p" :label "At point" :prefix my-codex-diagnostics-transient)
       (:command my-codex-explain-buffer-diagnostics :key "a" :label "All" :prefix my-codex-diagnostics-transient)))
     "Commands used to generate the prefix keymap and command menus.")

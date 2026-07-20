@@ -42,7 +42,7 @@ Body:
 <Markdown issue body>
 
 Preserve concrete file names, command names, and technical details. Do not edit files."
-  "Prompt used by `my-codex-summarize-session-to-github-issue'."
+  "Prompt used by `my-codex-summarise-session-to-github-issue'."
   :type 'string
   :group 'my-codex)
 
@@ -274,7 +274,7 @@ Preserve concrete file names, command names, and technical details. Do not edit 
   (when my-codex--github-issue-creation-in-progress
     (user-error "GitHub issue creation is already in progress"))
   (quit-window 'kill)
-  (message "GitHub issue draft canceled."))
+  (message "GitHub issue draft cancelled."))
 
 (defun my-codex-edit-github-issue-draft (draft root)
   "Open an editable GitHub issue DRAFT for ROOT."
@@ -296,7 +296,7 @@ Preserve concrete file names, command names, and technical details. Do not edit 
     (message "Edit the GitHub issue draft, then press C-c C-c to create it.")))
 
 ;;;###autoload
-(defun my-codex-summarize-session-to-github-issue ()
+(defun my-codex-summarise-session-to-github-issue ()
   "Ask the agent to draft a GitHub issue from the current conversation.
 Open an editable issue draft before running `gh issue create'."
   (interactive)
@@ -317,7 +317,7 @@ Open an editable issue draft before running `gh issue create'."
      :ready-message "Agent GitHub issue draft is ready for editing."
      :poll-interval my-codex-generated-output-poll-interval
      :poll-attempts my-codex-generated-output-poll-attempts
-     :timer-var 'my-codex--generated-artifact-wait-timer)
+     :timer-var 'my-codex--generated-artefact-wait-timer)
     (message "Asked %s to draft a GitHub issue; waiting to open editor."
              (my-codex--active-agent-label root))))
 

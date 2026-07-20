@@ -190,7 +190,7 @@ Focus on:
 - risks or constraints
 
 Preserve concrete file names, command names, and technical details. Do not edit files."
-  "Prompt used by `my-codex-summarize-session-to-markdown'."
+  "Prompt used by `my-codex-summarise-session-to-markdown'."
   :type 'string
   :group 'my-codex)
 
@@ -676,8 +676,8 @@ AGENT is the agent profile used to format their references."
             (format "\n  test: %s"
                     (my-codex--format-file-reference test-relative agent))))
          (if test-relative
-             "Analyze test coverage."
-           "Find the relevant test files, then analyze test coverage."))
+             "Analyse test coverage."
+           "Find the relevant test files, then analyse test coverage."))
    "\n\n"))
 
 ;;;###autoload

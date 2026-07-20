@@ -67,7 +67,7 @@ The literal substring `%s' is replaced with the Git command."
   "Inspect the staged Git diff using `git diff -U1 --cached -- .` and write a concise conventional commit message.
 
 Use an imperative subject and a short explanatory body when useful. Limit each line to %d columns. Do not edit files.\n"
-  "Prompt template used by `my-codex-commit-message-from-diff'.
+  "Prompt template used by `my-codex-git-commit-with-latest-message'.
 The literal substring `%d' is replaced with
 `my-codex-commit-message-fill-column'.  Marked-output instructions
 are appended for each request."
@@ -513,35 +513,6 @@ When invoked from the agent terminal, use the file in the window to its left."
         root)
        root))))
 
-;;;###autoload
-(defun my-codex-commit-message-from-diff ()
-  "Ask the agent to draft a commit message from the staged Git diff."
-  (interactive)
-  (let* ((buffer (my-codex-active-session-buffer t))
-         (root (my-codex-project-root))
-         (default-directory root)
-         (markers (my-codex--unique-output-markers "COMMIT_MESSAGE"))
-         (begin-marker (car markers))
-         (end-marker (cdr markers))
-         (signature nil))
-    (my-codex--ensure-git-repository)
-    (unless (my-codex--staged-changes-p)
-      (user-error "No staged Git changes to draft a commit message from"))
-    (setq signature (my-codex--staged-diff-signature))
-    (with-current-buffer buffer
-      (setq my-codex--commit-message-request-signature signature)
-      (setq my-codex--commit-message-request-output-markers markers)
-      (setq my-codex--commit-message-request-marker
-            (copy-marker (point-max))))
-    (my-codex-send-prompt
-     (my-codex--commit-message-prompt begin-marker end-marker)
-     buffer)
-    (message
-     "Asked %s to draft a commit message; use F8 c or M-x %s to edit and commit it."
-     (my-codex--active-agent-label root)
-     "my-codex-git-commit-with-latest-message")
-    signature))
-
 (defun my-codex--latest-commit-message-after
     (buffer start-point &optional output-markers)
   "Return the commit message in BUFFER appearing after START-POINT, or nil."
@@ -552,19 +523,6 @@ When invoked from the agent terminal, use the file in the window to its left."
      (car markers)
      (cdr markers)
      '("..." "<commit message here>"))))
-
-(defun my-codex--latest-commit-message ()
-  "Return latest requested commit message from current agent buffer.
-Return nil when no matching message is available."
-  (when-let ((buffer (or (ignore-errors
-                           (my-codex-active-session-buffer))
-                         (get-buffer (my-codex-current-buffer-name)))))
-    (with-current-buffer buffer
-      (when-let* ((marker my-codex--commit-message-request-marker)
-                  ((markerp marker))
-                  ((eq (marker-buffer marker) buffer)))
-        (my-codex--latest-commit-message-after
-         buffer marker my-codex--commit-message-request-output-markers)))))
 
 (defun my-codex--commit-message-buffer-name (root)
   "Return the commit message buffer name for ROOT."
@@ -594,7 +552,7 @@ Return nil when no matching message is available."
   "Cancel the current agent commit message buffer."
   (interactive)
   (quit-window 'kill)
-  (message "Git commit canceled."))
+  (message "Git commit cancelled."))
 
 (defun my-codex--quit-commit-buffer (buffer)
   "Kill BUFFER and quit any windows that were opened for it."
