@@ -4,17 +4,12 @@ Plans target an executor with no session context. They must be self-contained, b
 
 Name files `plans/NNN-short-slug.md` in execution order.
 
-- [Plan template](#plan-template)
-- [Index template](#index-template)
-- [Quality check](#quality-check)
-
-
 ## Plan template
 
 ```markdown
 # Plan NNN: <imperative title>
 
-> Follow this plan step by step. Run each verification before moving on. If a STOP condition occurs, stop and report. Do not improvise.
+> Follow this plan step by step. Make only minor in-scope adjustments needed for the planned outcome and document them. Stop before changing scope or design.
 >
 > Drift check:
 > - committed changes: `git diff --stat <planned-at SHA>..HEAD -- <in-scope paths>`
@@ -29,7 +24,10 @@ Name files `plans/NNN-short-slug.md` in execution order.
 - Depends on: `plans/NNN-*.md` or none
 - Category: bug | security | perf | tests | tech-debt | migration | dx | docs | direction
 - Planned at: commit `<short SHA>`, <YYYY-MM-DD>
-- Issue: <URL; only for `--issues`>
+- Issue: <URL; omit unless published>
+- Verified at: commit `<short SHA>`, <YYYY-MM-DD>; omit until reconciled
+- Execution workspace: `<absolute path>`; omit until execution starts
+- Execution branch: `<branch>`; omit until execution starts
 
 ## Why this matters
 
@@ -37,19 +35,16 @@ Name files `plans/NNN-short-slug.md` in execution order.
 
 ## Current state
 
-- Relevant files, roles, and short excerpts with `file:line` (no prior references).
-- Repo conventions to match, plus ADR/product/design constraints.
+- Relevant facts and symbols with `file:line`; include excerpts only when essential.
+- Repo conventions and ADR/product/design constraints that affect execution.
 
-## Commands
+## Verification
 
-| Purpose | Command | Expected |
-|---|---|---|
-| Install | `<repo command>` | exit 0 |
-| Typecheck | `<repo command>` | exit 0 |
-| Test | `<repo command>` | relevant tests pass |
-| Lint | `<repo command>` | exit 0 |
+| ID | Purpose | Command | Expected |
+|---|---|---|---|
+| V1 | `<purpose>` | `<repo command>` | `<observable result>` |
 
-Use commands verified during recon.
+Include only applicable commands verified during recon. Describe tests to add or change, including paths and cases, in the relevant step.
 
 ## Scope
 
@@ -73,30 +68,24 @@ Out of scope:
 
 Exact files, symbols, target shape, and constraints.
 
-Verify: `<command>` -> `<expected result>`
+Verify: V1.
 
 ### Step 2: ...
 
-## Test plan
-
-- Tests to add/change, with file paths and cases.
-- Existing test to model, if any.
-- Verification command and expected result.
-
 ## Done criteria
 
-- [ ] `<typecheck command>` exits 0
-- [ ] `<test command>` exits 0 and covers `<case>`
+- [ ] Planned behaviour and test cases are implemented.
+- [ ] Every Verification row passes.
 - [ ] No files outside Scope changed
 
 ## STOP conditions
 
 - Current State does not match live code.
-- Verification fails twice after reasonable fixes.
-- Fix requires out-of-scope files.
+- Verification still fails after one minor in-scope correction.
+- Completion requires an unplanned design or out-of-scope change.
 - Key assumption `<assumption>` is false.
 
-## Maintenance notes
+## Maintenance notes (omit if empty)
 
 - Future implications.
 - Review focus.

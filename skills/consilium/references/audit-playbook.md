@@ -2,7 +2,7 @@
 
 A finding needs evidence. Speculation is not a finding.
 
-## 1. Correctness / bugs
+## 1. Bug
 
 Look for proven failure modes: swallowed errors, async/race issues, unsafe null or boundary handling, unhandled states, non-atomic writes, retry/idempotency bugs, repeated type-safety bypasses, and resource leaks.
 
@@ -14,23 +14,23 @@ Do not flag standard conventions or ADR-backed tradeoffs unless the implementati
 
 Check credential handling, injection/path traversal risks, auth/authz, request validation, file uploads, dependency advisories, production config, cookies, and sensitive logs/errors.
 
-## 3. Performance
+## 3. Perf
 
 Prefer structural wins over micro-optimisations: repeated work, poor complexity, unbounded inputs, avoidable serialisation, inefficient I/O, excessive allocation/copying, missing reuse/caching, deferrable work on critical paths, and slow verification loops.
 
-## 4. Test coverage
+## 4. Tests
 
 Find risky untested behaviour: critical paths, state changes, core workflows, high-churn modules, weak or flaky tests, missing boundary coverage, and no one-command verification.
 
-## 5. Tech debt & architecture
+## 5. Tech-debt
 
 Flag debt with maintenance cost: duplication, layering violations, circular dependencies, overly broad modules, dead code, stale flags, unused dependencies, oversized components, deep conditionals, inconsistent patterns, and poor abstraction boundaries.
 
-## 6. Dependencies & migrations
+## 6. Migration
 
 Flag only meaningful migration pressure: unsupported platforms or runtimes, deprecated APIs with removal timelines, abandoned critical dependencies, duplicate capabilities, dependency/configuration drift, and migrations with clear blast radius.
 
-## 7. DX & tooling
+## 7. DX
 
 Look for broken feedback loops: missing static checks or formatting, weak local automation, slow build/test/review cycles, wrong setup docs, undocumented configuration, missing local-setting examples, missing agent instructions, and poor diagnostics.
 
