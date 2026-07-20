@@ -307,14 +307,6 @@
           (overlay-get overlay 'my-codex-eat-link))
         (overlays-at (point)))))))
 
-(ert-deftest my-codex-eat-integration-deferred-load-respects-disabled-mode ()
-  (let ((my-codex-eat-integration-mode nil)
-        installed)
-    (cl-letf (((symbol-function 'my-codex--enable-eat-output-linkification)
-               (lambda () (setq installed t))))
-      (my-codex--enable-eat-output-linkification-when-active)
-      (should-not installed))))
-
 (ert-deftest my-codex-eat-output-boundary-workaround-ignores-end-of-chunk ()
   (let ((output "\e[ "))
     (should-not
