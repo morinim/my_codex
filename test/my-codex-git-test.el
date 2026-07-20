@@ -28,42 +28,6 @@
        "  fix: trim message  \n\n  body text with extra spaces that wraps  \n")
       "fix: trim message\n\nbody text with extra spaces\nthat wraps"))))
 
-(ert-deftest my-codex--latest-commit-message-ignores-before-request-marker ()
-  (let ((buffer (generate-new-buffer "*my-codex-test-session*")))
-    (unwind-protect
-        (with-current-buffer buffer
-          (insert "BEGIN_COMMIT_MESSAGE\n"
-                  "fix: stale message\n"
-                  "END_COMMIT_MESSAGE\n")
-          (setq-local my-codex--commit-message-request-marker (copy-marker (point)))
-          (insert "request sent\n")
-          (cl-letf (((symbol-function 'my-codex-current-buffer-name)
-                     (lambda () (buffer-name buffer))))
-            (should-not (my-codex--latest-commit-message))))
-      (kill-buffer buffer))))
-
-(ert-deftest my-codex--latest-commit-message-uses-request-markers ()
-  (let ((buffer (generate-new-buffer "*my-codex-test-session*")))
-    (unwind-protect
-        (with-current-buffer buffer
-          (setq-local my-codex--commit-message-request-marker
-                      (copy-marker (point)))
-          (setq-local my-codex--commit-message-request-output-markers
-                      '("BEGIN_COMMIT_MESSAGE_unique"
-                        . "END_COMMIT_MESSAGE_unique"))
-          (insert "BEGIN_COMMIT_MESSAGE\n"
-                  "fix: stale fixed-marker message\n"
-                  "END_COMMIT_MESSAGE\n"
-                  "BEGIN_COMMIT_MESSAGE_unique\n"
-                  "fix: use unique markers\n"
-                  "END_COMMIT_MESSAGE_unique\n")
-          (cl-letf (((symbol-function 'my-codex-current-buffer-name)
-                     (lambda () (buffer-name buffer))))
-            (should
-             (equal (my-codex--latest-commit-message)
-                    "fix: use unique markers"))))
-      (kill-buffer buffer))))
-
 (ert-deftest my-codex-git-commit-latest-message-uses-request-markers ()
   (let ((buffer (generate-new-buffer "*my-codex-test-session*"))
         (root "/project/")
