@@ -109,12 +109,8 @@ When nil, diagnostics context is not capped by token budget."
       (user-error "No Flycheck diagnostics in this buffer"))
     (mapcar #'my-codex--normalise-flycheck-diagnostic diagnostics)))
 
-(defun my-codex--flycheck-diagnostic-file (diagnostic root)
-  "Return DIAGNOSTIC file name relative to ROOT when possible."
-  (my-codex--diagnostic-file diagnostic root))
-
-(defun my-codex--flycheck-diagnostic-entry (diagnostic)
-  "Return a YAML-ish entry for Flycheck DIAGNOSTIC."
+(defun my-codex--diagnostic-entry (diagnostic)
+  "Return a YAML-ish entry for DIAGNOSTIC."
   (let ((id (plist-get diagnostic :id)))
     (string-join
      (delq nil
@@ -139,7 +135,7 @@ When nil, diagnostics context is not capped by token budget."
                      (or (plist-get diagnostic :message) "")))))
      "\n")))
 
-(defun my-codex--flycheck-diagnostic-key (diagnostic root)
+(defun my-codex--diagnostic-key (diagnostic root)
   "Return a duplicate-detection key for DIAGNOSTIC under ROOT."
   (list
    (my-codex--diagnostic-file diagnostic root)
@@ -150,18 +146,18 @@ When nil, diagnostics context is not capped by token budget."
    (plist-get diagnostic :id)
    (plist-get diagnostic :message)))
 
-(defun my-codex--flycheck-unique-diagnostics (diagnostics root)
+(defun my-codex--diagnostic-unique (diagnostics root)
   "Return DIAGNOSTICS with exact duplicates removed."
   (let ((seen (make-hash-table :test #'equal))
         unique)
     (dolist (diagnostic diagnostics)
-      (let ((key (my-codex--flycheck-diagnostic-key diagnostic root)))
+      (let ((key (my-codex--diagnostic-key diagnostic root)))
         (unless (gethash key seen)
           (puthash key t seen)
           (push diagnostic unique))))
     (nreverse unique)))
 
-(defun my-codex--flycheck-group-key (diagnostic root)
+(defun my-codex--diagnostic-group-key (diagnostic root)
   "Return a repeated-message grouping key for DIAGNOSTIC under ROOT."
   (list
    (my-codex--diagnostic-file diagnostic root)
@@ -170,12 +166,12 @@ When nil, diagnostics context is not capped by token budget."
    (plist-get diagnostic :id)
    (plist-get diagnostic :message)))
 
-(defun my-codex--flycheck-group-diagnostics (diagnostics root)
+(defun my-codex--diagnostic-group (diagnostics root)
   "Return compact repeated-message groups for DIAGNOSTICS under ROOT."
   (let ((table (make-hash-table :test #'equal))
         groups)
     (dolist (diagnostic diagnostics)
-      (let* ((key (my-codex--flycheck-group-key diagnostic root))
+      (let* ((key (my-codex--diagnostic-group-key diagnostic root))
              (group (gethash key table)))
         (if group
             (push diagnostic (plist-get group :diagnostics))
@@ -195,22 +191,22 @@ When nil, diagnostics context is not capped by token budget."
             (nreverse (plist-get group :diagnostics))))
     (nreverse groups)))
 
-(defun my-codex--flycheck-group-count (group)
+(defun my-codex--diagnostic-group-count (group)
   "Return the number of diagnostics represented by GROUP."
   (length (plist-get group :diagnostics)))
 
-(defun my-codex--flycheck-truncate-group (group count)
+(defun my-codex--diagnostic-truncate-group (group count)
   "Return GROUP with at most COUNT diagnostic locations."
   (let ((copy (copy-sequence group)))
     (setf (plist-get copy :diagnostics)
           (seq-take (plist-get group :diagnostics) count))
     copy))
 
-(defun my-codex--flycheck-group-entry (group)
-  "Return a YAML-ish entry for a compact Flycheck GROUP."
+(defun my-codex--diagnostic-group-entry (group)
+  "Return a YAML-ish entry for a compact diagnostic GROUP."
   (let ((diagnostics (plist-get group :diagnostics)))
     (if (= (length diagnostics) 1)
-        (my-codex--flycheck-diagnostic-entry (car diagnostics))
+        (my-codex--diagnostic-entry (car diagnostics))
       (string-join
        (delq nil
              (list
@@ -239,7 +235,7 @@ When nil, diagnostics context is not capped by token budget."
                "\n")))
        "\n"))))
 
-(defun my-codex--flycheck-diagnostic-at-point (diagnostics)
+(defun my-codex--diagnostic-at-point (diagnostics)
   "Return the most relevant diagnostic at point from DIAGNOSTICS."
   (let* ((line (line-number-at-pos nil t))
          (column (1+ (current-column)))
@@ -383,7 +379,7 @@ When nil, diagnostics context is not capped by token budget."
             ('flycheck (my-codex--flycheck-diagnostics))
             ('flymake (my-codex--flymake-diagnostics))))))
 
-(defun my-codex--flycheck-groups-by-file (groups)
+(defun my-codex--diagnostic-groups-by-file (groups)
   "Return compact diagnostic GROUPS grouped by file."
   (let ((file-groups nil))
     (dolist (group groups)
@@ -395,43 +391,43 @@ When nil, diagnostics context is not capped by token budget."
                 (append file-groups (list (list file group)))))))
     file-groups))
 
-(defun my-codex--flycheck-group-file-entry (group)
+(defun my-codex--diagnostic-group-file-entry (group)
   "Return a YAML-ish file entry for compact diagnostics in GROUP."
   (string-join
    (list
     (format "  - file: %s" (my-codex--yaml-string (car group)))
     "    diagnostics:"
-    (string-join (mapcar #'my-codex--flycheck-group-entry (cdr group))
+    (string-join (mapcar #'my-codex--diagnostic-group-entry (cdr group))
                  "\n"))
    "\n"))
 
-(defun my-codex--flycheck-groups-context (groups)
+(defun my-codex--diagnostic-groups-context (groups)
   "Return the YAML-ish diagnostics context for compact GROUPS."
   (string-join
-   (mapcar #'my-codex--flycheck-group-file-entry
-           (my-codex--flycheck-groups-by-file groups))
+   (mapcar #'my-codex--diagnostic-group-file-entry
+           (my-codex--diagnostic-groups-by-file groups))
    "\n"))
 
-(defun my-codex--flycheck-fit-group-to-budget (selected group token-budget)
+(defun my-codex--diagnostic-fit-group-to-budget (selected group token-budget)
   "Return GROUP truncated to fit TOKEN-BUDGET after SELECTED, or nil.
 When SELECTED is nil, return one diagnostic if even one exceeds the budget."
-  (let ((count (my-codex--flycheck-group-count group))
+  (let ((count (my-codex--diagnostic-group-count group))
         fitted)
     (catch 'done
       (dotimes (index count)
         (let* ((candidate
-                (my-codex--flycheck-truncate-group group (1+ index)))
+                (my-codex--diagnostic-truncate-group group (1+ index)))
                (context
-                (my-codex--flycheck-groups-context
+                (my-codex--diagnostic-groups-context
                  (append selected (list candidate)))))
           (if (> (my-codex--approx-token-count context) token-budget)
               (throw 'done nil)
             (setq fitted candidate)))))
     (or fitted
         (unless selected
-          (my-codex--flycheck-truncate-group group 1)))))
+          (my-codex--diagnostic-truncate-group group 1)))))
 
-(defun my-codex--flycheck-select-groups (groups limit token-budget)
+(defun my-codex--diagnostic-select-groups (groups limit token-budget)
   "Return compact GROUPS constrained by LIMIT and TOKEN-BUDGET."
   (let ((selected nil)
         (included 0))
@@ -441,44 +437,44 @@ When SELECTED is nil, return one diagnostic if even one exceeds the budget."
                (candidate-group
                 (cond
                  ((<= remaining 0) (throw 'done nil))
-                 ((> (my-codex--flycheck-group-count group) remaining)
-                  (my-codex--flycheck-truncate-group group remaining))
+                 ((> (my-codex--diagnostic-group-count group) remaining)
+                  (my-codex--diagnostic-truncate-group group remaining))
                  (t group)))
                (candidate-selected (append selected (list candidate-group)))
                (candidate-context
-                (my-codex--flycheck-groups-context candidate-selected)))
+                (my-codex--diagnostic-groups-context candidate-selected)))
           (when (and token-budget
                      (> (my-codex--approx-token-count candidate-context)
                         token-budget))
             (setq candidate-group
-                  (my-codex--flycheck-fit-group-to-budget
+                  (my-codex--diagnostic-fit-group-to-budget
                    selected candidate-group token-budget))
             (unless candidate-group
               (throw 'done nil))
             (setq candidate-selected (append selected (list candidate-group))))
           (setq selected candidate-selected
                 included (+ included
-                            (my-codex--flycheck-group-count
+                            (my-codex--diagnostic-group-count
                              candidate-group))))))
     selected))
 
-(defun my-codex--flycheck-diagnostics-prompt (diagnostics &optional provider)
+(defun my-codex--diagnostic-batch-prompt (diagnostics &optional provider)
   "Return an agent prompt for DIAGNOSTICS from PROVIDER."
   (let* ((root (my-codex-project-root))
          (provider (or provider 'flycheck))
          (provider-label (capitalize (symbol-name provider)))
          (limit my-codex-diagnostics-limit)
          (total (length diagnostics))
-         (unique (my-codex--flycheck-unique-diagnostics diagnostics root))
+         (unique (my-codex--diagnostic-unique diagnostics root))
          (unique-total (length unique))
-         (groups (my-codex--flycheck-group-diagnostics unique root))
+         (groups (my-codex--diagnostic-group unique root))
          (selected-groups
-          (my-codex--flycheck-select-groups
+          (my-codex--diagnostic-select-groups
            groups limit my-codex-diagnostics-token-budget))
          (diagnostics-context
-          (my-codex--flycheck-groups-context selected-groups))
+          (my-codex--diagnostic-groups-context selected-groups))
          (included
-          (apply #'+ (mapcar #'my-codex--flycheck-group-count
+          (apply #'+ (mapcar #'my-codex--diagnostic-group-count
                              selected-groups)))
          (omitted (- total included))
          (truncated (> omitted 0)))
@@ -510,13 +506,13 @@ When SELECTED is nil, return one diagnostic if even one exceeds the budget."
      (if truncated "true" "false")
      diagnostics-context)))
 
-(defun my-codex--flycheck-diagnostic-at-point-prompt
+(defun my-codex--diagnostic-at-point-prompt
     (diagnostic &optional provider)
   "Return an agent prompt for DIAGNOSTIC from PROVIDER."
   (let* ((root (my-codex-project-root))
          (provider-label
           (capitalize (symbol-name (or provider 'flycheck))))
-         (file (my-codex--flycheck-diagnostic-file diagnostic root)))
+         (file (my-codex--diagnostic-file diagnostic root)))
     (format
      (concat "Explain this %s diagnostic and suggest the most likely "
              "fix. Inspect the file directly if needed. Do not edit files.\n\n"
@@ -526,7 +522,7 @@ When SELECTED is nil, return one diagnostic if even one exceeds the budget."
      provider-label
      provider-label
      (my-codex--yaml-string file)
-     (my-codex--flycheck-diagnostic-entry diagnostic))))
+     (my-codex--diagnostic-entry diagnostic))))
 
 ;;;###autoload
 (defun my-codex-explain-diagnostic-at-point ()
@@ -535,8 +531,8 @@ When SELECTED is nil, return one diagnostic if even one exceeds the budget."
   (pcase-let ((`(,provider . ,diagnostics)
                (my-codex--current-diagnostics)))
     (my-codex--preview-and-send-prompt
-     (my-codex--flycheck-diagnostic-at-point-prompt
-      (my-codex--flycheck-diagnostic-at-point diagnostics)
+     (my-codex--diagnostic-at-point-prompt
+      (my-codex--diagnostic-at-point diagnostics)
       provider))))
 
 ;;;###autoload
@@ -546,7 +542,7 @@ When SELECTED is nil, return one diagnostic if even one exceeds the budget."
   (pcase-let ((`(,provider . ,diagnostics)
                (my-codex--current-diagnostics)))
     (my-codex--preview-and-send-prompt
-     (my-codex--flycheck-diagnostics-prompt diagnostics provider))))
+     (my-codex--diagnostic-batch-prompt diagnostics provider))))
 
 (provide 'my-codex-diagnostics)
 

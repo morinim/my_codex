@@ -61,7 +61,7 @@
      (my-codex--flycheck-diagnostics)
      :type 'user-error)))
 
-(ert-deftest my-codex-flycheck-diagnostic-at-point-selects-nearest-column ()
+(ert-deftest my-codex-diagnostic-at-point-selects-nearest-column ()
   (let ((diagnostics
          '((:line 2 :column 4 :message "left")
            (:line 2 :column 12 :message "right")
@@ -75,12 +75,12 @@
         (should
          (equal
           (plist-get
-           (my-codex--flycheck-diagnostic-at-point
+           (my-codex--diagnostic-at-point
             (my-codex--flycheck-diagnostics))
            :message)
           "right"))))))
 
-(ert-deftest my-codex-flycheck-diagnostic-at-point-uses-absolute-line-in-narrowed-buffer ()
+(ert-deftest my-codex-diagnostic-at-point-uses-absolute-line-in-narrowed-buffer ()
   (let ((diagnostics
          '((:line 2 :column 1 :message "wrong-relative-line")
            (:line 4 :column 1 :message "absolute-line"))))
@@ -97,12 +97,12 @@
         (should
          (equal
           (plist-get
-           (my-codex--flycheck-diagnostic-at-point
+           (my-codex--diagnostic-at-point
             (my-codex--flycheck-diagnostics))
            :message)
           "absolute-line"))))))
 
-(ert-deftest my-codex-flycheck-diagnostic-at-point-ignores-other-files ()
+(ert-deftest my-codex-diagnostic-at-point-ignores-other-files ()
   (let* ((root (file-name-as-directory (make-temp-file "my-codex-flycheck" t)))
          (current-file (expand-file-name "src/current.el" root))
          (other-file (expand-file-name "src/other.el" root))
@@ -126,13 +126,13 @@
             (should
              (equal
               (plist-get
-               (my-codex--flycheck-diagnostic-at-point
+               (my-codex--diagnostic-at-point
                 (my-codex--flycheck-diagnostics))
                :message)
               "current-file"))))
       (delete-directory root t))))
 
-(ert-deftest my-codex-flycheck-diagnostic-at-point-errors-without-current-line-diagnostic ()
+(ert-deftest my-codex-diagnostic-at-point-errors-without-current-line-diagnostic ()
   (let ((diagnostics '((:line 3 :column 1 :message "other"))))
     (with-temp-buffer
       (insert "one\ntwo\nthree\n")
@@ -140,11 +140,11 @@
       (forward-line 1)
       (my-codex-test--with-mock-flycheck diagnostics
         (should-error
-         (my-codex--flycheck-diagnostic-at-point
+         (my-codex--diagnostic-at-point
           (my-codex--flycheck-diagnostics))
          :type 'user-error)))))
 
-(ert-deftest my-codex-flycheck-diagnostics-prompt-formats-diagnostics ()
+(ert-deftest my-codex-diagnostic-batch-prompt-formats-diagnostics ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-flycheck" t))))
     (unwind-protect
         (with-temp-buffer
@@ -167,7 +167,7 @@
               (cl-letf (((symbol-function 'my-codex-project-root)
                          (lambda () root)))
                 (let* ((my-codex-flycheck-diagnostics-limit 100)
-                       (prompt (my-codex--flycheck-diagnostics-prompt
+                       (prompt (my-codex--diagnostic-batch-prompt
                                 (my-codex--flycheck-diagnostics))))
                   (should
                    (string-match-p
@@ -233,7 +233,7 @@
           (should (string-match-p "message: \"broken\"" sent))
           (should-not (string-match-p "message: \"other\"" sent)))))))
 
-(ert-deftest my-codex-flycheck-diagnostics-prompt-reports-truncation ()
+(ert-deftest my-codex-diagnostic-batch-prompt-reports-truncation ()
   (let ((my-codex-flycheck-diagnostics-limit 2)
         (diagnostics
          '((:line 1 :column 1 :level error :checker mock :message "first")
@@ -242,7 +242,7 @@
     (my-codex-test--with-mock-flycheck diagnostics
       (cl-letf (((symbol-function 'my-codex-project-root)
                  (lambda () "/repo/")))
-        (let ((prompt (my-codex--flycheck-diagnostics-prompt diagnostics)))
+        (let ((prompt (my-codex--diagnostic-batch-prompt diagnostics)))
           (should (string-match-p "diagnostic_count: 3" prompt))
           (should (string-match-p "included_count: 2" prompt))
           (should (string-match-p "truncated: true" prompt))
@@ -250,7 +250,7 @@
           (should (string-match-p "message: \"second\"" prompt))
           (should-not (string-match-p "message: \"third\"" prompt)))))))
 
-(ert-deftest my-codex-flycheck-diagnostics-prompt-deduplicates-diagnostics ()
+(ert-deftest my-codex-diagnostic-batch-prompt-deduplicates-diagnostics ()
   (let ((diagnostics
          '((:line 1 :column 1 :level error :checker mock :message "same")
            (:line 1 :column 1 :level error :checker mock :message "same")
@@ -258,7 +258,7 @@
     (my-codex-test--with-mock-flycheck diagnostics
       (cl-letf (((symbol-function 'my-codex-project-root)
                  (lambda () "/repo/")))
-        (let ((prompt (my-codex--flycheck-diagnostics-prompt diagnostics)))
+        (let ((prompt (my-codex--diagnostic-batch-prompt diagnostics)))
           (should (string-match-p "diagnostic_count: 3" prompt))
           (should (string-match-p "unique_diagnostic_count: 2" prompt))
           (should (string-match-p "included_count: 2" prompt))
@@ -271,7 +271,7 @@
                                start (match-end 0)))
                        count))))))))
 
-(ert-deftest my-codex-flycheck-diagnostics-prompt-groups-repeated-messages ()
+(ert-deftest my-codex-diagnostic-batch-prompt-groups-repeated-messages ()
   (let ((diagnostics
          '((:line 1 :column 1 :level error :checker mock :message "repeat")
            (:line 2 :column 3 :level error :checker mock :message "repeat")
@@ -279,14 +279,14 @@
     (my-codex-test--with-mock-flycheck diagnostics
       (cl-letf (((symbol-function 'my-codex-project-root)
                  (lambda () "/repo/")))
-        (let ((prompt (my-codex--flycheck-diagnostics-prompt diagnostics)))
+        (let ((prompt (my-codex--diagnostic-batch-prompt diagnostics)))
           (should (string-match-p "occurrence_count: 2" prompt))
           (should (string-match-p "locations:" prompt))
           (should (string-match-p "- line: 1" prompt))
           (should (string-match-p "- line: 2" prompt))
           (should (string-match-p "- line: 4" prompt)))))))
 
-(ert-deftest my-codex-flycheck-diagnostics-prompt-obeys-context-budget ()
+(ert-deftest my-codex-diagnostic-batch-prompt-obeys-context-budget ()
   (let ((my-codex-flycheck-diagnostics-limit 100)
         (my-codex-diagnostics-token-budget 80)
         (diagnostics
@@ -297,7 +297,7 @@
     (my-codex-test--with-mock-flycheck diagnostics
       (cl-letf (((symbol-function 'my-codex-project-root)
                  (lambda () "/repo/")))
-        (let ((prompt (my-codex--flycheck-diagnostics-prompt diagnostics)))
+        (let ((prompt (my-codex--diagnostic-batch-prompt diagnostics)))
           (should (string-match-p "diagnostic_count: 3" prompt))
           (should (string-match-p "included_count: 1" prompt))
           (should (string-match-p "omitted_count: 2" prompt))
@@ -307,7 +307,7 @@
           (should-not (string-match-p "much longer message" prompt))
           (should-not (string-match-p "message: \"later\"" prompt)))))))
 
-(ert-deftest my-codex-flycheck-diagnostics-prompt-keeps-one-tight-budget ()
+(ert-deftest my-codex-diagnostic-batch-prompt-keeps-one-tight-budget ()
   (let ((my-codex-flycheck-diagnostics-limit 100)
         (my-codex-diagnostics-token-budget 1)
         (diagnostics
@@ -318,7 +318,7 @@
     (my-codex-test--with-mock-flycheck diagnostics
       (cl-letf (((symbol-function 'my-codex-project-root)
                  (lambda () "/repo/")))
-        (let ((prompt (my-codex--flycheck-diagnostics-prompt diagnostics)))
+        (let ((prompt (my-codex--diagnostic-batch-prompt diagnostics)))
           (should (string-match-p "diagnostic_count: 2" prompt))
           (should (string-match-p "included_count: 1" prompt))
           (should (string-match-p "omitted_count: 1" prompt))
@@ -327,7 +327,7 @@
                    prompt))
           (should-not (string-match-p "message: \"later\"" prompt)))))))
 
-(ert-deftest my-codex-flycheck-diagnostics-prompt-caps-first-repeated-group ()
+(ert-deftest my-codex-diagnostic-batch-prompt-caps-first-repeated-group ()
   (let ((my-codex-flycheck-diagnostics-limit 100)
         (my-codex-diagnostics-token-budget 10)
         (diagnostics
@@ -340,7 +340,7 @@
                 ((symbol-function 'my-codex--approx-token-count)
                  (lambda (text)
                    (if (string-match-p "- line: 2" text) 99 1))))
-        (let ((prompt (my-codex--flycheck-diagnostics-prompt diagnostics)))
+        (let ((prompt (my-codex--diagnostic-batch-prompt diagnostics)))
           (should (string-match-p "diagnostic_count: 3" prompt))
           (should (string-match-p "included_count: 1" prompt))
           (should (string-match-p "omitted_count: 2" prompt))
@@ -407,7 +407,7 @@
       (goto-char 3)
       (should
        (eq normalised
-           (my-codex--flycheck-diagnostic-at-point
+           (my-codex--diagnostic-at-point
             (list normalised)))))))
 
 (ert-deftest my-codex-flymake-diagnostic-does-not-serialise-backend-closure ()
@@ -443,7 +443,7 @@
               (goto-char 7)
               (should
                (eq normalised
-                   (my-codex--flycheck-diagnostic-at-point
+                   (my-codex--diagnostic-at-point
                     (list normalised))))))
         (delete-overlay overlay)))))
 
@@ -497,7 +497,7 @@
       (should
        (equal
         (plist-get
-         (my-codex--flycheck-diagnostic-at-point diagnostics)
+         (my-codex--diagnostic-at-point diagnostics)
          :message)
         "overlapping")))))
 
@@ -514,7 +514,7 @@
       (should
        (equal
         (plist-get
-         (my-codex--flycheck-diagnostic-at-point diagnostics)
+         (my-codex--diagnostic-at-point diagnostics)
          :message)
         "current")))))
 
