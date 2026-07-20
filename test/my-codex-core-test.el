@@ -305,7 +305,7 @@
                     (my-codex-show-git-diff my-codex-git-transient "v")
                     (my-codex-git-review-transient my-codex-git-transient "r")
                     (my-codex-list-open-issues my-codex-github-transient "l")
-                    (my-codex-summarize-session-to-github-issue my-codex-github-transient "d")))
+                    (my-codex-summarise-session-to-github-issue my-codex-github-transient "d")))
     (pcase-let ((`(,command ,prefix ,key) entry))
       (should
        (cl-find-if

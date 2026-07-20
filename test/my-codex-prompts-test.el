@@ -1553,7 +1553,7 @@
           (test-pos
            (string-match "test: @test/example-test\\.el" prompt))
           (request-pos
-           (string-match "Analyze test coverage\\." prompt)))
+           (string-match "Analyse test coverage\\." prompt)))
       (should instructions-pos)
       (should context-pos)
       (should implementation-pos)
