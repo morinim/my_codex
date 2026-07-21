@@ -473,11 +473,12 @@ When SELECTED is nil, return one diagnostic if even one exceeds the budget."
            groups limit my-codex-diagnostics-token-budget))
          (diagnostics-context
           (my-codex--diagnostic-groups-context selected-groups))
-         (included
+         (included-unique-count
           (apply #'+ (mapcar #'my-codex--diagnostic-group-count
                              selected-groups)))
-         (omitted (- total included))
-         (truncated (> omitted 0)))
+         (duplicate-count (- total unique-total))
+         (omitted-unique-count (- unique-total included-unique-count))
+         (truncated (> omitted-unique-count 0)))
     (format
      (concat "Analyse these %s diagnostics as a batch.\n\n"
              "Identify common root causes, cascade errors, missing imports/"
@@ -487,8 +488,9 @@ When SELECTED is nil, return one diagnostic if even one exceeds the budget."
              "source: %s\n"
              "diagnostic_count: %d\n"
              "unique_diagnostic_count: %d\n"
-             "included_count: %d\n"
-             "omitted_count: %d\n"
+             "duplicate_count: %d\n"
+             "included_unique_count: %d\n"
+             "omitted_unique_count: %d\n"
              "context_budget_tokens: %s\n"
              "context_tokens: %d\n"
              "truncated: %s\n"
@@ -497,8 +499,9 @@ When SELECTED is nil, return one diagnostic if even one exceeds the budget."
      provider-label
      total
      unique-total
-     included
-     omitted
+     duplicate-count
+     included-unique-count
+     omitted-unique-count
      (if my-codex-diagnostics-token-budget
          (number-to-string my-codex-diagnostics-token-budget)
        "unlimited")
