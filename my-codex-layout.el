@@ -304,11 +304,13 @@
     (my-codex--set-edit-fill-column-indicator-window edit-window)))
 
 (defun my-codex-two-column-layout-with-command
-    (codex-command &optional focus-term session-name agent access-mode)
+    (codex-command &optional focus-term session-name agent access-mode
+                   startup-prompt)
   "Display Codex and run CODEX-COMMAND if the backend is not running.
 If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window.
 When SESSION-NAME is non-nil, use that named session instead of default.
-AGENT identifies the agent profile used for buffer names and metadata."
+AGENT identifies the agent profile used for buffer names and metadata.
+STARTUP-PROMPT is explicit prompt text sent when starting the session."
   (cl-labels
       ((display-codex-buffer
         (buffer)
@@ -361,6 +363,9 @@ AGENT identifies the agent profile used for buffer names and metadata."
                   session-name agent access-mode)))
             (when (bufferp started-buffer)
               (setq term-buffer started-buffer)
+              (when startup-prompt
+                (my-codex--record-outbound-prompt
+                 term-buffer startup-prompt))
               (when (window-live-p term-window)
                 (set-window-buffer term-window term-buffer))
               (when (window-live-p edit-window)

@@ -451,6 +451,19 @@ unlimited."
 (defvar-local my-codex-session-prompt-count 0
   "Number of prompts sent during this agent session.")
 
+(defvar-local my-codex-session-prompt-token-estimate 0
+  "Approximate outbound prompt-text tokens sent during this session.")
+
+(defun my-codex--approx-token-count (text)
+  "Estimate tokens in TEXT from its byte size."
+  (ceiling (/ (float (string-bytes text)) 3.2)))
+
+(defun my-codex--record-outbound-prompt (buffer prompt)
+  "Record PROMPT as outbound Emacs text for session BUFFER."
+  (with-current-buffer buffer
+    (cl-incf my-codex-session-prompt-token-estimate
+             (my-codex--approx-token-count prompt))))
+
 (defface my-codex-workspace-write-face
   '((t :inherit warning :weight bold))
   "Face used to mark workspace-write agent sessions."
@@ -581,7 +594,7 @@ The returned buffer must have a live backend process and stable name.
 When SESSION-NAME is non-nil, mark the buffer as that named session.")
 
 (cl-defgeneric my-codex-backend-send (backend prompt)
-  "Send one complete PROMPT through BACKEND and record session activity.")
+  "Send PROMPT through BACKEND and record activity and outbound text.")
 
 (cl-defgeneric my-codex-backend-live-p (backend)
   "Return non-nil when BACKEND has a live agent process.
@@ -692,6 +705,7 @@ Existing session buffers keep their recorded terminal backend."
       (goto-char (point-max))
       (vterm-send-string prompt t)
       (vterm-send-return)
+      (my-codex--record-outbound-prompt buffer prompt)
       (setq my-codex-session-last-activity (current-time))
       (setq my-codex-session-prompt-count
             (1+ (or my-codex-session-prompt-count 0))))))
@@ -773,6 +787,7 @@ Existing session buffers keep their recorded terminal backend."
     (setq-local my-codex-session-last-activity (current-time))
     (setq-local my-codex-session-last-output-time nil)
     (setq-local my-codex-session-prompt-count 0)
+    (setq-local my-codex-session-prompt-token-estimate 0)
     (add-hook 'kill-buffer-hook #'my-codex--forget-active-session nil t)
     (my-codex--refresh-session-title)))
 

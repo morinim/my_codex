@@ -234,10 +234,6 @@ Preserve concrete file names, command names, and technical details. Do not edit 
     (message "%s session summary is ready for editing."
              (my-codex--active-agent-label root))))
 
-(defun my-codex--approx-token-count (text)
-  "Estimate tokens in TEXT from its byte size."
-  (ceiling (/ (float (string-bytes text)) 3.2)))
-
 (defun my-codex--prompt-size-description (prompt)
   "Return a short human-readable size description for PROMPT."
   (format "%d chars; outbound prompt text: approximately %d tokens"
@@ -1322,7 +1318,8 @@ When prompt preview is enabled, open it for review first."
     (when (eq secondary-agent primary-agent)
       (user-error "Secondary agent must differ from primary agent"))
     (my-codex-two-column-layout-with-command
-     secondary-command nil secondary-session secondary-agent 'read-only)
+     secondary-command nil secondary-session secondary-agent 'read-only
+     secondary-prompt)
     (when (my-codex--session-buffer-live-p existing-secondary-buffer)
       (my-codex-send-prompt secondary-prompt existing-secondary-buffer))
     (message "Asked %s in session %s."

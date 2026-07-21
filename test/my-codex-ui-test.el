@@ -14,6 +14,8 @@
         (progn
           (my-codex--mark-named-session
            session-buffer "review" root 'workspace-write)
+          (with-current-buffer session-buffer
+            (setq-local my-codex-session-prompt-token-estimate 1234))
           (cl-letf (((symbol-function 'get-buffer-process)
                      (lambda (buffer)
                        (eq buffer session-buffer)))
@@ -33,6 +35,8 @@
             (my-codex-top))
           (with-current-buffer "*Agents Top*"
             (should (derived-mode-p 'my-codex-top-mode))
+            (should (equal (car (aref tabulated-list-format 11))
+                           "Out tokens (est.)"))
             (should (string-match-p "review" (buffer-string)))
             (should (string-match-p "Codex" (buffer-string)))
             (should (string-match-p "\\*codex-top-render\\*" (buffer-string)))
@@ -40,6 +44,7 @@
             (should (string-match-p "feature-x" (buffer-string)))
             (should (string-match-p "dirty" (buffer-string)))
             (should (string-match-p "9999" (buffer-string)))
+            (should (string-match-p "1234" (buffer-string)))
             (should (string-match-p "live" (buffer-string)))))
       (delete-directory root t)
       (when (buffer-live-p session-buffer)
@@ -59,8 +64,8 @@
   (with-temp-buffer
     (my-codex-top-mode)
     (setq tabulated-list-entries
-          '((one ["b" "" "" "" "" "" "" "" "" "" "" "" "" ""])
-            (two ["a" "" "" "" "" "" "" "" "" "" "" "" "" ""])))
+          '((one ["b" "" "" "" "" "" "" "" "" "" "" "" "" "" ""])
+            (two ["a" "" "" "" "" "" "" "" "" "" "" "" "" "" ""])))
     (tabulated-list-print)
     (should (eq (command-remapping 'tabulated-list-sort)
                 #'my-codex-top-sort))
@@ -68,6 +73,25 @@
     (should (eq (caar tabulated-list-entries) 'two))
     (should (equal (car header-line-format) ""))
     (should (memq 'header-line-indent header-line-format))))
+
+(ert-deftest my-codex-top-sorts-outbound-tokens-numerically ()
+  (with-temp-buffer
+    (my-codex-top-mode)
+    (setq tabulated-list-entries
+          '((small ["" "" "" "" "" "" "" "" "" "" "" "900" "" "" ""])
+            (large ["" "" "" "" "" "" "" "" "" "" "" "1000" "" "" ""])))
+    (my-codex-top-sort 11)
+    (should (eq (caar tabulated-list-entries) 'small))))
+
+(ert-deftest my-codex-top-token-sort-indicator-preserves-header-alignment ()
+  (with-temp-buffer
+    (my-codex-top-mode)
+    (let ((unsorted (my-codex--build-header-string)))
+      (setq tabulated-list-sort-key '("Out tokens (est.)" . nil))
+      (let ((sorted (my-codex--build-header-string)))
+        (should (= (length sorted) (length unsorted)))
+        (should (= (string-match "Lines" sorted)
+                   (string-match "Lines" unsorted)))))))
 
 (ert-deftest my-codex-top-mouse-sort-refreshes-custom-header ()
   (with-temp-buffer
@@ -89,7 +113,7 @@
   (with-temp-buffer
     (my-codex-top-mode)
     (setq tabulated-list-entries
-          '((one ["project" "" "" "" "" "" "" "" "" "" "" "" "" ""])))
+          '((one ["project" "" "" "" "" "" "" "" "" "" "" "" "" "" ""])))
     (tabulated-list-print)
     (goto-char (point-min))
     (should (eq (command-remapping 'tabulated-list-widen-current-column)
@@ -324,7 +348,7 @@
             (setq tabulated-list-entries
                   `((,(buffer-name session-buffer)
                      ["" "" "project" "session" ,(buffer-name session-buffer)
-                      "" "" "" "" "" "" "" "" ""])))
+                      "" "" "" "" "" "" "" "" "" ""])))
             (tabulated-list-print)
             (goto-char (point-min))
             (search-forward (buffer-name session-buffer))
@@ -351,7 +375,7 @@
             (setq tabulated-list-entries
                   `((,(buffer-name session-buffer)
                      ["" "" "project" "session" ,(buffer-name session-buffer)
-                      "" "" "" "" "" "" "" "" ""])))
+                      "" "" "" "" "" "" "" "" "" ""])))
             (tabulated-list-print)
             (goto-char (point-min))
             (search-forward (buffer-name session-buffer))
@@ -391,7 +415,7 @@
           (setq tabulated-list-entries
                 `((,(buffer-name session-buffer)
                    ["" "" "project" "session" ,(buffer-name session-buffer)
-                    "" "" "" "" "" "" "" "" ""])))
+                    "" "" "" "" "" "" "" "" "" ""])))
           (tabulated-list-print)
           (goto-char (point-min))
           (search-forward (buffer-name session-buffer))

@@ -125,7 +125,8 @@ Set TIMER-COUNT to the number of timers created."
         (progn
           (with-current-buffer buffer
             (setq-local eat-terminal 'test-terminal)
-            (setq-local my-codex-session-prompt-count 0))
+            (setq-local my-codex-session-prompt-count 0)
+            (setq-local my-codex-session-prompt-token-estimate 0))
           (cl-letf (((symbol-function 'get-buffer-process)
                      (lambda (candidate)
                        (and (eq candidate buffer) 'test-process)))
@@ -144,7 +145,10 @@ Set TIMER-COUNT to the number of timers created."
                     '((:yank test-terminal "line one\nline two")
                       (:input-event test-terminal 1 return))))
             (with-current-buffer buffer
-              (should (equal my-codex-session-prompt-count 1)))))
+              (should (equal my-codex-session-prompt-count 1))
+              (should
+               (= my-codex-session-prompt-token-estimate
+                  (my-codex--approx-token-count "line one\nline two"))))))
       (when (buffer-live-p buffer)
         (kill-buffer buffer)))))
 

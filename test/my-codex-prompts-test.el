@@ -578,7 +578,8 @@
                     ((symbol-function 'my-codex--read-secondary-agent)
                      (lambda (&optional _primary-agent) 'antigravity))
                     ((symbol-function 'my-codex-two-column-layout-with-command)
-                     (lambda (_command _focus session agent access)
+                     (lambda (_command _focus session agent access
+                              &optional _startup-prompt)
                        (my-codex--mark-named-session
                         (get-buffer-create
                          (my-codex-session-buffer-name session agent))
@@ -610,7 +611,7 @@
              :commands ((read-only . "agy-ro")))))
          (my-codex-secondary-remark-session-name "remark")
          (primary (get-buffer-create "*my-codex-primary-remark*"))
-         started waited sent)
+         secondary started waited sent)
     (unwind-protect
         (let ((default-directory root))
           (my-codex--mark-named-session
@@ -621,12 +622,16 @@
                     ((symbol-function 'process-live-p)
                      (lambda (process) process))
                     ((symbol-function 'my-codex-two-column-layout-with-command)
-                     (lambda (command focus session agent access)
-                       (setq started (list command focus session agent access))
+                     (lambda (command focus session agent access
+                              &optional startup-prompt)
+                       (setq started
+                             (list command focus session agent access
+                                   startup-prompt))
+                       (setq secondary
+                             (get-buffer-create
+                              (my-codex-session-buffer-name session agent)))
                        (my-codex--mark-named-session
-                        (get-buffer-create
-                         (my-codex-session-buffer-name session agent))
-                        session root access agent)))
+                        secondary session root access agent)))
                     ((symbol-function 'my-codex--wait-for-marked-output)
                      (lambda (&rest args)
                        (setq waited args)))
@@ -642,16 +647,18 @@
                      (car started)))
             (should-not (string-match-p "BEGIN_SECONDARY_REMARK_"
                                         (car started)))
-            (should (equal (cdr started)
+            (should (equal (seq-take (cdr started) 4)
                            '(nil "remark" antigravity read-only)))
+            (should
+             (equal (nth 5 started)
+                    (my-codex--secondary-ask-prompt
+                     "How should this be designed?" primary)))
             (should-not waited)
             (should-not sent)))
       (set-window-parameter (selected-window) 'my-codex-term-buffer nil)
       (when (buffer-live-p primary)
         (kill-buffer primary))
-      (when-let ((secondary (get-buffer
-                             (my-codex-session-buffer-name
-                              "remark" 'antigravity))))
+      (when (buffer-live-p secondary)
         (kill-buffer secondary))
       (delete-directory root t))))
 
@@ -685,8 +692,11 @@
                     ((symbol-function 'process-live-p)
                      (lambda (process) process))
                     ((symbol-function 'my-codex-two-column-layout-with-command)
-                     (lambda (command focus session agent access)
-                       (setq started (list command focus session agent access))))
+                     (lambda (command focus session agent access
+                              &optional startup-prompt)
+                       (setq started
+                             (list command focus session agent access
+                                   startup-prompt))))
                     ((symbol-function 'my-codex--wait-for-marked-output)
                      (lambda (&rest args)
                        (setq waited args)))
@@ -695,7 +705,7 @@
                        (setq sent (list prompt target)))))
             (my-codex-ask-secondary-remark "How should this be designed?"
                                            'antigravity)
-            (should (equal (cdr started)
+            (should (equal (seq-take (cdr started) 4)
                            '(nil "remark" antigravity read-only)))
             (should (eq (cadr sent) secondary))
             (should (string-match-p "How should this be designed?"
@@ -752,10 +762,38 @@
                      (lambda (backend prompt)
                        (setq sent
                              (list (my-codex-backend-buffer-name backend)
-                                   prompt)))))
+                                   prompt))
+                       (my-codex--record-outbound-prompt target prompt))))
             (my-codex-send-prompt "hello" target)
             (should
-             (equal sent '("*my-codex-send-target*" "hello")))))
+             (equal sent '("*my-codex-send-target*" "hello")))
+            (with-current-buffer target
+              (should (= my-codex-session-prompt-token-estimate 2)))))
+      (when (buffer-live-p target)
+        (kill-buffer target))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-send-prompt-does-not-count-failed-send ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-send" t)))
+        (target (get-buffer-create "*my-codex-send-failed*")))
+    (unwind-protect
+        (progn
+          (my-codex--mark-named-session
+           target "review" root 'workspace-write 'antigravity)
+          (cl-letf (((symbol-function
+                      'my-codex--warn-about-unsaved-project-buffers)
+                     #'ignore)
+                    ((symbol-function 'get-buffer-process)
+                     (lambda (buffer) (eq buffer target)))
+                    ((symbol-function 'process-live-p)
+                     (lambda (process) process))
+                    ((symbol-function 'pop-to-buffer) #'ignore)
+                    ((symbol-function 'my-codex-backend-send)
+                     (lambda (_backend _prompt)
+                       (error "Send failed"))))
+            (should-error (my-codex-send-prompt "hello" target))
+            (with-current-buffer target
+              (should (= my-codex-session-prompt-token-estimate 0)))))
       (when (buffer-live-p target)
         (kill-buffer target))
       (delete-directory root t))))

@@ -35,6 +35,11 @@
 (defvar my-codex-top--git-cache (make-hash-table :test #'equal)
   "Git dashboard information keyed by project root.")
 
+(defun my-codex-top--out-tokens-less-p (first second)
+  "Return non-nil when FIRST has fewer estimated outbound tokens than SECOND."
+  (< (string-to-number (aref (cadr first) 11))
+     (string-to-number (aref (cadr second) 11))))
+
 (defvar-keymap my-codex-top-sort-button-map
   :parent tabulated-list-sort-button-map
   "<header-line> <mouse-1>" #'my-codex-top-col-sort
@@ -258,6 +263,7 @@
          ("Branch" 12 t)
          ("Git" 8 t)
          ("Prompts" 8 t)
+         ("Out tokens (est.)" 19 my-codex-top--out-tokens-less-p)
          ("Lines" 8 t)
          ("Age" 6 t)
          ("Activity" 8 t)])
@@ -321,7 +327,8 @@ STATE is one of the strings `clean', `dirty', or `error'."
   (let ((git-cache (make-hash-table :test #'equal)))
     (mapcar
      (lambda (buffer)
-       (let (active agent project session access state pid branch git-state prompts lines age last-act)
+       (let (active agent project session access state pid branch git-state
+             prompts out-tokens lines age last-act)
          (with-current-buffer buffer
            (let ((root my-codex-session-project-root)
                  (now (current-time)))
@@ -345,6 +352,9 @@ STATE is one of the strings `clean', `dirty', or `error'."
                        "—")
                  lines (format "%d" (count-lines (point-min) (point-max)))
                  prompts (format "%d" (or my-codex-session-prompt-count 0))
+                 out-tokens
+                 (format "%d"
+                         (or my-codex-session-prompt-token-estimate 0))
                  age (my-codex--format-duration my-codex-session-start-time now)
                  last-act (my-codex--format-duration my-codex-session-last-activity now))
            (if (and root (file-directory-p root))
@@ -358,7 +368,9 @@ STATE is one of the strings `clean', `dirty', or `error'."
                (setq branch "—"
                      git-state "—"))))
          (list (buffer-name buffer)
-               (vector active agent project session (buffer-name buffer) access state pid branch git-state prompts lines age last-act))))
+               (vector active agent project session (buffer-name buffer) access
+                       state pid branch git-state prompts out-tokens lines age
+                       last-act))))
      (my-codex--all-session-buffers))))
 
 (defun my-codex-top-kill-session ()

@@ -189,6 +189,53 @@
         (kill-buffer existing))
       (delete-directory root t))))
 
+(ert-deftest my-codex-layout-records-explicit-startup-prompt ()
+  (let* ((root (file-name-as-directory (make-temp-file "my-codex-layout" t)))
+         (buffer-name "*my-codex-layout-startup*")
+         (prompt "Read only; do not edit")
+         (command "agy")
+         (my-codex--project-active-agents (make-hash-table :test #'equal))
+         (my-codex--project-active-sessions (make-hash-table :test #'equal)))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (let (term-window)
+            (cl-letf (((symbol-function 'my-codex-project-root)
+                       (lambda () root))
+                      ((symbol-function 'my-codex-session-buffer-name)
+                       (lambda (&rest _args) buffer-name))
+                      ((symbol-function 'my-codex--fit-frame-to-right-layout)
+                       #'ignore)
+                      ((symbol-function 'my-codex--apply-display-window-width)
+                       #'ignore)
+                      ((symbol-function
+                        'my-codex--resize-edit-window-for-right-layout)
+                       #'ignore)
+                      ((symbol-function
+                        'my-codex--enable-edit-fill-column-indicator)
+                       #'ignore)
+                      ((symbol-function 'my-codex-backend-start)
+                       (lambda (_backend project-root _command
+                                &optional session agent access)
+                         (let ((buffer (get-buffer-create buffer-name)))
+                           (my-codex--mark-named-session
+                            buffer session project-root access agent)
+                           buffer)))
+                      ((symbol-function 'display-buffer)
+                       (lambda (buffer &rest _args)
+                         (setq term-window (split-window-right))
+                         (set-window-buffer term-window buffer)
+                         term-window)))
+              (my-codex-two-column-layout-with-command
+               command nil "review" 'antigravity 'read-only prompt)))
+          (with-current-buffer buffer-name
+            (should
+             (= my-codex-session-prompt-token-estimate
+                (my-codex--approx-token-count prompt)))))
+      (when-let ((buffer (get-buffer buffer-name)))
+        (kill-buffer buffer))
+      (delete-directory root t))))
+
 (ert-deftest my-codex-selected-text-consumes-captured-selection ()
   (let ((my-codex--captured-selection "selected")
         (window (selected-window)))

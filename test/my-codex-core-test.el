@@ -77,6 +77,29 @@
   (let ((system-type 'gnu/linux))
     (should (eq (my-codex-default-terminal-backend) 'vterm))))
 
+(ert-deftest my-codex-vterm-backend-send-records-outbound-tokens ()
+  (let* ((buffer-name "*my-codex-vterm-send-test*")
+         (buffer (get-buffer-create buffer-name))
+         (backend (my-codex--make-vterm-backend buffer-name))
+         calls)
+    (unwind-protect
+        (progn
+          (with-current-buffer buffer
+            (setq-local my-codex-session-prompt-count 0)
+            (setq-local my-codex-session-prompt-token-estimate 0))
+          (cl-letf (((symbol-function 'vterm-send-string)
+                     (lambda (prompt paste-p)
+                       (push (list prompt paste-p) calls)))
+                    ((symbol-function 'vterm-send-return)
+                     (lambda () (push 'return calls))))
+            (my-codex-backend-send backend "hello")
+            (should (equal (nreverse calls) '(("hello" t) return)))
+            (with-current-buffer buffer
+              (should (= my-codex-session-prompt-count 1))
+              (should (= my-codex-session-prompt-token-estimate 2)))))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
+
 (ert-deftest my-codex-command-catalogue-commands-exist ()
   (dolist (entry my-codex-command-catalogue)
     (should (fboundp (plist-get entry :command)))))
@@ -773,6 +796,9 @@
           (should (eq my-codex-session-access-mode 'workspace-write))
           (should (eq my-codex-session-agent 'codex))
           (should (eq my-codex-session-terminal-backend 'vterm))
+          (should (local-variable-p
+                   'my-codex-session-prompt-token-estimate))
+          (should (= my-codex-session-prompt-token-estimate 0))
           (should (string-match-p "Codex · WORKSPACE WRITE · default"
                                   header-line-format))
           (let ((footer (my-codex--session-footer)))

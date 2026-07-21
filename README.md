@@ -102,10 +102,13 @@ not restart it with a different mode.
 
 The session dashboard (`F8 S l`) lists running and stopped sessions across
 projects. It shows the agent, project, session, access mode, process state, Git
-branch/state, prompt count, buffer lines, age, and last activity. Within the
-dashboard, use `RET` to visit a session, `e` to select its edit window, `D` for
-Dired, `b` to build, `R` to rename, `d` for the project diff, `k` to kill one
-session, `K` to kill stopped sessions, and `g` to refresh Git information.
+branch/state, prompt count, estimated outbound prompt-text tokens, buffer lines,
+age, and last activity. The token figure estimates prompt text sent through
+Emacs helpers; it excludes CLI startup arguments, API usage, and retained
+context. Within the dashboard, use `RET` to visit a session, `e` to
+select its edit window, `D` for Dired, `b` to build, `R` to rename, `d` for the
+project diff, `k` to kill one session, `K` to kill stopped sessions, and `g` to
+refresh Git information.
 
 ### Prompts & Refactoring
 
