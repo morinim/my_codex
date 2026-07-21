@@ -31,11 +31,6 @@ When `auto', prefer an active Flycheck session, then Flymake."
                  (const flymake))
   :group 'my-codex)
 
-(define-obsolete-variable-alias
-  'my-codex-flycheck-diagnostics-limit
-  'my-codex-diagnostics-limit
-  "0.101.0")
-
 (defcustom my-codex-diagnostics-limit 100
   "Maximum number of diagnostics to include in one agent prompt."
   :type 'natnum

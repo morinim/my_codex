@@ -50,14 +50,6 @@ ACCEPT-COMMAND and CANCEL-COMMAND are bound to `C-c C-c' and `C-c C-k'."
   :group 'convenience
   :prefix "my-codex-")
 
-(defconst my-codex-default-buffer-name "*codex*"
-  "Default name of the terminal buffer used for Codex.")
-
-(defcustom my-codex-buffer-name my-codex-default-buffer-name
-  "Name of the terminal buffer used for Codex."
-  :type 'string
-  :group 'my-codex)
-
 (defun my-codex-default-terminal-backend ()
   "Return the default terminal backend for this system."
   (if (eq system-type 'windows-nt) 'eat 'vterm))
@@ -877,22 +869,15 @@ Existing session buffers keep their recorded terminal backend."
 
 (defun my-codex-current-buffer-name (&optional agent)
   "Return the buffer name for the current agent session."
-  (let ((agent (or agent (my-codex--active-agent))))
-    (if-let* ((project (project-current))
-              (root (file-truename (project-root project)))
-              (name (file-name-nondirectory (directory-file-name root)))
-              (hash (substring (secure-hash 'sha1 root) 0 8)))
-        (format "*%s:%s:%s*"
-                (my-codex--agent-buffer-prefix agent) name hash)
-      (if (and (eq agent 'codex)
-               (not (equal my-codex-buffer-name
-                           my-codex-default-buffer-name)))
-          my-codex-buffer-name
-        (let* ((root (file-truename (my-codex-project-root)))
-               (name (file-name-nondirectory (directory-file-name root)))
-               (hash (substring (secure-hash 'sha1 root) 0 8)))
-          (format "*%s:%s:%s*"
-                  (my-codex--agent-buffer-prefix agent) name hash))))))
+  (let* ((agent (or agent (my-codex--active-agent)))
+         (root (file-truename
+                (if-let ((project (project-current)))
+                    (project-root project)
+                  (my-codex-project-root))))
+         (name (file-name-nondirectory (directory-file-name root)))
+         (hash (substring (secure-hash 'sha1 root) 0 8)))
+    (format "*%s:%s:%s*"
+            (my-codex--agent-buffer-prefix agent) name hash)))
 
 (defun my-codex--normalise-session-name (name)
   "Return a normalised agent session NAME, or raise an error."
@@ -1001,9 +986,9 @@ process."
 
 (defun my-codex--process-output-lines (program &rest args)
   "Return PROGRAM output lines for ARGS, or nil when PROGRAM fails."
-  (with-temp-buffer
-    (when (eq 0 (apply #'process-file program nil t nil args))
-      (split-string (string-trim-right (buffer-string)) "\n" t))))
+  (pcase (apply #'my-codex--process-output-result program args)
+    (`(0 . ,lines) lines)
+    (_ nil)))
 
 (defun my-codex--process-output-result (program &rest args)
   "Run PROGRAM with ARGS and return (STATUS . LINES).

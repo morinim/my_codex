@@ -598,18 +598,6 @@ When RESOLVE is non-nil, also require availability predicates to be defined."
 ;; resolve predicates only when the source or compiled package is loaded.
 (my-codex--validate-command-catalogue my-codex-command-catalogue t)
 
-(defun my-codex--catalogue-prefix-keymap ()
-  "Return the prefix keymap described by the command catalogue."
-  (let ((map (make-sparse-keymap)))
-    (dolist (entry my-codex-command-catalogue map)
-      (unless (plist-get entry :prefix)
-        (keymap-set map (plist-get entry :key)
-                    (plist-get entry :command))))))
-
-;; Prefix keymap for agent commands.
-(defvar my-codex-map (my-codex--catalogue-prefix-keymap)
-  "Prefix keymap for agent commands.")
-
 ;;;###autoload (autoload 'my-codex-session-transient "my-codex" nil t)
 (my-codex--define-catalogue-transient my-codex-session-transient
   "Show agent session commands.")

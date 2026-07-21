@@ -166,7 +166,7 @@
                    :message "unused lexical argument"))
               (cl-letf (((symbol-function 'my-codex-project-root)
                          (lambda () root)))
-                (let* ((my-codex-flycheck-diagnostics-limit 100)
+                (let* ((my-codex-diagnostics-limit 100)
                        (prompt (my-codex--diagnostic-batch-prompt
                                 (my-codex--flycheck-diagnostics))))
                   (should
@@ -234,7 +234,7 @@
           (should-not (string-match-p "message: \"other\"" sent)))))))
 
 (ert-deftest my-codex-diagnostic-batch-prompt-reports-truncation ()
-  (let ((my-codex-flycheck-diagnostics-limit 2)
+  (let ((my-codex-diagnostics-limit 2)
         (diagnostics
          '((:line 1 :column 1 :level error :checker mock :message "first")
            (:line 2 :column 1 :level error :checker mock :message "second")
@@ -276,7 +276,7 @@
                        count))))))))
 
 (ert-deftest my-codex-diagnostic-batch-prompt-separates-duplicates-and-omissions ()
-  (let ((my-codex-flycheck-diagnostics-limit 1)
+  (let ((my-codex-diagnostics-limit 1)
         (diagnostics
          '((:line 1 :column 1 :level error :checker mock :message "same")
            (:line 1 :column 1 :level error :checker mock :message "same")
@@ -308,7 +308,7 @@
           (should (string-match-p "- line: 4" prompt)))))))
 
 (ert-deftest my-codex-diagnostic-batch-prompt-obeys-context-budget ()
-  (let ((my-codex-flycheck-diagnostics-limit 100)
+  (let ((my-codex-diagnostics-limit 100)
         (my-codex-diagnostics-token-budget 80)
         (diagnostics
          '((:line 1 :column 1 :level error :checker mock :message "short")
@@ -329,7 +329,7 @@
           (should-not (string-match-p "message: \"later\"" prompt)))))))
 
 (ert-deftest my-codex-diagnostic-batch-prompt-keeps-one-tight-budget ()
-  (let ((my-codex-flycheck-diagnostics-limit 100)
+  (let ((my-codex-diagnostics-limit 100)
         (my-codex-diagnostics-token-budget 1)
         (diagnostics
          '((:line 1 :column 1 :level error :checker mock
@@ -349,7 +349,7 @@
           (should-not (string-match-p "message: \"later\"" prompt)))))))
 
 (ert-deftest my-codex-diagnostic-batch-prompt-caps-first-repeated-group ()
-  (let ((my-codex-flycheck-diagnostics-limit 100)
+  (let ((my-codex-diagnostics-limit 100)
         (my-codex-diagnostics-token-budget 10)
         (diagnostics
          '((:line 1 :column 1 :level error :checker mock :message "repeat")
@@ -467,23 +467,6 @@
                    (my-codex--diagnostic-at-point
                     (list normalised))))))
         (delete-overlay overlay)))))
-
-(ert-deftest my-codex-diagnostics-limit-preserves-obsolete-setting ()
-  (let* ((script
-          '(progn
-             (setq my-codex-flycheck-diagnostics-limit 17)
-             (require 'my-codex-diagnostics)
-             (prin1 my-codex-diagnostics-limit)))
-         (output
-          (with-temp-buffer
-            (let ((status
-                   (call-process invocation-name nil t nil
-                                 "--batch" "-Q" "-L" default-directory
-                                 "--eval" (prin1-to-string script))))
-              (unless (zerop status)
-                (error "Nested Emacs failed: %s" (buffer-string)))
-              (buffer-string)))))
-    (should (equal output "17"))))
 
 (ert-deftest my-codex-flymake-severity-honours-custom-types ()
   (require 'flymake)
