@@ -23,6 +23,29 @@
          (shell-file-name "/bin/sh"))
      ,@body))
 
+(cl-defmacro my-codex-test-with-captured-eat-refresh
+    ((callback arguments timer-count) &rest body)
+  "Run BODY while capturing Eat refresh CALLBACK and ARGUMENTS.
+Set TIMER-COUNT to the number of timers created."
+  (declare (indent 1))
+  `(let (,callback ,arguments (,timer-count 0))
+     (cl-letf (((symbol-function 'run-with-timer)
+                (lambda (delay repeat function &rest args)
+                  (should (= delay my-codex--eat-link-refresh-delay))
+                  (should-not repeat)
+                  (cl-incf ,timer-count)
+                  (setq ,callback function)
+                  (setq ,arguments args)
+                  (timer-create))))
+       ,@body)))
+
+(defun my-codex-test-eat-link-overlays ()
+  "Return my-codex Eat link overlays in the current buffer."
+  (cl-remove-if-not
+   (lambda (overlay)
+     (overlay-get overlay 'my-codex-eat-link))
+   (overlays-in (point-min) (point-max))))
+
 (ert-deftest my-codex-eat-loads-without-external-eat ()
   (let* ((script '(progn
                     (setq load-prefer-newer t)
@@ -220,17 +243,144 @@
        (eq (get-text-property (point) 'my-codex-session-link-type)
            'url)))))
 
-(ert-deftest my-codex-eat-link-refresh-coalesces-timers ()
+(ert-deftest my-codex-eat-link-refresh-coalesces-updates ()
   (with-temp-buffer
     (let ((my-codex-session-links-mode t)
+          (my-codex--eat-link-refresh-enabled t)
           (eat-terminal nil))
-      (cl-letf (((symbol-function 'run-with-timer)
-                 (lambda (&rest _args) (run-at-time 60 nil #'ignore))))
+      (my-codex-test-with-captured-eat-refresh
+          (callback arguments timer-count)
+        (let ((refresh-count 0))
+          (cl-letf (((symbol-function 'my-codex--eat-linkify-after-update)
+                     (lambda (&rest _args)
+                       (cl-incf refresh-count))))
+            (dotimes (_ 3)
+              (my-codex--eat-schedule-link-refresh))
+            (should (= timer-count 1))
+            (apply callback arguments)
+            (should (= refresh-count 1))))))))
+
+(ert-deftest my-codex-eat-disable-cancels-pending-link-refresh ()
+  (with-temp-buffer
+    (let ((my-codex-session-id "test-session")
+          (eat-terminal nil))
+      (insert "https://example.invalid")
+      (my-codex-session-links-mode 1)
+      (my-codex--eat-linkify-after-update)
+      (setq my-codex--eat-link-refresh-enabled t)
+      (my-codex-test-with-captured-eat-refresh
+          (callback arguments timer-count)
         (my-codex--eat-schedule-link-refresh)
-        (let ((timer my-codex--eat-link-refresh-timer))
+        (should (= timer-count 1))
+        (should (my-codex-test-eat-link-overlays))
+        (my-codex--disable-eat-session-links)
+        (should-not my-codex--eat-link-refresh-enabled)
+        (should-not my-codex--eat-link-refresh-timer)
+        (should-not my-codex--eat-link-refresh-beginning)
+        (should-not my-codex--eat-link-refresh-end)
+        (should-not (my-codex-test-eat-link-overlays))
+        (apply callback arguments)
+        (should-not (my-codex-test-eat-link-overlays))))))
+
+(ert-deftest my-codex-eat-killed-buffer-ignores-pending-link-refresh ()
+  (let ((buffer (generate-new-buffer " *my-codex-eat-pending*")))
+    (unwind-protect
+        (my-codex-test-with-captured-eat-refresh
+            (callback arguments timer-count)
+          (with-current-buffer buffer
+            (setq-local my-codex-session-links-mode t)
+            (setq-local my-codex--eat-link-refresh-enabled t)
+            (add-hook 'kill-buffer-hook
+                      #'my-codex--eat-cancel-link-refresh nil t)
+            (my-codex--eat-schedule-link-refresh))
+          (should (= timer-count 1))
+          (kill-buffer buffer)
+          (should-not (buffer-live-p buffer))
+          (should-not (apply callback arguments)))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
+
+(ert-deftest my-codex-eat-scrollback-truncation-removes-stale-overlays ()
+  (with-temp-buffer
+    (let ((my-codex-session-id "test-session")
+          (eat-terminal nil))
+      (insert "https://old.example.invalid\nplain terminal row\n")
+      (my-codex-session-links-mode 1)
+      (my-codex--eat-linkify-after-update)
+      (let ((stale-overlay (car (my-codex-test-eat-link-overlays))))
+        (should stale-overlay)
+        (setq my-codex--eat-link-refresh-enabled t)
+        (my-codex-test-with-captured-eat-refresh
+            (callback arguments timer-count)
           (my-codex--eat-schedule-link-refresh)
-          (should (eq timer my-codex--eat-link-refresh-timer))))
-      (my-codex--eat-cancel-link-refresh))))
+          (should (= timer-count 1))
+          (let ((inhibit-modification-hooks t))
+            (delete-region (point-min)
+                           (save-excursion
+                             (goto-char (point-min))
+                             (forward-line 1)
+                             (point))))
+          (apply callback arguments)
+          (should-not (overlay-buffer stale-overlay))
+          (should-not (my-codex-test-eat-link-overlays)))))))
+
+(ert-deftest my-codex-eat-link-split-across-updates-becomes-clickable ()
+  (with-temp-buffer
+    (let ((my-codex-session-id "test-session")
+          (my-codex--eat-link-refresh-enabled t)
+          (eat-terminal nil))
+      (my-codex-session-links-mode 1)
+      (my-codex-test-with-captured-eat-refresh
+          (callback arguments timer-count)
+        (let ((inhibit-modification-hooks t))
+          (insert "https://example.")
+          (my-codex--eat-schedule-link-refresh)
+          (insert "invalid")
+          (my-codex--eat-schedule-link-refresh))
+        (should (= timer-count 1))
+        (apply callback arguments)
+        (goto-char (point-min))
+        (should (eq (get-text-property
+                     (point) 'my-codex-session-link-type)
+                    'url))
+        (should (equal (get-text-property
+                        (point) 'my-codex-session-link-target)
+                       "https://example.invalid"))
+        (should (my-codex-test-eat-link-overlays))))))
+
+(ert-deftest my-codex-eat-row-update-removes-disappeared-link ()
+  (with-temp-buffer
+    (let ((my-codex-session-id "test-session")
+          (my-codex--eat-link-refresh-enabled t)
+          (eat-terminal nil))
+      (insert "https://old.example.invalid\n"
+              "https://kept.example.invalid\n")
+      (my-codex-session-links-mode 1)
+      (my-codex--eat-linkify-after-update)
+      (my-codex-test-with-captured-eat-refresh
+          (callback arguments timer-count)
+        (let ((inhibit-modification-hooks t))
+          (goto-char (point-min))
+          (delete-region (line-beginning-position) (line-end-position))
+          (insert "plain terminal row"))
+        (my-codex--eat-schedule-link-refresh)
+        (should (= timer-count 1))
+        (apply callback arguments)
+        (goto-char (point-min))
+        (should-not (get-text-property
+                     (point) 'my-codex-session-link-type))
+        (should-not (cl-find-if
+                     (lambda (overlay)
+                       (overlay-get overlay 'my-codex-eat-link))
+                     (overlays-at (point))))
+        (forward-line 1)
+        (should (eq (get-text-property
+                     (point) 'my-codex-session-link-type)
+                    'url))
+        (should (cl-find-if
+                 (lambda (overlay)
+                   (overlay-get overlay 'my-codex-eat-link))
+                 (overlays-at (point))))))))
 
 (ert-deftest my-codex-eat-update-linkifies-before-session-metadata ()
   (with-temp-buffer

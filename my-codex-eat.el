@@ -244,7 +244,9 @@ When either bound is nil, use the corresponding buffer boundary."
 
 (defun my-codex--eat-refresh-links (buffer)
   "Refresh pending session links in Eat BUFFER."
-  (when (buffer-live-p buffer)
+  (when (and (buffer-live-p buffer)
+             (buffer-local-value
+              'my-codex--eat-link-refresh-enabled buffer))
     (with-current-buffer buffer
       (setq my-codex--eat-link-refresh-timer nil)
       (let ((beg (and (markerp my-codex--eat-link-refresh-beginning)
