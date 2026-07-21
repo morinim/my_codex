@@ -361,12 +361,14 @@
       (advice-remove 'eat--process-output-queue
                      #'my-codex--eat-process-output-queue-advice))))
 
-(ert-deftest my-codex-eat-hookless-loaded-eat-uses-output-advice ()
-  (let ((eat-update-hook nil))
+(ert-deftest my-codex-eat-prebound-legacy-hook-uses-output-advice ()
+  (cl-progv '(eat-update-hook) '((external-refresh))
     (cl-letf (((symbol-function 'featurep)
                (lambda (feature) (eq feature 'eat)))
               ((symbol-function 'eat--process-output-queue)
-               (lambda (_buffer))))
+               (lambda (_buffer)))
+              ((get 'eat-update-hook 'custom-type) nil)
+              ((get 'eat-update-hook 'variable-documentation) nil))
       (unwind-protect
           (with-temp-buffer
             (my-codex--enable-eat-session-links)
@@ -375,6 +377,19 @@
                               'eat--process-output-queue)))
         (advice-remove 'eat--process-output-queue
                        #'my-codex--eat-process-output-queue-advice)))))
+
+(ert-deftest my-codex-eat-bound-update-hook-needs-no-custom-type ()
+  (cl-progv '(eat-update-hook) '(nil)
+    (cl-letf (((symbol-function 'featurep)
+               (lambda (feature) (eq feature 'eat)))
+              ((get 'eat-update-hook 'custom-type) nil)
+              ((get 'eat-update-hook 'variable-documentation)
+               "Hook run after an Eat terminal is updated."))
+      (with-temp-buffer
+        (my-codex--enable-eat-session-links)
+        (should
+         (memq #'my-codex--eat-schedule-link-refresh
+               (symbol-value 'eat-update-hook)))))))
 
 (ert-deftest my-codex-eat-process-output-advice-linkifies-buffer ()
   (let ((buffer (generate-new-buffer " *my-codex-eat-advice*")))

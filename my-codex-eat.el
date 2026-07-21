@@ -300,10 +300,10 @@ When either bound is nil, use the corresponding buffer boundary."
     (my-codex--eat-clear-link-overlays)))
 
 (defun my-codex--eat-update-hook-supported-p ()
-  "Return non-nil when Eat owns and provides `eat-update-hook'."
+  "Return non-nil when loaded Eat declares `eat-update-hook'."
   (and (featurep 'eat)
        (boundp 'eat-update-hook)
-       (get 'eat-update-hook 'custom-type)))
+       (get 'eat-update-hook 'variable-documentation)))
 
 (defun my-codex--eat-process-output-queue-advice (buffer)
   "Refresh BUFFER after an Eat output queue update.
