@@ -42,13 +42,13 @@
 (defvar-local my-codex--eat-link-refresh-timer nil
   "Timer for a pending Eat link refresh.")
 
-(defvar-local my-codex--eat-link-refresh-beginning nil
+(defvar-local my-codex--eat-link-dirty-beg nil
   "Marker at the beginning of pending Eat link changes.")
 
-(defvar-local my-codex--eat-link-refresh-end nil
+(defvar-local my-codex--eat-link-dirty-end nil
   "Marker at the end of pending Eat link changes.")
 
-(defvar-local my-codex--eat-previous-display-beginning nil
+(defvar-local my-codex--eat-previous-display-beg nil
   "Marker at Eat's display beginning before its latest update.")
 
 (defun my-codex--eat-clear-link-overlays (&optional beg end)
@@ -237,10 +237,10 @@ When either bound is nil, use the corresponding buffer boundary."
   (when (timerp my-codex--eat-link-refresh-timer)
     (cancel-timer my-codex--eat-link-refresh-timer))
   (setq my-codex--eat-link-refresh-timer nil)
-  (my-codex--eat-release-marker my-codex--eat-link-refresh-beginning)
-  (my-codex--eat-release-marker my-codex--eat-link-refresh-end)
-  (setq my-codex--eat-link-refresh-beginning nil)
-  (setq my-codex--eat-link-refresh-end nil))
+  (my-codex--eat-release-marker my-codex--eat-link-dirty-beg)
+  (my-codex--eat-release-marker my-codex--eat-link-dirty-end)
+  (setq my-codex--eat-link-dirty-beg nil)
+  (setq my-codex--eat-link-dirty-end nil))
 
 (defun my-codex--eat-refresh-links (buffer)
   "Refresh pending session links in Eat BUFFER."
@@ -249,14 +249,14 @@ When either bound is nil, use the corresponding buffer boundary."
               'my-codex--eat-link-refresh-enabled buffer))
     (with-current-buffer buffer
       (setq my-codex--eat-link-refresh-timer nil)
-      (let ((beg (and (markerp my-codex--eat-link-refresh-beginning)
-                      (marker-position my-codex--eat-link-refresh-beginning)))
-            (end (and (markerp my-codex--eat-link-refresh-end)
-                      (marker-position my-codex--eat-link-refresh-end))))
-        (my-codex--eat-release-marker my-codex--eat-link-refresh-beginning)
-        (my-codex--eat-release-marker my-codex--eat-link-refresh-end)
-        (setq my-codex--eat-link-refresh-beginning nil)
-        (setq my-codex--eat-link-refresh-end nil)
+      (let ((beg (and (markerp my-codex--eat-link-dirty-beg)
+                      (marker-position my-codex--eat-link-dirty-beg)))
+            (end (and (markerp my-codex--eat-link-dirty-end)
+                      (marker-position my-codex--eat-link-dirty-end))))
+        (my-codex--eat-release-marker my-codex--eat-link-dirty-beg)
+        (my-codex--eat-release-marker my-codex--eat-link-dirty-end)
+        (setq my-codex--eat-link-dirty-beg nil)
+        (setq my-codex--eat-link-dirty-end nil)
         (when (and beg end
                    (bound-and-true-p my-codex-session-links-mode))
           (my-codex--eat-linkify-after-update beg end))))))
@@ -266,23 +266,22 @@ When either bound is nil, use the corresponding buffer boundary."
   (when (bound-and-true-p my-codex-session-links-mode)
     (let* ((display-beg (my-codex--eat-current-display-beginning))
            (previous-beg
-            (and (markerp my-codex--eat-previous-display-beginning)
-                 (marker-position my-codex--eat-previous-display-beginning)))
+            (and (markerp my-codex--eat-previous-display-beg)
+                 (marker-position my-codex--eat-previous-display-beg)))
            (beg (min display-beg (or previous-beg display-beg)))
            (end (my-codex--eat-current-display-end)))
-      (if (markerp my-codex--eat-previous-display-beginning)
-          (set-marker my-codex--eat-previous-display-beginning display-beg)
-        (setq my-codex--eat-previous-display-beginning
+      (if (markerp my-codex--eat-previous-display-beg)
+          (set-marker my-codex--eat-previous-display-beg display-beg)
+        (setq my-codex--eat-previous-display-beg
               (copy-marker display-beg)))
-      (if (markerp my-codex--eat-link-refresh-beginning)
-          (when (< beg (marker-position
-                        my-codex--eat-link-refresh-beginning))
-            (set-marker my-codex--eat-link-refresh-beginning beg))
-        (setq my-codex--eat-link-refresh-beginning (copy-marker beg)))
-      (if (markerp my-codex--eat-link-refresh-end)
-          (when (> end (marker-position my-codex--eat-link-refresh-end))
-            (set-marker my-codex--eat-link-refresh-end end))
-        (setq my-codex--eat-link-refresh-end (copy-marker end t)))
+      (if (markerp my-codex--eat-link-dirty-beg)
+          (when (< beg (marker-position my-codex--eat-link-dirty-beg))
+            (set-marker my-codex--eat-link-dirty-beg beg))
+        (setq my-codex--eat-link-dirty-beg (copy-marker beg)))
+      (if (markerp my-codex--eat-link-dirty-end)
+          (when (> end (marker-position my-codex--eat-link-dirty-end))
+            (set-marker my-codex--eat-link-dirty-end end))
+        (setq my-codex--eat-link-dirty-end (copy-marker end t)))
       (unless my-codex--eat-link-refresh-timer
         (setq my-codex--eat-link-refresh-timer
               (run-with-timer my-codex--eat-link-refresh-delay nil
@@ -292,12 +291,12 @@ When either bound is nil, use the corresponding buffer boundary."
 (defun my-codex--eat-session-links-mode-changed ()
   "Update Eat link refresh state after session links mode changes."
   (my-codex--eat-cancel-link-refresh)
-  (my-codex--eat-release-marker my-codex--eat-previous-display-beginning)
-  (setq my-codex--eat-previous-display-beginning nil)
+  (my-codex--eat-release-marker my-codex--eat-previous-display-beg)
+  (setq my-codex--eat-previous-display-beg nil)
   (if (bound-and-true-p my-codex-session-links-mode)
       (progn
         (my-codex--eat-linkify-after-update)
-        (setq my-codex--eat-previous-display-beginning
+        (setq my-codex--eat-previous-display-beg
               (copy-marker (my-codex--eat-current-display-beginning))))
     (my-codex--eat-clear-link-overlays)))
 
@@ -364,8 +363,8 @@ This is retained for Eat versions without `eat-update-hook'."
                #'my-codex--eat-session-links-mode-changed t)
   (remove-hook 'kill-buffer-hook #'my-codex--eat-cancel-link-refresh t)
   (my-codex--eat-cancel-link-refresh)
-  (my-codex--eat-release-marker my-codex--eat-previous-display-beginning)
-  (setq my-codex--eat-previous-display-beginning nil)
+  (my-codex--eat-release-marker my-codex--eat-previous-display-beg)
+  (setq my-codex--eat-previous-display-beg nil)
   (setq my-codex--eat-link-refresh-enabled nil)
   (my-codex--eat-clear-link-overlays))
 
