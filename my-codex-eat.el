@@ -143,10 +143,7 @@ When either bound is nil, use the corresponding buffer boundary."
   ((backend my-codex-eat-backend) project-root command
    &optional session-name agent access-mode)
   "Start BACKEND's Eat process in PROJECT-ROOT with COMMAND."
-  (let* ((agent (or agent my-codex-agent))
-         (access-mode
-          (or access-mode (my-codex--session-access-mode command agent)))
-         (buffer-name (my-codex-backend-buffer-name backend))
+  (let* ((buffer-name (my-codex-backend-buffer-name backend))
          (buffer (my-codex--start-eat-buffer buffer-name project-root)))
     (with-current-buffer buffer
       (my-codex--ensure-eat-scrollback)
@@ -154,16 +151,9 @@ When either bound is nil, use the corresponding buffer boundary."
       (when my-codex-enable-session-links
         (my-codex-session-links-mode 1)
         (my-codex--enable-eat-session-links))
-      (if session-name
-          (my-codex--mark-named-session
-           buffer session-name project-root access-mode agent 'eat)
-        (my-codex--mark-default-session
-         buffer project-root access-mode agent 'eat))
-      (let ((proc (get-buffer-process buffer)))
-        (unless (process-live-p proc)
-          (user-error "Failed to start Eat process in %s" buffer-name))
-        (set-process-query-on-exit-flag proc nil)
-        (my-codex--track-process-output-time proc)
+      (let ((proc (my-codex--prepare-backend-session
+                   buffer project-root command session-name agent access-mode
+                   'eat)))
         (goto-char (point-max))
         (process-send-string proc (my-codex--eat-command-and-exit command))
         (process-send-string proc "\n")))

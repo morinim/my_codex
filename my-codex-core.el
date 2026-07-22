@@ -812,6 +812,27 @@ Existing session buffers keep their recorded terminal backend."
      agent
      backend)))
 
+(defun my-codex--prepare-backend-session
+    (buffer project-root command session-name agent access-mode backend)
+  "Prepare BUFFER as a BACKEND session and return its live process.
+Infer AGENT and ACCESS-MODE when they are nil, and mark the session for
+PROJECT-ROOT.  SESSION-NAME selects a named rather than default session."
+  (let* ((agent (or agent my-codex-agent))
+         (access-mode
+          (or access-mode (my-codex--session-access-mode command agent))))
+    (if session-name
+        (my-codex--mark-named-session
+         buffer session-name project-root access-mode agent backend)
+      (my-codex--mark-default-session
+       buffer project-root access-mode agent backend))
+    (let ((process (get-buffer-process buffer)))
+      (unless (process-live-p process)
+        (user-error "Failed to start %s process in %s"
+                    backend (buffer-name buffer)))
+      (set-process-query-on-exit-flag process nil)
+      (my-codex--track-process-output-time process)
+      process)))
+
 (defun my-codex--safe-root-name (root)
   "Return a buffer-name-safe representation of ROOT."
   (replace-regexp-in-string

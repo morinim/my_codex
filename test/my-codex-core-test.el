@@ -859,6 +859,68 @@
           (should (eq my-codex-session-agent 'antigravity)))
       (delete-directory root t))))
 
+(ert-deftest my-codex-prepare-backend-session-infers-and-configures ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-session" t)))
+        query-args
+        tracked-process)
+    (unwind-protect
+        (with-temp-buffer
+          (let ((buffer (current-buffer))
+                (command (my-codex--agent-command 'codex 'workspace-write)))
+            (cl-letf (((symbol-function 'get-buffer-process)
+                       (lambda (candidate)
+                         (and (eq candidate buffer) 'test-process)))
+                      ((symbol-function 'process-live-p)
+                       (lambda (process) (eq process 'test-process)))
+                      ((symbol-function 'set-process-query-on-exit-flag)
+                       (lambda (&rest args) (setq query-args args)))
+                      ((symbol-function 'my-codex--track-process-output-time)
+                       (lambda (process) (setq tracked-process process))))
+              (should
+               (eq (my-codex--prepare-backend-session
+                    buffer root command nil nil nil 'eat)
+                   'test-process)))
+            (should (equal my-codex-session-name "default"))
+            (should (eq my-codex-session-agent 'codex))
+            (should (eq my-codex-session-access-mode 'workspace-write))
+            (should (eq my-codex-session-terminal-backend 'eat))
+            (should my-codex-session-start-time)
+            (should my-codex-session-last-activity)
+            (should (equal query-args '(test-process nil)))
+            (should (eq tracked-process 'test-process))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-prepare-backend-session-preserves-explicit-metadata ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-session" t))))
+    (unwind-protect
+        (with-temp-buffer
+          (let ((buffer (current-buffer)))
+            (cl-letf (((symbol-function 'get-buffer-process)
+                       (lambda (_buffer) 'test-process))
+                      ((symbol-function 'process-live-p) (lambda (_process) t))
+                      ((symbol-function 'set-process-query-on-exit-flag)
+                       #'ignore)
+                      ((symbol-function 'my-codex--track-process-output-time)
+                       #'ignore))
+              (my-codex--prepare-backend-session
+               buffer root "custom" "plan" 'antigravity 'read-only 'vterm))
+            (should (equal my-codex-session-name "plan"))
+            (should (eq my-codex-session-agent 'antigravity))
+            (should (eq my-codex-session-access-mode 'read-only))
+            (should (eq my-codex-session-terminal-backend 'vterm))))
+      (delete-directory root t))))
+
+(ert-deftest my-codex-prepare-backend-session-requires-live-process ()
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-session" t))))
+    (unwind-protect
+        (with-temp-buffer
+          (cl-letf (((symbol-function 'get-buffer-process) #'ignore))
+            (should-error
+             (my-codex--prepare-backend-session
+              (current-buffer) root "custom" nil 'codex 'read-only 'vterm)
+             :type 'user-error)))
+      (delete-directory root t))))
+
 (ert-deftest my-codex-session-buffer-name-appends-safe-session-name ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-buffer" t))))
     (unwind-protect

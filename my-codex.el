@@ -81,10 +81,7 @@
   ((backend my-codex-vterm-backend) project-root command
    &optional session-name agent access-mode)
   "Start BACKEND's vterm process in PROJECT-ROOT with COMMAND."
-  (let* ((agent (or agent my-codex-agent))
-         (access-mode
-          (or access-mode (my-codex--session-access-mode command agent)))
-         (default-directory project-root)
+  (let* ((default-directory project-root)
          (buffer-name (my-codex-backend-buffer-name backend))
          (buffer (get-buffer-create buffer-name)))
     (with-current-buffer buffer
@@ -94,19 +91,11 @@
       (setq-local show-trailing-whitespace nil)
       (when my-codex-enable-session-links
         (my-codex-session-links-mode 1))
-      (if session-name
-          (my-codex--mark-named-session
-           buffer session-name project-root access-mode agent 'vterm)
-        (my-codex--mark-default-session
-         buffer project-root access-mode agent 'vterm))
-      (let ((proc (get-buffer-process buffer)))
-        (unless (process-live-p proc)
-          (user-error "Failed to start vterm process in %s" buffer-name))
-        (set-process-query-on-exit-flag proc nil)
-        (my-codex--track-process-output-time proc)
-        (goto-char (point-max))
-        (vterm-send-string (my-codex--shell-command-and-exit command))
-        (vterm-send-return)))
+      (my-codex--prepare-backend-session
+       buffer project-root command session-name agent access-mode 'vterm)
+      (goto-char (point-max))
+      (vterm-send-string (my-codex--shell-command-and-exit command))
+      (vterm-send-return))
     (when (bound-and-true-p my-codex-vterm-integration-mode)
       (with-current-buffer buffer
         (my-codex--enable-vterm-buffer-integration)))
