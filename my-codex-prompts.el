@@ -362,8 +362,20 @@ session is available."
                              (my-codex--prompt-size-description prompt)))))
       (user-error "%s prompt cancelled" (my-codex--active-agent-label)))))
 
+(defun my-codex--display-after-send (buffer)
+  "Display agent BUFFER according to `my-codex-after-send-action'."
+  (pcase my-codex-after-send-action
+    ('focus
+     (if-let ((window (get-buffer-window buffer t)))
+         (select-window window)
+       (pop-to-buffer buffer)))
+    ('display
+     (display-buffer buffer my-codex-display-buffer-action))
+    ('stay nil)
+    (_ (error "Unknown after-send action: %s" my-codex-after-send-action))))
+
 (defun my-codex-send-prompt (prompt &optional target-buffer)
-  "Send PROMPT to the agent backend buffer and show it."
+  "Send PROMPT to the agent backend buffer and display it as configured."
   (my-codex--warn-about-unsaved-project-buffers)
   (my-codex--check-prompt-size prompt)
   (let* ((buffer (or target-buffer (my-codex-active-session-buffer t)))
@@ -371,11 +383,9 @@ session is available."
     (unless (and (buffer-live-p buffer)
                  (my-codex-backend-live-p backend))
       (user-error "No running agent process in %s" (buffer-name buffer)))
-    (if-let (window (get-buffer-window buffer t))
-        (select-window window)
-      (pop-to-buffer buffer))
-    (redisplay t)
-    (my-codex-backend-send backend prompt)))
+    (my-codex-backend-send backend prompt)
+    (my-codex--display-after-send buffer)
+    (redisplay t)))
 
 (cl-defun my-codex--request-marked-output
     (&key name buffer prompt placeholder parser callback timeout-message

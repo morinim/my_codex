@@ -172,6 +172,7 @@ resize the frame and editing window to accommodate that target.
 (setq my-codex-project-build-command "./setup_build")
 (setq my-codex-enable-prompt-preview t)
 (setq my-codex-region-send-policy 'prefer-inline)
+(setq my-codex-after-send-action 'stay)
 
 ;; Define or replace an agent profile.
 (my-codex-define-agent

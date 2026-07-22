@@ -242,6 +242,14 @@ different placement, such as a bottom side window or a dedicated frame."
   :type 'sexp
   :group 'my-codex)
 
+(defcustom my-codex-after-send-action 'focus
+  "How to display the agent after sending a prompt."
+  :type '(choice
+          (const :tag "Focus agent window" focus)
+          (const :tag "Display without selecting" display)
+          (const :tag "Remain in current window" stay))
+  :group 'my-codex)
+
 (defun my-codex--instruction-target-directory (root)
   "Return the instruction discovery directory below ROOT."
   (let ((directory (file-name-as-directory
