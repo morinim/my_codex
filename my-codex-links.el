@@ -113,7 +113,9 @@ TYPE is one of `url' or `file'.  TARGET is link-specific data."
       ('url
        (browse-url target))
       ('file
-       (my-codex-open-file-reference target))
+       (my-codex-open-file-reference
+        (or (my-codex--resolve-file-reference-target target pos)
+            target)))
       (_
        (user-error "No agent session link at point")))))
 
@@ -185,7 +187,9 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
                       (line-beginning-position)
                       (line-end-position)))))
           (when (string-match
-                 "\\(?:^\\|[^[:alnum:]_.@+-]\\)\\(\\(?:[[:alnum:]_.@+-]+/\\)+\\)\\'"
+                 (concat
+                  "\\(?:^\\|[^[:alnum:]_.@+/-]\\)"
+                  "\\(/?\\(?:[[:alnum:]_.@+-]+/\\)+\\)\\'")
                  line)
             (setq directory (match-string 1 line)))))
       directory)))
@@ -196,14 +200,19 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
       target
     (let ((file (plist-get target :file)))
       (when (and file
-                 (not (file-name-directory file))
                  (not (file-name-absolute-p file)))
         (when-let ((directory (my-codex--file-reference-context-directory pos)))
-          (let ((resolved (plist-put (copy-sequence target)
-                                     :file
-                                     (concat directory file))))
-            (when (my-codex--valid-file-reference-target-p resolved)
-              resolved)))))))
+          (when (or (not (file-name-directory file))
+                    (file-name-absolute-p directory))
+            (let* ((root (my-codex--session-link-project-root))
+                   (resolved
+                    (my-codex--normalise-file-reference-target
+                     (plist-put (copy-sequence target)
+                                :file
+                                (concat directory file))
+                     root)))
+              (when (my-codex--valid-file-reference-target-p resolved)
+                resolved))))))))
 
 (defun my-codex--normalise-file-reference-target (target root)
   "Return TARGET with an absolute in-project file made relative to ROOT."

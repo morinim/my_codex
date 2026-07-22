@@ -155,6 +155,37 @@
                     :end-line 34)))))))
       (delete-directory root t))))
 
+(ert-deftest my-codex-session-links-resolves-split-project-directory ()
+  (let* ((parent (file-name-as-directory
+                  (make-temp-file "my-codex-links" t)))
+         (root (expand-file-name "ultra/" parent))
+         (file "src/kernel/gp/src/search.tcc"))
+    (unwind-protect
+        (progn
+          (make-directory
+           (file-name-directory (expand-file-name file root))
+           t)
+          (write-region "" nil (expand-file-name file root) nil 'silent)
+          (with-temp-buffer
+            (let ((my-codex-session-project-root root))
+              (insert "Review comment -- " parent "\n"
+                      "  ultra/" file ":386-388")
+              (goto-char (point-min))
+              (forward-line 1)
+              (should
+               (equal
+                (my-codex--resolve-file-reference-target
+                 '(:file "ultra/src/kernel/gp/src/search.tcc"
+                   :line 386
+                   :column nil
+                   :end-line 388)
+                 (point))
+                '(:file "src/kernel/gp/src/search.tcc"
+                  :line 386
+                  :column nil
+                  :end-line 388))))))
+      (delete-directory parent t))))
+
 (ert-deftest my-codex-session-links-does-not-prepend-wrapped-prose ()
   (let ((root (file-name-as-directory (make-temp-file "my-codex-links" t))))
     (unwind-protect
