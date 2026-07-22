@@ -46,7 +46,7 @@ ACCEPT-COMMAND and CANCEL-COMMAND are bound to `C-c C-c' and `C-c C-k'."
     (use-local-map map)))
 
 (defgroup my-codex nil
-  "Customisation options for the Codex development tool."
+  "Customisation options for the coding-agent development tool."
   :group 'convenience
   :prefix "my-codex-")
 

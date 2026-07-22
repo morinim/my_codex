@@ -1,4 +1,4 @@
-;;; my-codex.el --- Codex integration -*- lexical-binding: t; -*-
+;;; my-codex.el --- Coding-agent integration -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2026 Manlio Morini
 
@@ -102,7 +102,7 @@
     buffer))
 
 (defun my-codex--selected-window-is-codex-p ()
-  "Return non-nil if the selected window shows Codex."
+  "Return non-nil if the selected window shows the active agent."
   (eq (selected-window)
       (ignore-errors
         (my-codex-visible-window))))
@@ -627,7 +627,7 @@ When RESOLVE is non-nil, also require availability predicates to be defined."
 
 ;;;###autoload
 (defun my-codex-transient-preserve-selection ()
-  "Show Codex commands without disturbing the active region."
+  "Show agent commands without disturbing the active region."
   (interactive)
   (setq my-codex--captured-selection
         (when (and (my-codex--selected-window-is-codex-p)
@@ -721,7 +721,7 @@ When RESOLVE is non-nil, also require availability predicates to be defined."
 
 ;;;###autoload
 (define-minor-mode my-codex-global-mode
-  "Global minor mode for seamless Codex integration."
+  "Global minor mode for coding-agent integration."
   :global t
   :group 'my-codex
   :keymap my-codex-global-mode-map

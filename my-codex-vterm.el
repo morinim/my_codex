@@ -10,7 +10,7 @@
 
 ;;; Commentary:
 
-;; vterm backend integration for Codex sessions.
+;; vterm backend integration for agent sessions.
 
 ;;; Code:
 
@@ -22,7 +22,7 @@
 (declare-function vterm-mode "vterm" ())
 
 (defun my-codex--ensure-vterm-scrollback ()
-  "Raise `vterm-max-scrollback' in the current Codex buffer when needed."
+  "Raise `vterm-max-scrollback' in the current agent buffer when needed."
   (when (and my-codex-vterm-min-scrollback
              (boundp 'vterm-max-scrollback)
              (numberp vterm-max-scrollback)

@@ -24,7 +24,7 @@
     (should
      (equal
       (my-codex--doctor-vterm-scrollback t)
-      '("Codex vterm scrollback" warn
+      '("Agent vterm scrollback" warn
         "Scrollback floor is disabled; marked output can be truncated")))))
 
 (ert-deftest my-codex-doctor-vterm-scrollback-reports-local-raise ()
@@ -38,8 +38,8 @@
           (should
            (equal
             (my-codex--doctor-vterm-scrollback t)
-            '("Codex vterm scrollback" ok
-              "Codex buffers raise 1000 to 10000 lines"))))
+            '("Agent vterm scrollback" ok
+              "Agent buffers raise 1000 to 10000 lines"))))
       (if was-bound
           (set 'vterm-max-scrollback original-value)
         (makunbound 'vterm-max-scrollback)))))
@@ -49,7 +49,7 @@
     (should
      (equal
       (my-codex--doctor-eat-scrollback t)
-      '("Codex Eat scrollback" ok
+      '("Agent Eat scrollback" ok
         "Unlimited scrollback configured")))))
 
 (ert-deftest my-codex-doctor-terminal-rows-use-vterm-selection ()

@@ -10,7 +10,7 @@
 
 ;;; Commentary:
 
-;; Prompt construction and context collection helpers for Codex sessions.
+;; Prompt construction and context collection helpers for agent sessions.
 
 ;;; Code:
 

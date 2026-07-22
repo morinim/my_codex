@@ -10,7 +10,7 @@
 
 ;;; Commentary:
 
-;; Diagnostics for checking the local Codex integration setup.
+;; Diagnostics for checking the local coding-agent integration setup.
 
 ;;; Code:
 
@@ -184,65 +184,65 @@ The car is non-nil when loading succeeds.  The cdr is a diagnostic detail."
         (kill-buffer buffer)))))
 
 (defun my-codex--doctor-vterm-scrollback (vterm-loadable)
-  "Return a diagnostic row for Codex vterm scrollback settings.
+  "Return a diagnostic row for agent vterm scrollback settings.
 VTERM-LOADABLE is non-nil when `vterm' can be loaded."
   (cond
    ((null my-codex-vterm-min-scrollback)
-    (list "Codex vterm scrollback" 'warn
+    (list "Agent vterm scrollback" 'warn
           "Scrollback floor is disabled; marked output can be truncated"))
    ((< my-codex-vterm-min-scrollback 10000)
-    (list "Codex vterm scrollback" 'warn
+    (list "Agent vterm scrollback" 'warn
           (format "Floor is %s lines; recommended minimum is 10000"
                   my-codex-vterm-min-scrollback)))
    ((and vterm-loadable (boundp 'vterm-max-scrollback)
          (numberp vterm-max-scrollback)
          (< vterm-max-scrollback my-codex-vterm-min-scrollback))
-    (list "Codex vterm scrollback" 'ok
-          (format "Codex buffers raise %s to %s lines"
+    (list "Agent vterm scrollback" 'ok
+          (format "Agent buffers raise %s to %s lines"
                   vterm-max-scrollback
                   my-codex-vterm-min-scrollback)))
    ((and vterm-loadable (boundp 'vterm-max-scrollback)
          (numberp vterm-max-scrollback))
-    (list "Codex vterm scrollback" 'ok
+    (list "Agent vterm scrollback" 'ok
           (format "Effective floor is %s lines"
                   (max vterm-max-scrollback
                        my-codex-vterm-min-scrollback))))
    (vterm-loadable
-    (list "Codex vterm scrollback" 'warn
+    (list "Agent vterm scrollback" 'warn
           "Cannot inspect vterm-max-scrollback"))
    (t
-    (list "Codex vterm scrollback" 'warn
+    (list "Agent vterm scrollback" 'warn
           "Skipped; vterm cannot be loaded"))))
 
 (defun my-codex--doctor-eat-scrollback (eat-loadable)
-  "Return a diagnostic row for Codex Eat scrollback settings.
+  "Return a diagnostic row for agent Eat scrollback settings.
 EAT-LOADABLE is non-nil when Eat can be loaded."
   (cond
    ((null my-codex-eat-min-scrollback)
-    (list "Codex Eat scrollback" 'ok
+    (list "Agent Eat scrollback" 'ok
           "Unlimited scrollback configured"))
    ((< my-codex-eat-min-scrollback 100000)
-    (list "Codex Eat scrollback" 'warn
+    (list "Agent Eat scrollback" 'warn
           (format "Floor is %s characters; recommended minimum is 100000"
                   my-codex-eat-min-scrollback)))
    ((and eat-loadable (boundp 'eat-term-scrollback-size)
          (numberp eat-term-scrollback-size)
          (< eat-term-scrollback-size my-codex-eat-min-scrollback))
-    (list "Codex Eat scrollback" 'ok
-          (format "Codex buffers raise %s to %s characters"
+    (list "Agent Eat scrollback" 'ok
+          (format "Agent buffers raise %s to %s characters"
                   eat-term-scrollback-size
                   my-codex-eat-min-scrollback)))
    ((and eat-loadable (boundp 'eat-term-scrollback-size)
          (numberp eat-term-scrollback-size))
-    (list "Codex Eat scrollback" 'ok
+    (list "Agent Eat scrollback" 'ok
           (format "Effective floor is %s characters"
                   (max eat-term-scrollback-size
                        my-codex-eat-min-scrollback))))
    (eat-loadable
-    (list "Codex Eat scrollback" 'warn
+    (list "Agent Eat scrollback" 'warn
           "Cannot inspect eat-term-scrollback-size"))
    (t
-    (list "Codex Eat scrollback" 'warn
+    (list "Agent Eat scrollback" 'warn
           "Skipped; Eat cannot be loaded"))))
 
 (defun my-codex--doctor-terminal-rows ()
@@ -610,7 +610,7 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
 
 ;;;###autoload
 (defun my-codex-doctor ()
-  "Run a health check for the local Codex Emacs integration."
+  "Run a health check for the local coding-agent integration."
   (interactive)
   (let ((buffer (get-buffer-create "*my-codex-doctor*"))
         (root default-directory)

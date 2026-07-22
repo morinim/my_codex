@@ -10,7 +10,7 @@
 
 ;;; Commentary:
 
-;; Eat terminal backend integration for Codex sessions.
+;; Eat terminal backend integration for agent sessions.
 
 ;;; Code:
 

@@ -317,7 +317,7 @@ Do not modify files."))
 (defun my-codex--git-diff-buffer-name (root staged)
   "Return the diff buffer name for ROOT.
 When STAGED is non-nil, return the staged diff buffer name."
-  (format "*Codex diff:%s:%s*"
+  (format "*my-codex diff:%s:%s*"
           (my-codex--safe-root-name root)
           (if staged "staged" "worktree")))
 
@@ -408,7 +408,7 @@ the agent terminal, use the file in the window to its left."
   "Return a buffer containing RELATIVE-FILE from HEAD in ROOT.
 When RELATIVE-FILE does not exist in HEAD, return an empty buffer."
   (let ((buffer (generate-new-buffer
-                 (format "*Codex HEAD:%s*" relative-file))))
+                 (format "*my-codex HEAD:%s*" relative-file))))
     (with-current-buffer buffer
       (let* ((default-directory root)
              (status (process-file "git" nil t nil
@@ -590,7 +590,7 @@ CODEX-BUFFER is the agent session buffer that requested MESSAGE."
 Kill COMMIT-BUFFER after a successful commit when it is non-nil.
 Clear request state in CODEX-BUFFER after a successful commit when it is live."
   (let ((file (make-temp-file "my-codex-commit-" nil ".txt"))
-        (output-buffer (get-buffer-create "*Codex git commit*"))
+        (output-buffer (get-buffer-create "*my-codex git commit*"))
         (codex-buffer (or codex-buffer
                           (let ((default-directory root))
                             (ignore-errors

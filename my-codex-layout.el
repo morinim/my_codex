@@ -27,7 +27,7 @@
   (my-codex-active-session-window))
 
 (defun my-codex--associated-edit-window (codex-window)
-  "Return the edit window associated with CODEX-WINDOW, or nil."
+  "Return the edit window associated with the agent window, or nil."
   (let ((codex-buffer (window-buffer codex-window)))
     (seq-find
      (lambda (window)
@@ -140,7 +140,7 @@
           (window-resize window delta t 'ignore))))))
 
 (defun my-codex--apply-display-window-width (window)
-  "Apply the configured Codex display width to WINDOW."
+  "Apply the configured agent display width to WINDOW."
   (when (window-live-p window)
     (pcase (alist-get 'window-width (my-codex--display-buffer-action-alist))
       ((and width (pred integerp))
@@ -151,7 +151,7 @@
        (funcall width window)))))
 
 (defun my-codex--resize-edit-window-for-right-layout (edit-window term-window)
-  "Keep EDIT-WINDOW wide enough for the default right-side Codex layout."
+  "Keep EDIT-WINDOW wide enough for the default right-side agent layout."
   (when (and (my-codex--enforce-right-side-layout-p)
              (window-live-p edit-window)
              (window-live-p term-window)
@@ -171,7 +171,7 @@
     (display-fill-column-indicator-mode 1)))
 
 (defun my-codex--edit-window-codex-visible-p (window frame)
-  "Return non-nil if WINDOW's Codex buffer is visible in FRAME."
+  "Return non-nil if WINDOW's agent buffer is visible in FRAME."
   (when-let ((buffer (window-parameter window 'my-codex-term-buffer)))
     (and (buffer-live-p buffer)
          (get-buffer-window buffer frame))))
@@ -226,7 +226,7 @@
       (display-fill-column-indicator-mode 1))))
 
 (defun my-codex--active-edit-fill-column-indicator-buffers ()
-  "Return buffers shown in live Codex edit windows."
+  "Return buffers shown in live agent edit windows."
   (let (buffers)
     (dolist (frame (frame-list))
       (dolist (window (window-list frame 'no-minibuf))
@@ -236,7 +236,7 @@
     buffers))
 
 (defun my-codex--restore-inactive-edit-fill-column-indicator-buffers ()
-  "Restore managed buffers no longer shown in a live Codex edit window."
+  "Restore managed buffers no longer shown in a live agent edit window."
   (let ((active-buffers
          (my-codex--active-edit-fill-column-indicator-buffers)))
     (dolist (buffer (copy-sequence
@@ -258,7 +258,7 @@
                  #'my-codex--refresh-edit-fill-column-indicator-windows)))
 
 (defun my-codex--refresh-edit-fill-column-indicator-windows (frame)
-  "Apply Codex fill-column indicators to marked edit windows in FRAME."
+  "Apply agent fill-column indicators to marked edit windows in FRAME."
   (dolist (window (window-list frame 'no-minibuf))
     (when (window-parameter window 'my-codex-edit-window)
       (let ((previous-buffer
@@ -280,7 +280,7 @@
   (my-codex--remove-edit-fill-column-indicator-hook-if-unused))
 
 (defun my-codex--set-edit-fill-column-indicator-window (window)
-  "Mark WINDOW as the Codex edit window and update its indicator."
+  "Mark WINDOW as the agent edit window and update its indicator."
   (let ((previous-buffer (window-parameter window 'my-codex-edit-buffer))
         (current-buffer (window-buffer window)))
     (unless (eq previous-buffer current-buffer)
@@ -305,7 +305,7 @@
 (defun my-codex-two-column-layout-with-command
     (codex-command &optional focus-term session-name agent access-mode
                    startup-prompt)
-  "Display Codex and run CODEX-COMMAND if the backend is not running.
+  "Display the agent and run CODEX-COMMAND if the backend is not running.
 If FOCUS-TERM is non-nil, leave the cursor focused on the terminal window.
 When SESSION-NAME is non-nil, use that named session instead of default.
 AGENT identifies the agent profile used for buffer names and metadata.

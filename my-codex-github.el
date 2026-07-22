@@ -10,7 +10,7 @@
 
 ;;; Commentary:
 
-;; GitHub helpers for creating issue drafts from Codex sessions.
+;; GitHub helpers for creating issue drafts from agent sessions.
 
 ;;; Code:
 

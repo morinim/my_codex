@@ -223,12 +223,12 @@
 
 (defface my-codex-top-live-face
   '((t :inherit success :weight bold))
-  "Face used for live sessions in the Codex dashboard."
+  "Face used for live sessions in the agent dashboard."
   :group 'my-codex)
 
 (defface my-codex-top-dead-face
   '((t :inherit shadow))
-  "Face used for dead/inactive sessions in the Codex dashboard."
+  "Face used for dead/inactive sessions in the agent dashboard."
   :group 'my-codex)
 
 (defvar-keymap my-codex-top-mode-map
