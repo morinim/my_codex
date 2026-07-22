@@ -87,16 +87,15 @@
     (insert text)))
 
 (defun my-codex--effective-right-width ()
-  "Return the configured width of the Codex vterm window."
+  "Return the configured width of the agent window."
   (if my-codex-min-right-width
       (max my-codex-min-right-width my-codex-right-width)
     my-codex-right-width))
 
 (defun my-codex--right-window-width (window)
-  "Resize WINDOW to the target Codex width when enforcement is enabled."
-  (when my-codex-enforce-right-side-layout
-    (my-codex--resize-window-to-body-width
-     window (my-codex--effective-right-width))))
+  "Resize WINDOW to the target agent width when possible."
+  (my-codex--resize-window-to-body-width
+   window (my-codex--effective-right-width)))
 
 (defun my-codex--display-buffer-action-alist ()
   "Return the alist part of `my-codex-display-buffer-action', if any."
@@ -105,7 +104,7 @@
     (cdr my-codex-display-buffer-action)))
 
 (defun my-codex--right-side-action-p ()
-  "Return non-nil when Codex is configured for a right side window."
+  "Return non-nil when the agent is configured for a right side window."
   (eq (alist-get 'side (my-codex--display-buffer-action-alist)) 'right))
 
 (defun my-codex--right-layout-width ()
@@ -113,7 +112,7 @@
   (+ my-codex-left-width (my-codex--effective-right-width)))
 
 (defun my-codex--enforce-right-side-layout-p ()
-  "Return non-nil when Codex should enforce the right-side layout."
+  "Return non-nil when my-codex should enforce the right-side layout."
   (and my-codex-enforce-right-side-layout
        (my-codex--right-side-action-p)))
 

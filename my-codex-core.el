@@ -213,25 +213,28 @@ keywords correspond to properties documented by
   id)
 
 (defcustom my-codex-left-width 81
-  "Width of the editing window text area in the Codex right-side layout."
+  "Width of the editing window text area in the right-side agent layout."
   :type 'natnum
   :group 'my-codex)
 
 (defcustom my-codex-min-right-width nil
-  "Optional minimum width of the Codex vterm window.
+  "Optional minimum width of the agent window.
 When nil, `my-codex-right-width' is used directly."
   :type '(choice (const :tag "No minimum" nil)
                  natnum)
   :group 'my-codex)
 
 (defcustom my-codex-right-width 80
-  "Target width of the Codex vterm window."
+  "Best-effort target width of the agent window."
   :type 'natnum
   :group 'my-codex)
 
 (defcustom my-codex-enforce-right-side-layout nil
-  "When non-nil, resize the frame and edit window for right-side Codex.
-Leave this nil when another package or window manager controls window sizes."
+  "When non-nil, resize the frame and edit window for a right-side agent.
+The agent window itself is resized towards `my-codex-right-width'
+regardless of this option.
+Leave this nil when another package or window manager controls the frame or
+editing window size."
   :type 'boolean
   :group 'my-codex)
 
@@ -240,7 +243,7 @@ Leave this nil when another package or window manager controls window sizes."
     (side . right)
     (slot . 0)
     (window-width . my-codex--right-window-width))
-  "Display action used for Codex buffers.
+  "Display action used for agent buffers.
 
 The value is passed to `display-buffer'.  Customise this when you prefer a
 different placement, such as a bottom side window or a dedicated frame."

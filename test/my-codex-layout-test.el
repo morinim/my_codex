@@ -45,6 +45,27 @@
         (my-codex-min-right-width 80))
     (should (= (my-codex--effective-right-width) 100))))
 
+(ert-deftest my-codex-right-window-width-applies-without-layout-enforcement ()
+  (let ((my-codex-enforce-right-side-layout nil)
+        (my-codex-right-width 72)
+        (my-codex-min-right-width nil)
+        resized)
+    (cl-letf (((symbol-function 'my-codex--resize-window-to-body-width)
+               (lambda (window width)
+                 (setq resized (cons window width)))))
+      (my-codex--right-window-width (selected-window)))
+    (should (equal resized (cons (selected-window) 72)))))
+
+(ert-deftest my-codex-edit-window-resize-still-requires-layout-enforcement ()
+  (let ((my-codex-enforce-right-side-layout nil)
+        resized)
+    (cl-letf (((symbol-function 'my-codex--resize-window-to-body-width)
+               (lambda (&rest _args)
+                 (setq resized t))))
+      (my-codex--resize-edit-window-for-right-layout
+       (selected-window) (selected-window)))
+    (should-not resized)))
+
 (ert-deftest my-codex-right-layout-width-combines-edit-and-agent-widths ()
   (let ((my-codex-left-width 81)
         (my-codex-right-width 60)

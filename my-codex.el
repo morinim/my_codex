@@ -239,13 +239,15 @@ files."
 
 ;;;###autoload
 (defun my-codex-new-session (name agent &optional access-mode)
-  "Start or show a named agent session NAME using AGENT and ACCESS-MODE."
+  "Start or show a named agent session NAME using AGENT and ACCESS-MODE.
+ACCESS-MODE defaults to `read-only'."
   (interactive
    (list
     (read-string "Session name: ")
     (my-codex--read-agent)
     (my-codex--read-session-access-mode)))
-  (let ((session-name (my-codex--normalise-session-name name)))
+  (let ((session-name (my-codex--normalise-session-name name))
+        (access-mode (or access-mode 'read-only)))
     (my-codex-two-column-layout-with-command
      (my-codex--agent-command agent access-mode)
      nil session-name agent access-mode)))
