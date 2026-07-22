@@ -270,8 +270,7 @@
                         :key (lambda (item) (plist-get item :command)))))
     (should (plist-member entry :transient))
     (should-not (plist-get entry :transient))
-    (should (equal (plist-get entry :menu) "Send selected region"))
-    (should (eq (keymap-lookup my-codex-map "s") 'my-codex-send-region)))
+    (should (equal (plist-get entry :menu) "Send selected region")))
   (let ((layout (my-codex--catalogue-transient-layout
                  'my-codex-transient)))
     (should
@@ -298,8 +297,7 @@
                         :key (lambda (item) (plist-get item :command)))))
     (should (eq (plist-get entry :prefix)
                 'my-codex-ask-preset-transient))
-    (should (equal (plist-get entry :key) "s"))
-    (should-not (keymap-lookup my-codex-map "m"))))
+    (should (equal (plist-get entry :key) "s"))))
 
 (ert-deftest my-codex-command-catalogue-explain-error-hides-document-context ()
   (let ((entry (cl-find 'my-codex-explain-region-as-error
@@ -315,15 +313,10 @@
     (should-not (plist-get entry :available))))
 
 (ert-deftest my-codex-command-catalogue-groups-review-and-git-bindings ()
-  (should (eq (keymap-lookup my-codex-map "r")
-              'my-codex-plan-refactor-region))
-  (should (eq (keymap-lookup my-codex-map "g")
-              'my-codex-git-transient))
-  (should (eq (keymap-lookup my-codex-map "t")
-              'my-codex-github-transient))
-  (dolist (key '("v" "V" "D" "l"))
-    (should-not (keymap-lookup my-codex-map key)))
-  (dolist (entry '((my-codex-resume my-codex-session-transient "r")
+  (dolist (entry '((my-codex-plan-refactor-region nil "r")
+                    (my-codex-git-transient nil "g")
+                    (my-codex-github-transient nil "t")
+                    (my-codex-resume my-codex-session-transient "r")
                     (my-codex-send-git-diff my-codex-git-review-transient "a")
                     (my-codex-show-git-diff my-codex-git-transient "v")
                     (my-codex-git-review-transient my-codex-git-transient "r")
@@ -339,10 +332,13 @@
         my-codex-command-catalogue)))))
 
 (ert-deftest my-codex-command-catalogue-groups-code-examination-bindings ()
-  (should (eq (keymap-lookup my-codex-map "x")
-              'my-codex-examine-transient))
-  (dolist (key '("f" "F" "C"))
-    (should-not (keymap-lookup my-codex-map key)))
+  (should
+   (cl-find-if
+    (lambda (item)
+      (and (eq (plist-get item :command) 'my-codex-examine-transient)
+           (null (plist-get item :prefix))
+           (equal (plist-get item :key) "x")))
+    my-codex-command-catalogue))
   (dolist (entry '((my-codex-explain-symbol-at-point "s")
                    (my-codex-review-defun-at-point "f")
                    (my-codex-send-current-file "F")
@@ -1193,8 +1189,7 @@
         (root-b (file-name-as-directory (make-temp-file "my-codex-b" t)))
         (buffer-name "*codex-shared-test*"))
     (unwind-protect
-        (let ((buffer (get-buffer-create buffer-name))
-              (my-codex-buffer-name buffer-name))
+        (let ((buffer (get-buffer-create buffer-name)))
           (my-codex--mark-default-session buffer root-a 'read-only)
           (let ((expected-id (with-current-buffer buffer my-codex-session-id))
                 (expected-root
@@ -1238,7 +1233,6 @@
         started-backend)
     (unwind-protect
         (let ((buffer (get-buffer-create buffer-name))
-              (my-codex-buffer-name buffer-name)
               (my-codex-terminal-backend 'eat))
           (with-current-buffer buffer
             (setq-local my-codex-session-terminal-backend 'vterm))
@@ -1287,8 +1281,7 @@
         (buffer-name "*codex-eat-layout-test*")
         fresh-buffer)
     (unwind-protect
-        (let ((my-codex-buffer-name buffer-name)
-              (my-codex-terminal-backend 'eat)
+        (let ((my-codex-terminal-backend 'eat)
               (my-codex--project-active-sessions
                (make-hash-table :test #'equal)))
           (let ((default-directory root))
