@@ -317,10 +317,11 @@ EAT-LOADABLE is non-nil when Eat can be loaded."
         (match-string 2 line)
         (match-string 3 line))))
 
-(defun my-codex--doctor-codex-user-service-tier ()
-  "Return the Codex CLI user-level service_tier in the current buffer.
-The result is a cons of (TIER . SOURCE), or nil when unset."
-  (let (active-profile top-tier top-source profile-tiers current-profile
+(defun my-codex--doctor-codex-user-setting (key value-reader)
+  "Return Codex CLI setting KEY from the current buffer.
+VALUE-READER receives a line and KEY.  The result is a cons of
+(VALUE . SOURCE), honouring the active profile, or nil when unset."
+  (let (active-profile top-value profile-values current-profile
                        (current-section 'top))
     (goto-char (point-min))
     (while (not (eobp))
@@ -335,59 +336,33 @@ The result is a cons of (TIER . SOURCE), or nil when unset."
                 (my-codex--doctor-toml-profile-table line))
           (setq current-section (if current-profile 'profile 'other)))
          ((eq current-section 'profile)
-          (when-let ((tier (my-codex--doctor-toml-string-value
-                            line "service_tier")))
-            (setf (alist-get current-profile profile-tiers nil nil #'equal)
-                  tier)))
-         ((eq current-section 'top)
-          (when-let ((profile (my-codex--doctor-toml-string-value
-                               line "profile")))
-            (setq active-profile profile))
-          (when-let ((tier (my-codex--doctor-toml-string-value
-                            line "service_tier")))
-            (setq top-tier tier)
-            (setq top-source "top level")))))
-      (forward-line 1))
-    (if-let* ((active-profile)
-              (tier (alist-get active-profile profile-tiers nil nil #'equal)))
-        (cons tier (format "profile %S" active-profile))
-      (when top-tier
-        (cons top-tier top-source)))))
-
-(defun my-codex--doctor-codex-user-integer-setting (key)
-  "Return the Codex CLI user-level integer setting KEY in the current buffer.
-The result is a cons of (VALUE . SOURCE), or nil when unset."
-  (let (active-profile top-value top-source profile-values current-profile
-                       (current-section 'top))
-    (goto-char (point-min))
-    (while (not (eobp))
-      (let ((line (buffer-substring-no-properties
-                   (line-beginning-position)
-                   (line-end-position))))
-        (cond
-         ((or (string-blank-p line)
-              (string-match-p "\\`[[:space:]]*#" line)))
-         ((string-match-p "\\`[[:space:]]*\\[" line)
-          (setq current-profile
-                (my-codex--doctor-toml-profile-table line))
-          (setq current-section (if current-profile 'profile 'other)))
-         ((eq current-section 'profile)
-          (when-let ((value (my-codex--doctor-toml-integer-value line key)))
+          (when-let ((value (funcall value-reader line key)))
             (setf (alist-get current-profile profile-values nil nil #'equal)
                   value)))
          ((eq current-section 'top)
           (when-let ((profile (my-codex--doctor-toml-string-value
                                line "profile")))
             (setq active-profile profile))
-          (when-let ((value (my-codex--doctor-toml-integer-value line key)))
-            (setq top-value value)
-            (setq top-source "top level")))))
+          (when-let ((value (funcall value-reader line key)))
+            (setq top-value value)))))
       (forward-line 1))
     (if-let* ((active-profile)
               (value (alist-get active-profile profile-values nil nil #'equal)))
         (cons value (format "profile %S" active-profile))
       (when top-value
-        (cons top-value top-source)))))
+        (cons top-value "top level")))))
+
+(defun my-codex--doctor-codex-user-service-tier ()
+  "Return the Codex CLI user-level service_tier in the current buffer.
+The result is a cons of (TIER . SOURCE), or nil when unset."
+  (my-codex--doctor-codex-user-setting
+   "service_tier" #'my-codex--doctor-toml-string-value))
+
+(defun my-codex--doctor-codex-user-integer-setting (key)
+  "Return the Codex CLI user-level integer setting KEY in the current buffer.
+The result is a cons of (VALUE . SOURCE), or nil when unset."
+  (my-codex--doctor-codex-user-setting
+   key #'my-codex--doctor-toml-integer-value))
 
 (defun my-codex--doctor-codex-config-file ()
   "Return the Codex CLI config file path."
