@@ -37,8 +37,8 @@
 
 (defun my-codex-top--out-tokens-less-p (first second)
   "Return non-nil when FIRST has fewer estimated outbound tokens than SECOND."
-  (< (string-to-number (aref (cadr first) 11))
-     (string-to-number (aref (cadr second) 11))))
+  (< (string-to-number (aref (cadr first) 12))
+     (string-to-number (aref (cadr second) 12))))
 
 (defvar-keymap my-codex-top-sort-button-map
   :parent tabulated-list-sort-button-map
@@ -249,28 +249,28 @@
   "g"   #'my-codex-top-refresh-git)
 
 (define-derived-mode my-codex-top-mode tabulated-list-mode
-  "Agents Top"
+  "Agent Sessions"
   "Major mode for monitoring agent sessions."
   (setq tabulated-list-format
         [("Active" 6 t)
          ("Agent" 12 t)
          ("Project" 12 t)
          ("Session" 10 t)
-         ("Buffer" 28 t)
          ("Access" 16 t)
          ("State" 6 t)
+         ("Git" 8 t)
+         ("Activity" 8 t)
+         ("Buffer" 28 t)
          ("PID" 8 t)
          ("Branch" 12 t)
-         ("Git" 8 t)
          ("Prompts" 8 t)
          ("Out tokens (est.)" 19 my-codex-top--out-tokens-less-p)
          ("Lines" 8 t)
-         ("Age" 6 t)
-         ("Activity" 8 t)])
+         ("Age" 6 t)])
   (setq tabulated-list-padding 1)
   (setq revert-buffer-function #'my-codex-top-refresh)
   (setq-local mode-line-format
-              '("  *Agents Top*  [D:Dired  b:Build  R:Rename  d:Diff  e:Edit  k:Kill  K:Kill dead  RET:Visit  g:Refresh]"))
+              '("  *Agent Sessions*  [D:Dired  b:Build  R:Rename  d:Diff  e:Edit  k:Kill  K:Kill dead  RET:Visit  g:Refresh]"))
   (tabulated-list-init-header)
   (my-codex--sync-header-hscroll))
 
@@ -368,9 +368,9 @@ STATE is one of the strings `clean', `dirty', or `error'."
                (setq branch "—"
                      git-state "—"))))
          (list (buffer-name buffer)
-               (vector active agent project session (buffer-name buffer) access
-                       state pid branch git-state prompts out-tokens lines age
-                       last-act))))
+               (vector active agent project session access state git-state
+                       last-act (buffer-name buffer) pid branch prompts
+                       out-tokens lines age))))
      (my-codex--all-session-buffers))))
 
 (defun my-codex-top-kill-session ()
@@ -498,7 +498,7 @@ STATE is one of the strings `clean', `dirty', or `error'."
 (defun my-codex-top ()
   "Display a dashboard of all active and inactive agent sessions."
   (interactive)
-  (with-current-buffer (get-buffer-create "*Agents Top*")
+  (with-current-buffer (get-buffer-create "*Agent Sessions*")
     (my-codex-top-mode)
     (my-codex-top-refresh)
     (pop-to-buffer (current-buffer))))

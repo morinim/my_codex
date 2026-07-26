@@ -33,9 +33,14 @@
                         (t '(1)))))
                     ((symbol-function 'pop-to-buffer) #'ignore))
             (my-codex-top))
-          (with-current-buffer "*Agents Top*"
+          (with-current-buffer "*Agent Sessions*"
             (should (derived-mode-p 'my-codex-top-mode))
-            (should (equal (car (aref tabulated-list-format 11))
+            (should
+             (equal (mapcar #'car
+                            (seq-take (append tabulated-list-format nil) 8))
+                    '("Active" "Agent" "Project" "Session"
+                      "Access" "State" "Git" "Activity")))
+            (should (equal (car (aref tabulated-list-format 12))
                            "Out tokens (est.)"))
             (should (string-match-p "review" (buffer-string)))
             (should (string-match-p "Codex" (buffer-string)))
@@ -49,7 +54,7 @@
       (delete-directory root t)
       (when (buffer-live-p session-buffer)
         (kill-buffer session-buffer))
-      (when-let ((buffer (get-buffer "*Agents Top*")))
+      (when-let ((buffer (get-buffer "*Agent Sessions*")))
         (kill-buffer buffer)))))
 
 (ert-deftest my-codex-top-header-scrolls-horizontally ()
@@ -78,9 +83,9 @@
   (with-temp-buffer
     (my-codex-top-mode)
     (setq tabulated-list-entries
-          '((small ["" "" "" "" "" "" "" "" "" "" "" "900" "" "" ""])
-            (large ["" "" "" "" "" "" "" "" "" "" "" "1000" "" "" ""])))
-    (my-codex-top-sort 11)
+          '((small ["" "" "" "" "" "" "" "" "" "" "" "" "900" "" ""])
+            (large ["" "" "" "" "" "" "" "" "" "" "" "" "1000" "" ""])))
+    (my-codex-top-sort 12)
     (should (eq (caar tabulated-list-entries) 'small))))
 
 (ert-deftest my-codex-top-token-sort-indicator-preserves-header-alignment ()
@@ -259,7 +264,7 @@
                       ((symbol-function 'read-string)
                        (lambda (&rest _) "after")))
               (my-codex-top)
-              (with-current-buffer "*Agents Top*"
+              (with-current-buffer "*Agent Sessions*"
                 (goto-char (point-min))
                 (search-forward "*codex-top-rename*")
                 (beginning-of-line)
@@ -283,7 +288,7 @@
       (delete-directory root t)
       (when (buffer-live-p session-buffer)
         (kill-buffer session-buffer))
-      (when-let ((buffer (get-buffer "*Agents Top*")))
+      (when-let ((buffer (get-buffer "*Agent Sessions*")))
         (kill-buffer buffer)))))
 
 (ert-deftest my-codex-top-rejects-renaming-to-existing-session ()
@@ -342,13 +347,14 @@
           (setq dashboard-window (split-window-right))
           (set-window-parameter
            edit-window 'my-codex-term-buffer session-buffer)
-          (set-window-buffer dashboard-window (get-buffer-create "*Agents Top*"))
-          (with-current-buffer "*Agents Top*"
+          (set-window-buffer dashboard-window
+                             (get-buffer-create "*Agent Sessions*"))
+          (with-current-buffer "*Agent Sessions*"
             (my-codex-top-mode)
             (setq tabulated-list-entries
                   `((,(buffer-name session-buffer)
-                     ["" "" "project" "session" ,(buffer-name session-buffer)
-                      "" "" "" "" "" "" "" "" "" ""])))
+                     ["" "" "project" "session" "" "" "" ""
+                      ,(buffer-name session-buffer) "" "" "" "" "" ""])))
             (tabulated-list-print)
             (goto-char (point-min))
             (search-forward (buffer-name session-buffer))
@@ -360,7 +366,7 @@
         (delete-window dashboard-window))
       (when (buffer-live-p session-buffer)
         (kill-buffer session-buffer))
-      (when-let ((buffer (get-buffer "*Agents Top*")))
+      (when-let ((buffer (get-buffer "*Agent Sessions*")))
         (kill-buffer buffer)))))
 
 (ert-deftest my-codex-top-visit-edit-window-searches-all-frames ()
@@ -374,8 +380,8 @@
             (my-codex-top-mode)
             (setq tabulated-list-entries
                   `((,(buffer-name session-buffer)
-                     ["" "" "project" "session" ,(buffer-name session-buffer)
-                      "" "" "" "" "" "" "" "" "" ""])))
+                     ["" "" "project" "session" "" "" "" ""
+                      ,(buffer-name session-buffer) "" "" "" "" "" ""])))
             (tabulated-list-print)
             (goto-char (point-min))
             (search-forward (buffer-name session-buffer))
@@ -414,8 +420,8 @@
           (my-codex-top-mode)
           (setq tabulated-list-entries
                 `((,(buffer-name session-buffer)
-                   ["" "" "project" "session" ,(buffer-name session-buffer)
-                    "" "" "" "" "" "" "" "" "" ""])))
+                   ["" "" "project" "session" "" "" "" ""
+                    ,(buffer-name session-buffer) "" "" "" "" "" ""])))
           (tabulated-list-print)
           (goto-char (point-min))
           (search-forward (buffer-name session-buffer))
@@ -454,7 +460,7 @@
                         (get-buffer buffer-or-name))
                        (selected-window))))
             (my-codex-top)
-            (with-current-buffer "*Agents Top*"
+            (with-current-buffer "*Agent Sessions*"
               (goto-char (point-min))
               (search-forward "*codex-sessions-select*")
               (beginning-of-line)
@@ -471,7 +477,7 @@
         (kill-buffer old-buffer))
       (when (buffer-live-p session-buffer)
         (kill-buffer session-buffer))
-      (when-let ((buffer (get-buffer "*Agents Top*")))
+      (when-let ((buffer (get-buffer "*Agent Sessions*")))
         (kill-buffer buffer)))))
 
 (ert-deftest my-codex-top-visit-from-terminal-updates-edit-window ()
@@ -500,7 +506,7 @@
                      (lambda (&rest _) nil))
                     ((symbol-function 'pop-to-buffer) #'ignore))
             (my-codex-top)
-            (with-current-buffer "*Agents Top*"
+            (with-current-buffer "*Agent Sessions*"
               (goto-char (point-min))
               (search-forward "*codex-sessions-terminal-new*")
               (beginning-of-line)
@@ -519,7 +525,7 @@
         (kill-buffer old-buffer))
       (when (buffer-live-p session-buffer)
         (kill-buffer session-buffer))
-      (when-let ((buffer (get-buffer "*Agents Top*")))
+      (when-let ((buffer (get-buffer "*Agent Sessions*")))
         (kill-buffer buffer)))))
 
 
