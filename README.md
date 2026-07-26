@@ -117,8 +117,8 @@ refresh Git information.
 
 - `F8 a` / `F8 A` : ask a free-form question or open the Ask menu.
 - `F8 A s` : ask a secondary agent; the Ask menu also contains customisable prompt presets.
-- `F8 s` / `F8 r` : send the selected region, or draft a low-risk refactoring plan for it.
-- `F8 Right` : send the selected region when active, otherwise inspect the current file.
+- `F8 s` / `F8 Right` : send the selected region when active, otherwise inspect the current file.
+- `F8 r` : draft a low-risk refactoring plan for the selected region.
 - `F8 Left` / `F8 TAB` : insert agent text into code, or toggle focus between code and agent.
 - `F8 x f` / `F8 x F` / `F8 x c` : review the current defun, inspect the current file, or analyse test coverage. The agent finds relevant tests; use `C-u F8 x c` to select one explicitly.
 - `F8 x s` / `F8 e` : explain the symbol at point or selected error.

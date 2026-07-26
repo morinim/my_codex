@@ -226,6 +226,7 @@
                 (lambda (item)
                   (and (eq (plist-get item :command)
                            'my-codex-send-region-or-current-file)
+                       (equal (plist-get item :key) "<right>")
                        (equal (plist-get item :contexts) '(document))))
                 my-codex-command-catalogue)))
     (should entry)
@@ -256,28 +257,38 @@
         my-codex-command-catalogue)))))
 
 (ert-deftest my-codex-easy-menu-includes-contextual-right-command ()
-  (let* ((entry (cl-find 'my-codex-send-region-or-current-file
-                         my-codex-command-catalogue
-                         :key (lambda (item) (plist-get item :command))))
+  (let* ((entry (cl-find-if
+                 (lambda (item)
+                   (and (eq (plist-get item :command)
+                            'my-codex-send-region-or-current-file)
+                        (equal (plist-get item :key) "<right>")))
+                 my-codex-command-catalogue))
          (menu (my-codex--catalogue-easy-menu)))
     (should (equal (plist-get entry :menu-key) "Right"))
     (should (string-match-p "Send region or inspect current file"
                             (prin1-to-string menu)))
     (should (string-match-p "F8 Right" (prin1-to-string menu)))))
 
-(ert-deftest my-codex-command-catalogue-hides-region-from-transient-only ()
-  (let ((entry (cl-find 'my-codex-send-region my-codex-command-catalogue
-                        :key (lambda (item) (plist-get item :command)))))
-    (should (plist-member entry :transient))
-    (should-not (plist-get entry :transient))
-    (should (equal (plist-get entry :menu) "Send selected region")))
+(ert-deftest my-codex-command-catalogue-s-aliases-right-command ()
+  (let ((entry (cl-find-if
+                (lambda (item)
+                  (and (eq (plist-get item :command)
+                           'my-codex-send-region-or-current-file)
+                       (equal (plist-get item :key) "s")
+                       (equal (plist-get item :contexts) '(code unknown))))
+                my-codex-command-catalogue)))
+    (should entry)
+    (should (equal (plist-get entry :label) "Region or file")))
   (let ((layout (my-codex--catalogue-transient-layout
                  'my-codex-transient)))
     (should
      (cl-loop for group in layout
-              never (cl-loop for index from 1 below (length group)
-                             thereis (equal (car (aref group index))
-                                            "s"))))))
+              thereis (cl-loop for index from 1 below (length group)
+                               thereis
+                               (let ((suffix (aref group index)))
+                                 (and (equal (car suffix) "s")
+                                      (eq (nth 2 suffix)
+                                          'my-codex-send-region-or-current-file))))))))
 
 (ert-deftest my-codex-command-catalogue-refactor-plan-is-code-context ()
   (let ((entry (cl-find 'my-codex-plan-refactor-region
