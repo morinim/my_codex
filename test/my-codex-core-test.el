@@ -80,6 +80,44 @@
 (ert-deftest my-codex-terminal-backend-defaults-to-auto ()
   (should (eq (default-value 'my-codex-terminal-backend) 'auto)))
 
+(ert-deftest my-codex-customisation-has-five-top-level-groups ()
+  (let ((members (get 'my-codex 'custom-group)))
+    (dolist (group '(my-codex-sessions
+                     my-codex-layout
+                     my-codex-prompts
+                     my-codex-integrations
+                     my-codex-git))
+      (should (member (list group 'custom-group) members)))))
+
+(ert-deftest my-codex-layout-customisation-exposes-one-agent-width ()
+  (let ((members (get 'my-codex-layout 'custom-group)))
+    (should (member '(my-codex-agent-window-width custom-variable) members))
+    (should-not (assq 'my-codex-right-width members))
+    (should-not (assq 'my-codex-min-right-width members))
+    (should (member '(my-codex-layout-advanced custom-group) members))))
+
+(ert-deftest my-codex-right-width-remains-a-compatibility-alias ()
+  (let ((my-codex-agent-window-width 80))
+    (let ((my-codex-right-width 96))
+      (should (= my-codex-agent-window-width 96)))))
+
+(ert-deftest my-codex-right-width-migrates-a-value-set-before-load ()
+  (let* ((script '(progn
+                    (setq my-codex-right-width 96)
+                    (require 'my-codex-core)
+                    (prin1 (list my-codex-right-width
+                                 my-codex-agent-window-width))))
+         (output
+          (with-temp-buffer
+            (let ((exit-code
+                   (call-process invocation-name nil t nil
+                                 "--batch" "-Q" "-L" default-directory
+                                 "--eval" (prin1-to-string script))))
+              (unless (zerop exit-code)
+                (error "Nested Emacs failed: %s" (buffer-string)))
+              (buffer-string)))))
+    (should (equal output "(96 96)"))))
+
 (ert-deftest my-codex-auto-backend-prefers-platform-default ()
   (let ((system-type 'gnu/linux)
         checked)

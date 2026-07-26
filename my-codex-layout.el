@@ -89,8 +89,8 @@
 (defun my-codex--effective-right-width ()
   "Return the configured width of the agent window."
   (if my-codex-min-right-width
-      (max my-codex-min-right-width my-codex-right-width)
-    my-codex-right-width))
+      (max my-codex-min-right-width my-codex-agent-window-width)
+    my-codex-agent-window-width))
 
 (defun my-codex--right-window-width (window)
   "Resize WINDOW to the target agent width when possible."

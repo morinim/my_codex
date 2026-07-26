@@ -36,7 +36,7 @@
 Identify missing edge cases, unhandled exceptions, logical flaws and important behaviour that is not currently tested. Do not edit or write tests; list missing scenarios only."
   "Prompt used by `my-codex-analyse-test-coverage'."
   :type 'string
-  :group 'my-codex)
+  :group 'my-codex-prompts)
 
 (defcustom my-codex-refactor-plan-prompt
   "Draft a step-by-step, low-risk refactoring plan for this code.
@@ -54,7 +54,7 @@ Focus on:
 Finish with the smallest safe first edit worth making."
   "Prompt used by `my-codex-plan-refactor-region'."
   :type 'string
-  :group 'my-codex)
+  :group 'my-codex-prompts)
 
 (defcustom my-codex-document-task-brief-prompt
   "Use this document as the primary task brief.
@@ -64,7 +64,7 @@ risks. Then proceed with the smallest safe implementation step if the brief is
 actionable. If it is not actionable, ask for the smallest clarification needed."
   "Prompt used by `my-codex-use-document-as-task-brief'."
   :type 'string
-  :group 'my-codex)
+  :group 'my-codex-prompts)
 
 (defcustom my-codex-implement-plan-prompt
   "Implement this selected plan.
@@ -74,7 +74,7 @@ style, and run the smallest relevant checks. If a step is ambiguous or unsafe,
 pause and explain the smallest clarification needed."
   "Prompt used by `my-codex-implement-selected-plan'."
   :type 'string
-  :group 'my-codex)
+  :group 'my-codex-prompts)
 
 (defcustom my-codex-review-plan-prompt
   "Review this plan.
@@ -84,7 +84,7 @@ test coverage, rollback points, and any unclear requirements. Do not edit
 files unless explicitly asked."
   "Prompt used by `my-codex-review-plan'."
   :type 'string
-  :group 'my-codex)
+  :group 'my-codex-prompts)
 
 (defcustom my-codex-open-questions-prompt
   "Extract the open questions from this document.
@@ -93,7 +93,7 @@ Group them by topic when useful. Keep the list concise and concrete. Do not
 edit files."
   "Prompt used by `my-codex-extract-open-questions'."
   :type 'string
-  :group 'my-codex)
+  :group 'my-codex-prompts)
 
 (defcustom my-codex-summarise-document-prompt
   "Summarise this document.
@@ -102,26 +102,26 @@ Capture the objective, decisions, constraints, action items, risks, and any
 named files or commands. Keep it concise. Do not edit files."
   "Prompt used by `my-codex-summarise-document'."
   :type 'string
-  :group 'my-codex)
+  :group 'my-codex-prompts)
 
 (defcustom my-codex-enable-prompt-preview nil
   "When non-nil, show an editable preview before sending prompts."
   :type 'boolean
-  :group 'my-codex)
+  :group 'my-codex-prompts)
 
 (defcustom my-codex-prompt-warning-tokens 4000
   "Approximate prompt size in tokens that requires confirmation before sending.
 When nil, do not warn about large prompts."
   :type '(choice (const :tag "Do not warn" nil)
                  natnum)
-  :group 'my-codex)
+  :group 'my-codex-prompts)
 
 (defcustom my-codex-prompt-error-tokens nil
   "Approximate prompt size in tokens that is refused before sending.
 When nil, do not enforce a hard prompt size limit."
   :type '(choice (const :tag "No hard limit" nil)
                  natnum)
-  :group 'my-codex)
+  :group 'my-codex-prompts)
 
 (defcustom my-codex-region-send-policy 'prefer-reference
   "How selected regions are sent to the agent.
@@ -133,7 +133,7 @@ send selected text inline."
   :type '(choice (const :tag "Prefer file references" prefer-reference)
                  (const :tag "Automatic by size" automatic)
                  (const :tag "Prefer inline text" prefer-inline))
-  :group 'my-codex)
+  :group 'my-codex-prompts)
 
 (defcustom my-codex-region-reference-threshold-chars 5000
   "Region size in characters that sends a file reference instead of text.
@@ -142,32 +142,32 @@ and only to file-visiting buffers.  When nil, automatic mode always
 sends selected region text from `my-codex-send-region'."
   :type '(choice (const :tag "Always send selected text" nil)
                  natnum)
-  :group 'my-codex)
+  :group 'my-codex-prompts)
 
 (defcustom my-codex-symbol-context-lines 5
   "Number of surrounding lines to include for modified symbol buffers."
   :type 'natnum
-  :group 'my-codex)
+  :group 'my-codex-prompts)
 
 (defcustom my-codex-symbol-include-xref-context t
   "When non-nil, include xref definition and reference locations for symbols."
   :type 'boolean
-  :group 'my-codex)
+  :group 'my-codex-prompts)
 
 (defcustom my-codex-symbol-xref-definition-limit 1
   "Maximum number of xref definitions to include for symbol explanations."
   :type 'natnum
-  :group 'my-codex)
+  :group 'my-codex-prompts)
 
 (defcustom my-codex-symbol-xref-reference-limit 3
   "Maximum number of xref references to include for symbol explanations."
   :type 'natnum
-  :group 'my-codex)
+  :group 'my-codex-prompts)
 
 (defcustom my-codex-symbol-xref-context-lines 1
   "Number of surrounding lines to include for each modified xref buffer."
   :type 'natnum
-  :group 'my-codex)
+  :group 'my-codex-prompts)
 
 (defcustom my-codex-prompt-presets
   '(("Refactor" . "Review the following code and refactor it to improve readability and performance without changing its external behaviour.")
@@ -177,7 +177,7 @@ sends selected region text from `my-codex-send-region'."
   "Prompt presets offered by `my-codex-ask-with-preset'.
 Each entry is a cons cell of the form (NAME . PROMPT)."
   :type '(alist :key-type string :value-type string)
-  :group 'my-codex)
+  :group 'my-codex-prompts)
 
 (defcustom my-codex-session-summary-prompt
   "Summarise our conversation so far into useful project notes.
@@ -192,12 +192,12 @@ Focus on:
 Preserve concrete file names, command names, and technical details. Do not edit files."
   "Prompt used by `my-codex-summarise-session-to-markdown'."
   :type 'string
-  :group 'my-codex)
+  :group 'my-codex-prompts)
 
 (defcustom my-codex-secondary-remark-session-name "remark"
   "Named session used when asking a secondary agent for a remark."
   :type 'string
-  :group 'my-codex)
+  :group 'my-codex-sessions)
 
 (declare-function my-codex--project-files "my-codex-git" (root))
 (declare-function my-codex--subject-buffer "my-codex" ())

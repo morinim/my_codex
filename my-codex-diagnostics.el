@@ -29,19 +29,19 @@ When `auto', prefer an active Flycheck session, then Flymake."
   :type '(choice (const :tag "Automatically select" auto)
                  (const flycheck)
                  (const flymake))
-  :group 'my-codex)
+  :group 'my-codex-integrations)
 
 (defcustom my-codex-diagnostics-limit 100
   "Maximum number of diagnostics to include in one agent prompt."
   :type 'natnum
-  :group 'my-codex)
+  :group 'my-codex-integrations)
 
 (defcustom my-codex-diagnostics-token-budget 2000
   "Approximate token budget for generated diagnostics context.
 When nil, diagnostics context is not capped by token budget."
   :type '(choice (const :tag "No diagnostics token budget" nil)
                  natnum)
-  :group 'my-codex)
+  :group 'my-codex-integrations)
 
 (declare-function flycheck-error-< "flycheck" (err1 err2))
 (declare-function flycheck-error-checker "flycheck" (err))

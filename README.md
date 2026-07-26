@@ -155,6 +155,9 @@ Only active in document buffers (e.g. Markdown, Org, txt):
 ## Customisation
 
 Configure options via `M-x customize-group RET my-codex RET`.
+Options are organised into Sessions, Layout, Prompts, Integrations and Git.
+Specialised window placement and frame-sizing controls are under Advanced
+Layout.
 
 The defaults are Codex, automatic terminal selection, a best-effort agent
 window target width of 80 columns, prompt previews disabled, saved project
@@ -173,7 +176,7 @@ resize the frame and editing window to accommodate that target.
 (setq my-codex-terminal-backend 'eat)
 
 ;; Override layout, build, and prompt defaults.
-(setq my-codex-right-width 100)
+(setq my-codex-agent-window-width 100)
 (setq my-codex-project-build-command "./setup_build")
 (setq my-codex-enable-prompt-preview t)
 (setq my-codex-region-send-policy 'prefer-inline)

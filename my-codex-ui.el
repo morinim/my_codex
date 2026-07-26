@@ -30,7 +30,7 @@
 (defcustom my-codex-top-git-cache-ttl 5
   "Seconds for which dashboard Git information remains valid."
   :type 'number
-  :group 'my-codex)
+  :group 'my-codex-git)
 
 (defvar my-codex-top--git-cache (make-hash-table :test #'equal)
   "Git dashboard information keyed by project root.")
@@ -224,12 +224,12 @@
 (defface my-codex-top-live-face
   '((t :inherit success :weight bold))
   "Face used for live sessions in the agent dashboard."
-  :group 'my-codex)
+  :group 'my-codex-sessions)
 
 (defface my-codex-top-dead-face
   '((t :inherit shadow))
   "Face used for dead/inactive sessions in the agent dashboard."
-  :group 'my-codex)
+  :group 'my-codex-sessions)
 
 (defvar-keymap my-codex-top-mode-map
   :parent tabulated-list-mode-map

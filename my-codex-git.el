@@ -42,26 +42,26 @@
 (defcustom my-codex-commit-message-fill-column 76
   "Maximum line width for generated commit messages."
   :type 'natnum
-  :group 'my-codex)
+  :group 'my-codex-git)
 
 (defcustom my-codex-git-diff-review-prompt
   "Review the current Git diff using `git diff -- .`. Focus on correctness, regressions, edge cases, naming and maintainability. Do not edit unless asked\n"
   "Prompt used by `my-codex-send-git-diff'."
   :type 'string
-  :group 'my-codex)
+  :group 'my-codex-git)
 
 (defcustom my-codex-git-staged-diff-review-prompt
   "Review the staged Git diff using `git diff --cached -- .`. Focus on correctness, regressions, edge cases and commit readiness. Do not edit unless asked\n"
   "Prompt used by `my-codex-send-git-staged-diff'."
   :type 'string
-  :group 'my-codex)
+  :group 'my-codex-git)
 
 (defcustom my-codex-git-current-file-diff-review-prompt-template
   "Review only the current file's changes using:\n%s\n\nFocus on correctness, regressions and maintainability.\nDo not edit unless asked.\n"
   "Prompt template for reviewing the current file's Git diff.
 The literal substring `%s' is replaced with the Git command."
   :type 'string
-  :group 'my-codex)
+  :group 'my-codex-git)
 
 (defcustom my-codex-commit-message-prompt-template
   "Inspect the staged Git diff using `git diff -U1 --cached -- .` and write a concise conventional commit message.
@@ -72,17 +72,17 @@ The literal substring `%d' is replaced with
 `my-codex-commit-message-fill-column'.  Marked-output instructions
 are appended for each request."
   :type 'string
-  :group 'my-codex)
+  :group 'my-codex-git)
 
 (defcustom my-codex-commit-message-poll-interval 0.5
   "Seconds between checks for a generated agent commit message."
   :type 'number
-  :group 'my-codex)
+  :group 'my-codex-git)
 
 (defcustom my-codex-commit-message-poll-attempts 120
   "Maximum number of checks for a generated agent commit message."
   :type 'natnum
-  :group 'my-codex)
+  :group 'my-codex-git)
 
 (defun my-codex--commit-message-trailer-line-p (line)
   "Return non-nil if LINE looks like a Git commit message trailer."

@@ -33,21 +33,21 @@
       (should (eq (my-codex-visible-window) expected)))))
 
 (ert-deftest my-codex-effective-right-width-uses-target-without-minimum ()
-  (let ((my-codex-right-width 60)
+  (let ((my-codex-agent-window-width 60)
         (my-codex-min-right-width nil))
     (should (= (my-codex--effective-right-width) 60))))
 
-(ert-deftest my-codex-effective-right-width-honours-optional-minimum ()
-  (let ((my-codex-right-width 60)
+(ert-deftest my-codex-effective-right-width-honours-legacy-minimum ()
+  (let ((my-codex-agent-window-width 60)
         (my-codex-min-right-width 80))
     (should (= (my-codex--effective-right-width) 80)))
-  (let ((my-codex-right-width 100)
+  (let ((my-codex-agent-window-width 100)
         (my-codex-min-right-width 80))
     (should (= (my-codex--effective-right-width) 100))))
 
 (ert-deftest my-codex-right-window-width-applies-without-layout-enforcement ()
   (let ((my-codex-enforce-right-side-layout nil)
-        (my-codex-right-width 72)
+        (my-codex-agent-window-width 72)
         (my-codex-min-right-width nil)
         resized)
     (cl-letf (((symbol-function 'my-codex--resize-window-to-body-width)
@@ -68,7 +68,7 @@
 
 (ert-deftest my-codex-right-layout-width-combines-edit-and-agent-widths ()
   (let ((my-codex-left-width 81)
-        (my-codex-right-width 60)
+        (my-codex-agent-window-width 60)
         (my-codex-min-right-width nil))
     (should (= (my-codex--right-layout-width) 141))))
 

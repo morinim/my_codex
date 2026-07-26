@@ -224,7 +224,7 @@ path or URL instead.  Redact secrets and personal information.  Do not edit
 files."
   "Prompt used by `my-codex-new-session-from-handoff'."
   :type 'string
-  :group 'my-codex)
+  :group 'my-codex-prompts)
 
 ;;;###autoload
 (defun my-codex-new-session (name agent &optional access-mode)
@@ -724,7 +724,7 @@ When RESOLVE is non-nil, also require availability predicates to be defined."
 (define-minor-mode my-codex-global-mode
   "Global minor mode for coding-agent integration."
   :global t
-  :group 'my-codex
+  :group 'my-codex-sessions
   :keymap my-codex-global-mode-map
   (if my-codex-global-mode
       (progn

@@ -28,7 +28,7 @@
 (defcustom my-codex-doctor-terminal-timeout 3
   "Seconds to wait for a diagnostic vterm process to start."
   :type 'number
-  :group 'my-codex)
+  :group 'my-codex-integrations)
 
 (defconst my-codex--doctor-codex-project-doc-default-bytes (* 32 1024)
   "Codex's default maximum size for project instruction files.")

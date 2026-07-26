@@ -44,7 +44,7 @@ Body:
 Preserve concrete file names, command names, and technical details. Do not edit files."
   "Prompt used by `my-codex-summarise-session-to-github-issue'."
   :type 'string
-  :group 'my-codex)
+  :group 'my-codex-git)
 
 (defun my-codex--github-buffer-name (root purpose)
   "Return the GitHub buffer name for ROOT and PURPOSE."

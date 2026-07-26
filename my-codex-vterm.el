@@ -146,7 +146,7 @@
 (define-minor-mode my-codex-vterm-integration-mode
   "Global minor mode for my-codex vterm integration."
   :global t
-  :group 'my-codex
+  :group 'my-codex-integrations
   (if my-codex-vterm-integration-mode
       (with-eval-after-load 'vterm
         (when my-codex-vterm-integration-mode

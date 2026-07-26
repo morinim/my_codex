@@ -469,7 +469,7 @@ with Eat overrides disabled."
 (define-minor-mode my-codex-eat-integration-mode
   "Global minor mode for my-codex Eat integration."
   :global t
-  :group 'my-codex
+  :group 'my-codex-integrations
   (if my-codex-eat-integration-mode
       (my-codex--enable-eat-integration)
     (my-codex--disable-eat-integration)))

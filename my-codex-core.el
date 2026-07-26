@@ -50,6 +50,42 @@ ACCEPT-COMMAND and CANCEL-COMMAND are bound to `C-c C-c' and `C-c C-k'."
   :group 'convenience
   :prefix "my-codex-")
 
+(defgroup my-codex-sessions nil
+  "Agent profiles, sessions, and session behaviour."
+  :tag "Sessions"
+  :group 'my-codex
+  :prefix "my-codex-")
+
+(defgroup my-codex-layout nil
+  "Agent window layout and display behaviour."
+  :tag "Layout"
+  :group 'my-codex
+  :prefix "my-codex-")
+
+(defgroup my-codex-layout-advanced nil
+  "Advanced agent window placement and layout enforcement."
+  :tag "Advanced Layout"
+  :group 'my-codex-layout
+  :prefix "my-codex-")
+
+(defgroup my-codex-prompts nil
+  "Prompt content, context, and delivery behaviour."
+  :tag "Prompts"
+  :group 'my-codex
+  :prefix "my-codex-")
+
+(defgroup my-codex-integrations nil
+  "Terminal, editor, diagnostic, and external-tool integrations."
+  :tag "Integrations"
+  :group 'my-codex
+  :prefix "my-codex-")
+
+(defgroup my-codex-git nil
+  "Git and GitHub workflows."
+  :tag "Git"
+  :group 'my-codex
+  :prefix "my-codex-")
+
 (defun my-codex-default-terminal-backend ()
   "Return the default terminal backend for this system."
   (if (eq system-type 'windows-nt) 'eat 'vterm))
@@ -61,7 +97,7 @@ the other backend when the preferred one is unavailable."
   :type '(choice (const auto)
                  (const vterm)
                  (const eat))
-  :group 'my-codex)
+  :group 'my-codex-integrations)
 
 (defcustom my-codex-agent 'codex
   "Agent profile used by default agent commands.
@@ -69,7 +105,7 @@ Commands such as `my-codex-read-only', `my-codex-workspace', and
 `my-codex-resume' use this profile.  Named sessions can choose a
 different profile interactively."
   :type 'symbol
-  :group 'my-codex)
+  :group 'my-codex-sessions)
 
 (defcustom my-codex-agent-profiles
   '((codex
@@ -149,7 +185,7 @@ is a `format' string used for project-relative file references."
                 (choice :tag "Doctor function"
                         (const :tag "None" nil)
                         (function :tag "Function"))))
-  :group 'my-codex)
+  :group 'my-codex-sessions)
 
 (cl-defun my-codex-define-agent
     (id &key label buffer-prefix commands session-actions instruction-files
@@ -208,28 +244,53 @@ keywords correspond to properties documented by
 (defcustom my-codex-left-width 81
   "Width of the editing window text area in the right-side agent layout."
   :type 'natnum
-  :group 'my-codex)
+  :group 'my-codex-layout-advanced)
 
-(defcustom my-codex-min-right-width nil
-  "Optional minimum width of the agent window.
-When nil, `my-codex-right-width' is used directly."
-  :type '(choice (const :tag "No minimum" nil)
-                 natnum)
-  :group 'my-codex)
+(defvar my-codex--agent-window-width-before-load nil
+  "Agent window width configured before loading my-codex.")
 
-(defcustom my-codex-right-width 80
+(setq my-codex--agent-window-width-before-load
+      (cond
+       ((boundp 'my-codex-agent-window-width)
+        (cons t (symbol-value 'my-codex-agent-window-width)))
+       ((boundp 'my-codex-right-width)
+        (cons t (symbol-value 'my-codex-right-width)))))
+
+(unless (eq (indirect-variable 'my-codex-right-width)
+            'my-codex-agent-window-width)
+  (when (boundp 'my-codex-right-width)
+    (makunbound 'my-codex-right-width)))
+
+(define-obsolete-variable-alias 'my-codex-right-width
+  'my-codex-agent-window-width "0.104.0")
+
+(defvar my-codex-agent-window-width)
+
+(if my-codex--agent-window-width-before-load
+    (set 'my-codex-agent-window-width
+         (cdr my-codex--agent-window-width-before-load))
+  (makunbound 'my-codex-agent-window-width))
+
+(defcustom my-codex-agent-window-width 80
   "Best-effort target width of the agent window."
   :type 'natnum
-  :group 'my-codex)
+  :group 'my-codex-layout)
+
+(setq my-codex--agent-window-width-before-load nil)
+
+(defvar my-codex-min-right-width nil
+  "Legacy minimum width of the agent window.
+This remains supported for existing configurations but is no longer exposed
+through Customize.  Set `my-codex-agent-window-width' instead.")
 
 (defcustom my-codex-enforce-right-side-layout nil
   "When non-nil, resize the frame and edit window for a right-side agent.
-The agent window itself is resized towards `my-codex-right-width'
+The agent window itself is resized towards `my-codex-agent-window-width'
 regardless of this option.
 Leave this nil when another package or window manager controls the frame or
 editing window size."
   :type 'boolean
-  :group 'my-codex)
+  :group 'my-codex-layout-advanced)
 
 (defcustom my-codex-display-buffer-action
   '((display-buffer-in-side-window)
@@ -241,7 +302,7 @@ editing window size."
 The value is passed to `display-buffer'.  Customise this when you prefer a
 different placement, such as a bottom side window or a dedicated frame."
   :type 'sexp
-  :group 'my-codex)
+  :group 'my-codex-layout-advanced)
 
 (defcustom my-codex-after-send-action 'focus
   "How to display the agent after sending a prompt."
@@ -249,7 +310,7 @@ different placement, such as a bottom side window or a dedicated frame."
           (const :tag "Focus agent window" focus)
           (const :tag "Display without selecting" display)
           (const :tag "Remain in current window" stay))
-  :group 'my-codex)
+  :group 'my-codex-layout)
 
 (defun my-codex--instruction-target-directory (root)
   "Return the instruction discovery directory below ROOT."
@@ -305,12 +366,12 @@ directory.  Discovery follows the agent profile's instruction strategy."
 When nil, use `compile-command'."
   :type '(choice (const :tag "Use compile-command" nil)
                  string)
-  :group 'my-codex)
+  :group 'my-codex-integrations)
 
 (defcustom my-codex-warn-about-unsaved-project-buffers t
   "When non-nil, warn before sending prompts if project buffers are unsaved."
   :type 'boolean
-  :group 'my-codex)
+  :group 'my-codex-sessions)
 
 (defun my-codex-modified-project-buffers ()
   "Return modified file-visiting buffers belonging to the current project."
@@ -338,27 +399,27 @@ When nil, use `compile-command'."
 This defaults to non-nil so buffers follow changes made on disk by an agent,
 reducing the risk of users continuing to edit stale buffer contents."
   :type 'boolean
-  :group 'my-codex)
+  :group 'my-codex-integrations)
 
 (defcustom my-codex-enable-display-defaults nil
   "When non-nil, enable editing display helpers with `my-codex-global-mode'."
   :type 'boolean
-  :group 'my-codex)
+  :group 'my-codex-layout)
 
 (defcustom my-codex-enable-session-links t
   "When non-nil, make URLs and file references clickable in agent buffers."
   :type 'boolean
-  :group 'my-codex)
+  :group 'my-codex-integrations)
 
 (defcustom my-codex-enable-vterm-integration t
   "When non-nil, enable vterm helpers with `my-codex-global-mode'."
   :type 'boolean
-  :group 'my-codex)
+  :group 'my-codex-integrations)
 
 (defcustom my-codex-enable-eat-integration t
   "When non-nil, enable Eat helpers with `my-codex-global-mode'."
   :type 'boolean
-  :group 'my-codex)
+  :group 'my-codex-integrations)
 
 (defcustom my-codex-vterm-min-scrollback 10000
   "Minimum `vterm-max-scrollback' used in agent vterm buffers.
@@ -366,7 +427,7 @@ This protects marked-output extraction from losing markers when
 the agent emits verbose output.  When nil, do not adjust vterm scrollback."
   :type '(choice (const :tag "Do not adjust" nil)
                  natnum)
-  :group 'my-codex)
+  :group 'my-codex-integrations)
 
 (defcustom my-codex-eat-min-scrollback 1000000
   "Minimum `eat-term-scrollback-size' used in agent Eat buffers.
@@ -374,7 +435,7 @@ Eat measures scrollback in characters.  When nil, Eat scrollback is
 unlimited."
   :type '(choice (const :tag "Unlimited" nil)
                  natnum)
-  :group 'my-codex)
+  :group 'my-codex-integrations)
 
 (defvar my-codex--auto-revert-enabled-by-mode nil
   "Non-nil when `my-codex-global-mode' enabled `global-auto-revert-mode'.")
@@ -412,12 +473,12 @@ unlimited."
 (defcustom my-codex-generated-output-poll-interval 0.5
   "Seconds between checks for generated agent output."
   :type 'number
-  :group 'my-codex)
+  :group 'my-codex-sessions)
 
 (defcustom my-codex-generated-output-poll-attempts 600
   "Maximum number of checks for generated agent output."
   :type 'natnum
-  :group 'my-codex)
+  :group 'my-codex-sessions)
 
 (defvar-local my-codex--generated-artefact-wait-timer nil
   "Active timer waiting for a generated session artefact.")
@@ -471,12 +532,12 @@ unlimited."
 (defface my-codex-workspace-write-face
   '((t :inherit warning :weight bold))
   "Face used to mark workspace-write agent sessions."
-  :group 'my-codex)
+  :group 'my-codex-sessions)
 
 (defface my-codex-read-only-face
   '((t :inherit shadow))
   "Face used to mark read-only agent sessions."
-  :group 'my-codex)
+  :group 'my-codex-sessions)
 
 (defun my-codex--access-mode-label (access-mode &optional plain)
   "Return a visual label for ACCESS-MODE.
