@@ -54,11 +54,12 @@ ACCEPT-COMMAND and CANCEL-COMMAND are bound to `C-c C-c' and `C-c C-k'."
   "Return the default terminal backend for this system."
   (if (eq system-type 'windows-nt) 'eat 'vterm))
 
-(defcustom my-codex-terminal-backend (my-codex-default-terminal-backend)
+(defcustom my-codex-terminal-backend 'auto
   "Terminal backend used for agent sessions.
-The default is Eat on Windows, where vterm is not supported, and vterm
-elsewhere."
-  :type '(choice (const vterm)
+With `auto', prefer Eat on Windows and vterm elsewhere, falling back to
+the other backend when the preferred one is unavailable."
+  :type '(choice (const auto)
+                 (const vterm)
                  (const eat))
   :group 'my-codex)
 
@@ -618,6 +619,32 @@ This operation must not change backend or session state.")
 
 (autoload 'vterm-send-string "vterm")
 (autoload 'vterm-send-return "vterm")
+
+(defun my-codex--terminal-backend-loadable-p (backend)
+  "Return non-nil when BACKEND can be loaded."
+  (condition-case nil
+      (require backend nil t)
+    (error nil)))
+
+(defun my-codex--resolve-terminal-backend (&optional backend)
+  "Return the concrete terminal BACKEND to use.
+When BACKEND is nil, use `my-codex-terminal-backend'.  `auto' prefers
+the platform default and falls back to the other supported backend."
+  (let ((backend (or backend my-codex-terminal-backend)))
+    (pcase backend
+      ((or 'vterm 'eat) backend)
+      ('auto
+       (let* ((preferred (my-codex-default-terminal-backend))
+              (fallback (if (eq preferred 'vterm) 'eat 'vterm)))
+         (cond
+          ((my-codex--terminal-backend-loadable-p preferred) preferred)
+          ((my-codex--terminal-backend-loadable-p fallback) fallback)
+          (t
+           (user-error
+            "No terminal backend is available; install vterm or Eat")))))
+      (_
+       (user-error "Unknown my-codex terminal backend: %s" backend)))))
+
 (defun my-codex--backend-buffer (backend)
   "Return BACKEND's buffer, or nil when it does not exist."
   (get-buffer (my-codex-backend-buffer-name backend)))
@@ -625,14 +652,12 @@ This operation must not change backend or session state.")
 (defun my-codex--make-backend (buffer-name &optional backend)
   "Return BACKEND for BUFFER-NAME.
 When BACKEND is nil, use `my-codex-terminal-backend'."
-  (pcase (or backend my-codex-terminal-backend)
+  (pcase (my-codex--resolve-terminal-backend backend)
     ('vterm (my-codex--make-vterm-backend buffer-name))
     ('eat
      (unless (require 'my-codex-eat nil t)
        (user-error "Eat backend is selected but my-codex-eat is unavailable"))
-     (my-codex--make-eat-backend buffer-name))
-    (backend
-     (user-error "Unknown my-codex terminal backend: %s" backend))))
+     (my-codex--make-eat-backend buffer-name))))
 
 (defun my-codex--backend-for-buffer-name (buffer-name)
   "Return the backend for BUFFER-NAME.

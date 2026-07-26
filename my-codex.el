@@ -731,13 +731,13 @@ When RESOLVE is non-nil, also require availability predicates to be defined."
         (when my-codex-enable-display-defaults
           (my-codex--enable-display-defaults))
         (when (and my-codex-enable-vterm-integration
-                   (eq my-codex-terminal-backend 'vterm)
+                   (memq my-codex-terminal-backend '(auto vterm))
                    (not my-codex--vterm-integration-enabled-by-mode)
                    (not (bound-and-true-p my-codex-vterm-integration-mode)))
           (setq my-codex--vterm-integration-enabled-by-mode t)
           (my-codex-vterm-integration-mode 1))
         (when (and my-codex-enable-eat-integration
-                   (eq my-codex-terminal-backend 'eat)
+                   (memq my-codex-terminal-backend '(auto eat))
                    (not my-codex--eat-integration-enabled-by-mode)
                    (not (bound-and-true-p my-codex-eat-integration-mode)))
           (setq my-codex--eat-integration-enabled-by-mode t)

@@ -156,10 +156,12 @@ Only active in document buffers (e.g. Markdown, Org, txt):
 
 Configure options via `M-x customize-group RET my-codex RET`.
 
-The defaults are Codex, vterm on non-Windows systems or Eat on Windows, a
-best-effort agent window target width of 80 columns, prompt previews disabled,
-saved project regions sent by reference where safe, a warning above
-approximately 4,000 tokens, and warnings for unsaved project buffers. Set
+The defaults are Codex, automatic terminal selection, a best-effort agent
+window target width of 80 columns, prompt previews disabled, saved project
+regions sent by reference where safe, a warning above approximately 4,000
+tokens, and warnings for unsaved project buffers. Automatic terminal selection
+prefers vterm on non-Windows systems or Eat on Windows, then falls back to the
+other backend when necessary. Set
 `my-codex-enforce-right-side-layout' non-nil only when my-codex should also
 resize the frame and editing window to accommodate that target.
 

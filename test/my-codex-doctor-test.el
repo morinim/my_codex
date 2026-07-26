@@ -78,6 +78,26 @@
                                 (string-prefix-p "vterm" (car row)))
                               rows))))))
 
+(ert-deftest my-codex-doctor-terminal-rows-resolve-auto-selection ()
+  (let ((my-codex-terminal-backend 'auto))
+    (cl-letf (((symbol-function 'my-codex--resolve-terminal-backend)
+               (lambda (&optional _backend) 'eat))
+              ((symbol-function 'my-codex--doctor-require-eat)
+               (lambda () (cons nil "stub Eat missing"))))
+      (should
+       (equal (car (my-codex--doctor-terminal-rows))
+              '("Eat package" fail "stub Eat missing"))))))
+
+(ert-deftest my-codex-doctor-terminal-rows-report-unavailable-auto-backend ()
+  (let ((my-codex-terminal-backend 'auto))
+    (cl-letf (((symbol-function 'my-codex--resolve-terminal-backend)
+               (lambda (&optional _backend)
+                 (user-error "No terminal backend is available"))))
+      (should
+       (equal (my-codex--doctor-terminal-rows)
+              '(("terminal backend" fail
+                 "No terminal backend is available")))))))
+
 (ert-deftest my-codex-doctor-codex-service-tier-warns-for-fast ()
   (let ((config (make-temp-file "my-codex-config-" nil ".toml")))
     (unwind-protect

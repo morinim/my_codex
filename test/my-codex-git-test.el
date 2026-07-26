@@ -139,7 +139,7 @@
                    (require 'my-codex-git)
                    (let ((buffer (get-buffer-create (my-codex-current-buffer-name))))
                      (my-codex--mark-default-session
-                      buffer default-directory 'workspace-write 'codex)
+                      buffer default-directory 'workspace-write 'codex 'vterm)
                      (cl-letf (((symbol-function 'get-buffer-process)
                                 (lambda (candidate)
                                   (eq candidate buffer)))

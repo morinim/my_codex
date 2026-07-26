@@ -167,8 +167,11 @@
   (let* ((root (file-name-as-directory (make-temp-file "my-codex-layout" t)))
          (session "review")
          (agent 'antigravity)
+         (my-codex-terminal-backend 'vterm)
          (buffer-name (let ((default-directory root))
-                        (my-codex-session-buffer-name session agent)))
+                        (cl-letf (((symbol-function 'project-current)
+                                   (lambda (&rest _args) nil)))
+                          (my-codex-session-buffer-name session agent))))
          (existing (get-buffer-create buffer-name)))
     (unwind-protect
         (let ((default-directory root))
@@ -215,6 +218,7 @@
          (buffer-name "*my-codex-layout-startup*")
          (prompt "Read only; do not edit")
          (command "agy")
+         (my-codex-terminal-backend 'vterm)
          (my-codex--project-active-agents (make-hash-table :test #'equal))
          (my-codex--project-active-sessions (make-hash-table :test #'equal)))
     (unwind-protect

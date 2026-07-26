@@ -77,6 +77,42 @@
   (let ((system-type 'gnu/linux))
     (should (eq (my-codex-default-terminal-backend) 'vterm))))
 
+(ert-deftest my-codex-terminal-backend-defaults-to-auto ()
+  (should (eq (default-value 'my-codex-terminal-backend) 'auto)))
+
+(ert-deftest my-codex-auto-backend-prefers-platform-default ()
+  (let ((system-type 'gnu/linux)
+        checked)
+    (cl-letf (((symbol-function 'my-codex--terminal-backend-loadable-p)
+               (lambda (backend)
+                 (push backend checked)
+                 (eq backend 'vterm))))
+      (should (eq (my-codex--resolve-terminal-backend 'auto) 'vterm))
+      (should (equal (nreverse checked) '(vterm))))))
+
+(ert-deftest my-codex-auto-backend-falls-back-when-default-unavailable ()
+  (let ((system-type 'gnu/linux)
+        checked)
+    (cl-letf (((symbol-function 'my-codex--terminal-backend-loadable-p)
+               (lambda (backend)
+                 (push backend checked)
+                 (eq backend 'eat))))
+      (should (eq (my-codex--resolve-terminal-backend 'auto) 'eat))
+      (should (equal (nreverse checked) '(vterm eat))))))
+
+(ert-deftest my-codex-auto-backend-errors-when-none-available ()
+  (cl-letf (((symbol-function 'my-codex--terminal-backend-loadable-p)
+             (lambda (_backend) nil)))
+    (should-error (my-codex--resolve-terminal-backend 'auto)
+                  :type 'user-error)))
+
+(ert-deftest my-codex-explicit-backend-does-not-check-loadability ()
+  (cl-letf (((symbol-function 'my-codex--terminal-backend-loadable-p)
+             (lambda (_backend)
+               (ert-fail "Explicit backend checked for loadability"))))
+    (should (eq (my-codex--resolve-terminal-backend 'vterm) 'vterm))
+    (should (eq (my-codex--resolve-terminal-backend 'eat) 'eat))))
+
 (ert-deftest my-codex-vterm-backend-send-records-outbound-tokens ()
   (let* ((buffer-name "*my-codex-vterm-send-test*")
          (buffer (get-buffer-create buffer-name))
@@ -722,6 +758,14 @@
     (should (my-codex-eat-backend-p backend))
     (should (equal (my-codex-backend-buffer-name backend) "*agent*"))))
 
+(ert-deftest my-codex-backend-factory-resolves-auto ()
+  (let ((my-codex-terminal-backend 'auto))
+    (cl-letf (((symbol-function 'my-codex--resolve-terminal-backend)
+               (lambda (&optional _backend) 'eat)))
+      (let ((backend (my-codex--make-backend "*agent*")))
+        (should (my-codex-eat-backend-p backend))
+        (should (equal (my-codex-backend-buffer-name backend) "*agent*"))))))
+
 (ert-deftest my-codex-backend-factory-rejects-unknown-backend ()
   (let ((my-codex-terminal-backend 'unknown))
     (should-error (my-codex--make-backend "*agent*")
@@ -788,7 +832,8 @@
       (delete-directory root t))))
 
 (ert-deftest my-codex-mark-default-session-sets-buffer-local-metadata ()
-  (let ((root (file-name-as-directory (make-temp-file "my-codex-session" t))))
+  (let ((root (file-name-as-directory (make-temp-file "my-codex-session" t)))
+        (my-codex-terminal-backend 'vterm))
     (unwind-protect
         (with-temp-buffer
           (my-codex--mark-default-session
@@ -990,6 +1035,7 @@
     (unwind-protect
         (let ((default-directory root)
               (my-codex-agent 'codex)
+              (my-codex-terminal-backend 'vterm)
               (my-codex--project-active-agents
                (make-hash-table :test #'equal)))
           (cl-letf (((symbol-function 'my-codex--fit-frame-to-right-layout)
@@ -1020,7 +1066,8 @@
   (let ((root (file-name-as-directory (make-temp-file "my-codex-named" t)))
         started)
     (unwind-protect
-        (let ((default-directory root))
+        (let ((default-directory root)
+              (my-codex-terminal-backend 'vterm))
           (cl-letf (((symbol-function 'my-codex--fit-frame-to-right-layout)
                      #'ignore)
                     ((symbol-function 'my-codex--apply-display-window-width)
@@ -1061,7 +1108,8 @@
   (let ((root (file-name-as-directory (make-temp-file "my-codex-named" t)))
         started)
     (unwind-protect
-        (let ((default-directory root))
+        (let ((default-directory root)
+              (my-codex-terminal-backend 'vterm))
           (cl-letf (((symbol-function 'my-codex--fit-frame-to-right-layout)
                      #'ignore)
                     ((symbol-function 'my-codex--apply-display-window-width)
@@ -1260,7 +1308,8 @@
 (ert-deftest my-codex-reused-live-buffer-preserves-session-metadata ()
   (let ((root-a (file-name-as-directory (make-temp-file "my-codex-a" t)))
         (root-b (file-name-as-directory (make-temp-file "my-codex-b" t)))
-        (buffer-name "*codex-shared-test*"))
+        (buffer-name "*codex-shared-test*")
+        (my-codex-terminal-backend 'vterm))
     (unwind-protect
         (let ((buffer (get-buffer-create buffer-name)))
           (my-codex--mark-default-session buffer root-a 'read-only)
@@ -1433,7 +1482,8 @@
                     "if ($?) { exit 0 } else { exit 1 }")))))
 
 (ert-deftest my-codex-global-mode-preserves-pre-existing-services ()
-  (let ((my-codex-enable-display-defaults nil)
+  (let ((my-codex-terminal-backend 'vterm)
+        (my-codex-enable-display-defaults nil)
         (my-codex-enable-global-auto-revert t)
         (my-codex-enable-vterm-integration t)
         (global-auto-revert-mode t)
@@ -1494,6 +1544,42 @@
       (my-codex-global-mode 1)
       (my-codex-global-mode -1)
       (should (equal (nreverse calls) '((eat . 1) (eat . -1)))))))
+
+(ert-deftest my-codex-global-mode-registers-auto-integrations-lazily ()
+  (let ((my-codex-terminal-backend 'auto)
+        (my-codex-enable-display-defaults nil)
+        (my-codex-enable-global-auto-revert t)
+        (my-codex-enable-vterm-integration t)
+        (my-codex-enable-eat-integration t)
+        (global-auto-revert-mode nil)
+        (my-codex-vterm-integration-mode nil)
+        (my-codex-eat-integration-mode nil)
+        (my-codex--auto-revert-enabled-by-mode nil)
+        (my-codex--vterm-integration-enabled-by-mode nil)
+        (my-codex--eat-integration-enabled-by-mode nil)
+        integration-calls
+        auto-revert-calls)
+    (cl-letf (((symbol-function 'my-codex--resolve-terminal-backend)
+               (lambda (&optional _backend)
+                 (ert-fail "Global mode resolved the terminal backend")))
+              ((symbol-function 'my-codex-vterm-integration-mode)
+               (lambda (arg)
+                 (setq my-codex-vterm-integration-mode (> arg 0))
+                 (push (cons 'vterm arg) integration-calls)))
+              ((symbol-function 'my-codex-eat-integration-mode)
+               (lambda (arg)
+                 (setq my-codex-eat-integration-mode (> arg 0))
+                 (push (cons 'eat arg) integration-calls)))
+              ((symbol-function 'global-auto-revert-mode)
+               (lambda (arg)
+                 (setq global-auto-revert-mode (> arg 0))
+                 (push arg auto-revert-calls))))
+      (my-codex-global-mode 1)
+      (my-codex-global-mode -1)
+      (should
+       (equal (nreverse integration-calls)
+              '((vterm . 1) (eat . 1) (vterm . -1) (eat . -1))))
+      (should (equal (nreverse auto-revert-calls) '(1 -1))))))
 
 (provide 'my-codex-core-test)
 

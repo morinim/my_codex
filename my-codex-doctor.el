@@ -247,7 +247,10 @@ EAT-LOADABLE is non-nil when Eat can be loaded."
 
 (defun my-codex--doctor-terminal-rows ()
   "Return selected terminal backend diagnostic rows."
-  (pcase my-codex-terminal-backend
+  (pcase
+      (condition-case err
+          (my-codex--resolve-terminal-backend)
+        (user-error (cons 'error (error-message-string err))))
     ('vterm
      (let* ((vterm-status (my-codex--doctor-require-vterm))
             (vterm-loadable (car vterm-status)))
@@ -287,6 +290,8 @@ EAT-LOADABLE is non-nil when Eat can be loaded."
             (my-codex--doctor-eat-terminal-start)
           (list "terminal startup" 'fail
                 "Skipped; Eat cannot be loaded")))))
+    (`(error . ,message)
+     (list (list "terminal backend" 'fail message)))
     (backend
      (list
       (list "terminal backend" 'fail

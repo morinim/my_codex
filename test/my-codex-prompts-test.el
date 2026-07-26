@@ -567,7 +567,9 @@
           (my-codex--mark-named-session
            primary "primary" root 'workspace-write 'codex)
           (set-window-parameter (selected-window) 'my-codex-term-buffer primary)
-          (cl-letf (((symbol-function 'get-buffer-process)
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root))
+                    ((symbol-function 'get-buffer-process)
                      (lambda (buffer) (eq buffer primary)))
                     ((symbol-function 'process-live-p)
                      (lambda (process) process))
@@ -617,7 +619,9 @@
           (my-codex--mark-named-session
            primary "primary" root 'workspace-write 'codex)
           (set-window-parameter (selected-window) 'my-codex-term-buffer primary)
-          (cl-letf (((symbol-function 'get-buffer-process)
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root))
+                    ((symbol-function 'get-buffer-process)
                      (lambda (buffer) (eq buffer primary)))
                     ((symbol-function 'process-live-p)
                      (lambda (process) process))
@@ -687,7 +691,9 @@
           (my-codex--mark-named-session
            secondary "remark" root 'read-only 'antigravity)
           (set-window-parameter (selected-window) 'my-codex-term-buffer primary)
-          (cl-letf (((symbol-function 'get-buffer-process)
+          (cl-letf (((symbol-function 'my-codex-project-root)
+                     (lambda () root))
+                    ((symbol-function 'get-buffer-process)
                      (lambda (buffer) (memq buffer (list primary secondary))))
                     ((symbol-function 'process-live-p)
                      (lambda (process) process))
@@ -749,7 +755,7 @@
     (unwind-protect
         (progn
           (my-codex--mark-named-session
-           target "review" root 'workspace-write 'antigravity)
+           target "review" root 'workspace-write 'antigravity 'vterm)
           (cl-letf (((symbol-function 'my-codex--warn-about-unsaved-project-buffers)
                      #'ignore)
                     ((symbol-function 'get-buffer-process)
@@ -1030,7 +1036,7 @@
     (unwind-protect
         (let ((default-directory root))
           (my-codex--mark-named-session
-           target "review" root 'workspace-write 'antigravity)
+           target "review" root 'workspace-write 'antigravity 'vterm)
           (set-window-parameter (selected-window) 'my-codex-term-buffer target)
           (cl-letf (((symbol-function 'project-current)
                      (lambda (&rest _args) nil))
