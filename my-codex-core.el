@@ -981,21 +981,25 @@ PROJECT-ROOT.  SESSION-NAME selects a named rather than default session."
                  (my-codex--project-session-buffer-p buffer root))
         buffer))))
 
-(defun my-codex-active-session-buffer (&optional require-live)
+(defun my-codex-active-session-buffer (&optional require-live noerror)
   "Return the active agent session buffer.
 When REQUIRE-LIVE is non-nil, require the returned buffer to have a live
-process."
+process.  When NOERROR is non-nil, return nil if no suitable session exists."
   (let* ((root (my-codex-project-root))
          (buffer
           (or (my-codex--transient-session-buffer root)
               (my-codex--session-buffer-for-window (selected-window) root)
               (my-codex--project-active-session-buffer root)
-              (my-codex--session-buffer))))
+              (if noerror
+                  (my-codex--session-buffer t)
+                (my-codex--session-buffer)))))
     (when (and require-live
                (not (my-codex--session-buffer-live-p buffer)))
-      (if (buffer-live-p buffer)
-          (user-error "No running agent process in %s" (buffer-name buffer))
-        (user-error "No agent session available")))
+      (if noerror
+          (setq buffer nil)
+        (if (buffer-live-p buffer)
+            (user-error "No running agent process in %s" (buffer-name buffer))
+          (user-error "No agent session available"))))
     buffer))
 
 (defun my-codex--transient-target-description ()
@@ -1262,11 +1266,12 @@ the extracted text.  ATTEMPTS tracks polling cycles."
   (when (memq (process-status process) '(exit signal))
     (cons (process-exit-status process) (process-buffer process))))
 
-(defun my-codex--session-buffer ()
-  "Return the current project's agent session buffer, or raise an error."
+(defun my-codex--session-buffer (&optional noerror)
+  "Return the current project's agent session buffer.
+When NOERROR is non-nil, return nil instead of raising when it is absent."
   (let* ((buffer-name (my-codex-current-buffer-name))
          (buffer (get-buffer buffer-name)))
-    (unless buffer
+    (unless (or buffer noerror)
       (user-error "No %s buffer found" buffer-name))
     buffer))
 

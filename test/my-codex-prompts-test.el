@@ -773,6 +773,54 @@
         (kill-buffer target))
       (delete-directory root t))))
 
+(ert-deftest my-codex-send-prompt-explains-how-to-start-session ()
+  (let ((my-codex-prompt-warning-tokens nil))
+    (cl-letf (((symbol-function
+                'my-codex--warn-about-unsaved-project-buffers)
+               #'ignore)
+              ((symbol-function 'my-codex-active-session-buffer)
+               (lambda (&rest _args) nil)))
+      (condition-case err
+          (progn
+            (my-codex-send-prompt "hello")
+            (ert-fail "Expected a missing-session error"))
+        (user-error
+         (should
+          (equal
+           (cadr err)
+           "No running agent session; start one with F8 o (read-only) or F8 w (workspace)")))))))
+
+(ert-deftest my-codex-send-prompt-preserves-agent-profile-errors ()
+  (let* ((root (file-name-as-directory
+                (make-temp-file "my-codex-missing-profile" t)))
+         (default-directory root)
+         (my-codex-agent 'missing)
+         (my-codex-agent-profiles
+          '((codex
+             :label "Codex"
+             :buffer-prefix "codex"
+             :commands ((read-only . "codex-ro")))))
+         (my-codex--project-active-agents
+          (make-hash-table :test #'equal))
+         (my-codex--project-active-sessions
+          (make-hash-table :test #'equal))
+         (my-codex-prompt-warning-tokens nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'project-current)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function
+                    'my-codex--warn-about-unsaved-project-buffers)
+                   #'ignore))
+          (condition-case err
+              (progn
+                (my-codex-send-prompt "hello")
+                (ert-fail "Expected an unknown-profile error"))
+            (user-error
+             (should
+              (equal (cadr err)
+                     "Unknown my-codex agent profile: missing")))))
+      (delete-directory root t))))
+
 (ert-deftest my-codex-display-after-send-focuses-visible-agent ()
   (let ((my-codex-after-send-action 'focus)
         (buffer (get-buffer-create "*my-codex-visible-agent*"))
@@ -954,7 +1002,8 @@
                      (lambda (_buffer) nil)))
             (should-error
              (my-codex-active-session-buffer t)
-             :type 'user-error)))
+             :type 'user-error)
+            (should-not (my-codex-active-session-buffer t t))))
       (set-window-parameter (selected-window) 'my-codex-term-buffer nil)
       (when (buffer-live-p target)
         (kill-buffer target))

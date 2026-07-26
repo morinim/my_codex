@@ -378,7 +378,11 @@ session is available."
   "Send PROMPT to the agent backend buffer and display it as configured."
   (my-codex--warn-about-unsaved-project-buffers)
   (my-codex--check-prompt-size prompt)
-  (let* ((buffer (or target-buffer (my-codex-active-session-buffer t)))
+  (let* ((buffer
+          (or target-buffer
+              (my-codex-active-session-buffer t t)
+              (user-error
+               "No running agent session; start one with F8 o (read-only) or F8 w (workspace)")))
          (backend (my-codex--backend-for-buffer-name (buffer-name buffer))))
     (unless (and (buffer-live-p buffer)
                  (my-codex-backend-live-p backend))

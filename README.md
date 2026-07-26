@@ -80,6 +80,9 @@ Then clone the repository and add it to your Emacs load path:
 
 Press `F8` to open the agent command menu.
 
+Start a session with `F8 o` (read-only) or `F8 w` (workspace-write) before
+asking questions or sending context.
+
 Sessions are project-specific. Each agent can have one default session and any
 number of named sessions per project. Read-only sessions instruct the agent not
 to change the workspace; workspace-write sessions allow changes. Resume invokes
