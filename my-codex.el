@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.103.0
+;; Version: 0.104.0
 ;; Package-Requires: ((emacs "29.1") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -36,6 +36,8 @@
 (autoload 'my-codex-session-links-mode "my-codex-links" nil t)
 (autoload 'my-codex-vterm-integration-mode "my-codex-vterm" nil t)
 (autoload 'my-codex-eat-integration-mode "my-codex-eat" nil t)
+(autoload 'my-codex--doctor-command-executable-token "my-codex-doctor")
+(autoload 'my-codex-doctor "my-codex-doctor" nil t)
 (autoload 'my-codex--vterm-mode-with-scrollback-floor "my-codex-vterm")
 (autoload 'my-codex--ensure-vterm-scrollback "my-codex-vterm")
 (autoload 'my-codex--current-or-left-file-available-p "my-codex-git")
@@ -73,8 +75,7 @@
            (my-codex-ediff-changed-file-against-head . "my-codex-git")
            (my-codex-git-commit-with-latest-message . "my-codex-git")
            (my-codex-list-open-issues . "my-codex-github")
-           (my-codex-summarise-session-to-github-issue . "my-codex-github")
-           (my-codex-doctor . "my-codex-doctor")))
+           (my-codex-summarise-session-to-github-issue . "my-codex-github")))
   (autoload (car autoload-entry) (cdr autoload-entry) nil t))
 (declare-function my-codex--enable-vterm-buffer-integration "my-codex-vterm")
 (cl-defmethod my-codex-backend-start
@@ -468,6 +469,7 @@ computed from the subject buffer unless the predicate is itself left-aware."
       (:command my-codex-send-project-overview :key "p" :label "Project overview" :prefix my-codex-tools-transient :menu "Project overview" :help "Send the active agent a compact project overview")
       (:command my-codex-export-session-to-markdown :key "X" :label "Export session" :prefix my-codex-tools-transient :menu "Export session" :help "Export the current agent session transcript to Markdown")
       (:command my-codex-diagnostics-transient :key "E" :label "Diagnostics" :prefix my-codex-tools-transient :menu "Diagnostics" :help "Open diagnostic explanation commands")
+      (:command my-codex-setup :key "s" :label "Setup" :prefix my-codex-tools-transient :menu "Setup" :help "Select an available agent and terminal backend, then run the doctor")
       (:command my-codex-doctor :key "!" :label "Doctor" :prefix my-codex-tools-transient :menu "Doctor" :help "Check Emacs, agent, vterm, Git, gh, project, configuration, and terminal startup")
       (:command my-codex-use-document-as-task-brief :key "b" :label "Use as task brief" :prefix my-codex-document-transient :menu "Use as task brief" :contexts (document) :help "Ask the active agent to use the document or selection as the task brief")
       (:command my-codex-implement-selected-plan :key "i" :label "Implement selected plan" :prefix my-codex-document-transient :menu "Implement selected plan" :contexts (document) :help "Ask the active agent to implement the selected plan")
@@ -647,6 +649,78 @@ When RESOLVE is non-nil, also require availability predicates to be defined."
   (interactive)
   (let ((default-directory (my-codex-project-root)))
     (compile (or my-codex-project-build-command compile-command))))
+
+(defun my-codex--setup-available-agents ()
+  "Return configured agent identifiers whose executables are available."
+  (seq-filter
+   (lambda (agent)
+     (ignore-errors
+       (when-let ((program
+                   (my-codex--doctor-command-executable-token
+                    (my-codex--agent-command agent 'read-only))))
+         (executable-find program))))
+   (my-codex--agent-ids)))
+
+(defun my-codex--setup-available-backends ()
+  "Return available terminal backends in platform-preferred order."
+  (let* ((preferred (my-codex-default-terminal-backend))
+         (other (if (eq preferred 'vterm) 'eat 'vterm)))
+    (seq-filter #'my-codex--terminal-backend-loadable-p
+                (list preferred other))))
+
+(defun my-codex--setup-read-agent (agents)
+  "Read an agent from available AGENTS."
+  (if (= (length agents) 1)
+      (car agents)
+    (let* ((choices
+            (mapcar (lambda (agent)
+                      (cons (format "%s (%s)"
+                                    (my-codex--agent-label agent) agent)
+                            agent))
+                    agents))
+           (default
+            (car (rassq (if (memq my-codex-agent agents)
+                            my-codex-agent
+                          (car agents))
+                        choices))))
+      (cdr (assoc (completing-read "Agent: " choices nil t nil nil default)
+                  choices)))))
+
+(defun my-codex--setup-read-backend (backends)
+  "Read a terminal backend from available BACKENDS."
+  (if (= (length backends) 1)
+      (car backends)
+    (let ((default
+           (if (memq my-codex-terminal-backend backends)
+               my-codex-terminal-backend
+             (car backends))))
+      (intern
+       (completing-read "Terminal backend: "
+                        (mapcar #'symbol-name backends)
+                        nil t nil nil (symbol-name default))))))
+
+;;;###autoload
+(defun my-codex-setup ()
+  "Configure an available agent and terminal backend, then run the doctor.
+The selected options are saved through Customize.  Enable
+`my-codex-global-mode' for the current Emacs session."
+  (interactive)
+  (let ((agents (my-codex--setup-available-agents))
+        (backends (my-codex--setup-available-backends)))
+    (unless agents
+      (user-error "No configured agent executable is available"))
+    (unless backends
+      (user-error "No terminal backend is available; install vterm or Eat"))
+    (let ((agent (my-codex--setup-read-agent agents))
+          (backend (my-codex--setup-read-backend backends)))
+      (customize-save-variable 'my-codex-agent agent)
+      (customize-save-variable 'my-codex-terminal-backend backend)
+      (when my-codex-global-mode
+        (my-codex-global-mode -1))
+      (my-codex-global-mode 1)
+      (message "Configured %s with %s; running doctor"
+               (my-codex--agent-label agent) backend)
+      (my-codex-doctor))))
 
 (defvar-keymap my-codex-global-mode-map
   :doc "Keymap for `my-codex-global-mode'."

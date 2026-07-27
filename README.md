@@ -76,6 +76,12 @@ Then clone the repository and add it to your Emacs load path:
 (my-codex-global-mode 1)
 ```
 
+For guided initial configuration, evaluate the first two forms and run
+`M-x my-codex-setup`. It detects available agents and terminal backends, saves
+your selections, enables the mode for the current Emacs session, and opens the
+doctor report. Keep `(my-codex-global-mode 1)` in your Emacs configuration to
+enable the package after future restarts.
+
 ## Usage
 
 Press `F8` to open the agent command menu.
@@ -149,6 +155,7 @@ Only active in document buffers (e.g. Markdown, Org, txt):
 - `F8 T p` : send a compact project overview to the active agent.
 - `F8 T X` : export the active session transcript to Markdown.
 - `F8 T E p` / `F8 T E a` : explain the diagnostic at point, or all buffer diagnostics.
+- `F8 T s` : select and save an available agent and terminal backend, then run the doctor.
 - `F8 T !` : run the doctor health check.
 - `F7` : run the project build command.
 
