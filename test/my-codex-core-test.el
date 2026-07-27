@@ -44,6 +44,8 @@
                         my-codex--diagnostics-available-p
                         my-codex-explain-diagnostic-at-point
                         my-codex-explain-buffer-diagnostics
+                        my-codex-explain-problem
+                        my-codex-explain-compilation-error-at-point
                         my-codex--ensure-vterm-scrollback
                         my-codex-top)))))
          (output
@@ -59,7 +61,9 @@
                    (concat "(\"my-codex-prompts\" \"my-codex-prompts\" "
                            "\"my-codex-diagnostics\" "
                            "\"my-codex-diagnostics\" "
-                           "\"my-codex-diagnostics\" \"my-codex-vterm\" "
+                           "\"my-codex-diagnostics\" "
+                           "\"my-codex-problems\" \"my-codex-problems\" "
+                           "\"my-codex-vterm\" "
                            "\"my-codex-ui\")")))))
 
 (ert-deftest my-codex-package-requires-keeps-vterm-optional ()
@@ -449,11 +453,12 @@
                 'my-codex-ask-preset-transient))
     (should (equal (plist-get entry :key) "s"))))
 
-(ert-deftest my-codex-command-catalogue-explain-error-hides-document-context ()
-  (let ((entry (cl-find 'my-codex-explain-region-as-error
+(ert-deftest my-codex-command-catalogue-explain-problem-hides-document-context ()
+  (let ((entry (cl-find 'my-codex-explain-problem
                         my-codex-command-catalogue
                         :key (lambda (item) (plist-get item :command)))))
-    (should (equal (plist-get entry :contexts) '(code terminal unknown)))))
+    (should (equal (plist-get entry :contexts) '(code terminal unknown)))
+    (should-not (plist-get entry :available))))
 
 (ert-deftest my-codex-command-catalogue-review-defun-allows-non-file-buffers ()
   (let ((entry (cl-find 'my-codex-review-defun-at-point

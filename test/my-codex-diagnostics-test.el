@@ -261,6 +261,31 @@
           (should (string-match-p "message: \"broken\"" sent)))
       (kill-buffer subject))))
 
+(ert-deftest my-codex-diagnostic-at-point-prompt-or-nil-returns-prompt ()
+  (let ((diagnostics
+         '((:line 1 :column 1 :level error
+            :checker mock-checker :message "broken"))))
+    (with-temp-buffer
+      (insert "broken\n")
+      (goto-char (point-min))
+      (my-codex-test--with-mock-flycheck diagnostics
+        (cl-letf (((symbol-function 'my-codex-project-root)
+                   (lambda () "/repo/")))
+          (should
+           (string-match-p
+            "message: \\\"broken\\\""
+            (my-codex--diagnostic-at-point-prompt-or-nil))))))))
+
+(ert-deftest my-codex-diagnostic-at-point-prompt-or-nil-ignores-other-lines ()
+  (let ((diagnostics
+         '((:line 2 :column 1 :level error
+            :checker mock-checker :message "elsewhere"))))
+    (with-temp-buffer
+      (insert "current\nelsewhere\n")
+      (goto-char (point-min))
+      (my-codex-test--with-mock-flycheck diagnostics
+        (should-not (my-codex--diagnostic-at-point-prompt-or-nil))))))
+
 (ert-deftest my-codex-diagnostic-batch-prompt-reports-truncation ()
   (let ((my-codex-diagnostics-limit 2)
         (diagnostics

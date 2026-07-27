@@ -533,6 +533,21 @@ When SELECTED is nil, return one diagnostic if even one exceeds the budget."
      (my-codex--yaml-string file)
      (my-codex--diagnostic-entry diagnostic))))
 
+(defun my-codex--diagnostic-at-point-prompt-or-nil ()
+  "Return a diagnostic-at-point prompt, or nil when none is available."
+  (when (pcase my-codex-diagnostics-provider
+          ('flycheck (my-codex--flycheck-available-p))
+          ('flymake (my-codex--flymake-available-p))
+          ('auto (or (my-codex--flycheck-available-p)
+                     (my-codex--flymake-available-p))))
+    (condition-case nil
+        (pcase-let ((`(,provider . ,diagnostics)
+                     (my-codex--current-diagnostics)))
+          (my-codex--diagnostic-at-point-prompt
+           (my-codex--diagnostic-at-point diagnostics)
+           provider))
+      (user-error nil))))
+
 ;;;###autoload
 (defun my-codex-explain-diagnostic-at-point ()
   "Ask the agent to explain the diagnostic at point."

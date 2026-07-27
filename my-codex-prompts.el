@@ -903,17 +903,6 @@ and CONTEXT-LINES controls the excerpt radius for modified xref buffers."
                 "Inspect the file directly if needed. Do not edit files."))
          "\n\n"))))))
 
-;;;###autoload
-(defun my-codex-explain-region-as-error ()
-  "Ask the agent to explain the selected compiler or test error."
-  (interactive)
-  (unless (use-region-p)
-    (user-error "No active region"))
-  (my-codex--preview-and-send-prompt
-   (format "Explain this compiler/test error and suggest the most likely fix:\n\n%s"
-           (buffer-substring-no-properties (region-beginning) (region-end)))))
-
-
 (defun my-codex--current-file-reference ()
   "Return an agent reference to the current file."
   (unless buffer-file-name

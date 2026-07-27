@@ -127,7 +127,7 @@ refresh Git information.
 - `F8 r` : draft a low-risk refactoring plan for the selected region.
 - `F8 Left` / `F8 TAB` : insert agent text into code, or toggle focus between code and agent.
 - `F8 x f` / `F8 x F` / `F8 x c` : review the current defun, inspect the current file, or analyse test coverage. The agent finds relevant tests; use `C-u F8 x c` to select one explicitly.
-- `F8 x s` / `F8 e` : explain the symbol at point or selected error.
+- `F8 x s` / `F8 e` : explain the symbol at point or the selected or point-local problem.
 - `F8 y` : copy a file-and-line reference for the selected region or current line.
 
 ### Document Workflow (Markdown/Org contexts)

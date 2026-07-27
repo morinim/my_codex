@@ -18,6 +18,7 @@
 (require 'my-codex-links-test)
 (require 'my-codex-doctor-test)
 (require 'my-codex-diagnostics-test)
+(require 'my-codex-problems-test)
 
 (provide 'my-codex-test)
 
