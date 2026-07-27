@@ -44,6 +44,7 @@
 (autoload 'my-codex--request-marked-output "my-codex-prompts")
 (autoload 'my-codex-send-prompt "my-codex-prompts")
 (autoload 'my-codex--with-subject-buffer "my-codex-prompts")
+(autoload 'my-codex--diagnostics-available-p "my-codex-diagnostics")
 (autoload 'my-codex-top "my-codex-ui" nil t)
 (dolist (autoload-entry
          '((my-codex-send-region . "my-codex-prompts")
@@ -490,8 +491,8 @@ computed from the subject buffer unless the predicate is itself left-aware."
       (:command my-codex-github-transient :key "t" :label "GitHub..." :group "GitHub" :menu "GitHub commands" :help "Open GitHub issue and actions menu")
       (:command my-codex-list-open-issues :key "l" :label "List issues" :prefix my-codex-github-transient :menu "List issues" :help "List open GitHub issues for the current repository in a buffer")
       (:command my-codex-summarise-session-to-github-issue :key "d" :label "Draft issue" :prefix my-codex-github-transient :menu "Draft issue" :help "Ask the active agent to draft a GitHub issue, then edit it before creating it with gh")
-      (:command my-codex-explain-diagnostic-at-point :key "p" :label "At point" :prefix my-codex-diagnostics-transient)
-      (:command my-codex-explain-buffer-diagnostics :key "a" :label "All" :prefix my-codex-diagnostics-transient)))
+      (:command my-codex-explain-diagnostic-at-point :key "p" :label "At point" :prefix my-codex-diagnostics-transient :available my-codex--diagnostics-available-p :help "Ask the active agent to explain the diagnostic at point")
+      (:command my-codex-explain-buffer-diagnostics :key "a" :label "All" :prefix my-codex-diagnostics-transient :available my-codex--diagnostics-available-p :help "Ask the active agent to analyse all diagnostics in the current buffer")))
     "Commands used to generate the prefix keymap and command menus.")
 
   (defun my-codex--validate-command-catalogue (catalogue &optional resolve)

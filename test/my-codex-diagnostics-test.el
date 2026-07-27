@@ -233,6 +233,34 @@
           (should (string-match-p "message: \"broken\"" sent))
           (should-not (string-match-p "message: \"other\"" sent)))))))
 
+(ert-deftest my-codex-explain-diagnostic-at-point-uses-subject-buffer ()
+  (let ((subject (generate-new-buffer " *my-codex-diagnostic-subject*"))
+        observed-buffer
+        sent)
+    (unwind-protect
+        (progn
+          (with-current-buffer subject
+            (insert "first\nbroken\n")
+            (goto-char (point-min))
+            (forward-line 1))
+          (cl-letf (((symbol-function 'my-codex--subject-buffer)
+                     (lambda () subject))
+                    ((symbol-function 'my-codex--current-diagnostics)
+                     (lambda ()
+                       (setq observed-buffer (current-buffer))
+                       '(flycheck
+                         (:line 2 :column 1 :level error
+                          :checker mock-checker :message "broken"))))
+                    ((symbol-function 'my-codex-project-root)
+                     (lambda () "/repo/"))
+                    ((symbol-function 'my-codex--preview-and-send-prompt)
+                     (lambda (prompt) (setq sent prompt))))
+            (with-temp-buffer
+              (my-codex-explain-diagnostic-at-point)))
+          (should (eq observed-buffer subject))
+          (should (string-match-p "message: \"broken\"" sent)))
+      (kill-buffer subject))))
+
 (ert-deftest my-codex-diagnostic-batch-prompt-reports-truncation ()
   (let ((my-codex-diagnostics-limit 2)
         (diagnostics
@@ -388,6 +416,29 @@
         (should (string-match-p "source: Flycheck" sent))
         (should (string-match-p "message: \"broken\"" sent))))))
 
+(ert-deftest my-codex-explain-buffer-diagnostics-uses-subject-buffer ()
+  (let ((subject (generate-new-buffer " *my-codex-diagnostics-subject*"))
+        observed-buffer
+        sent)
+    (unwind-protect
+        (cl-letf (((symbol-function 'my-codex--subject-buffer)
+                   (lambda () subject))
+                  ((symbol-function 'my-codex--current-diagnostics)
+                   (lambda ()
+                     (setq observed-buffer (current-buffer))
+                     '(flycheck
+                       (:line 1 :column 1 :level error
+                        :checker mock-checker :message "broken"))))
+                  ((symbol-function 'my-codex-project-root)
+                   (lambda () "/repo/"))
+                  ((symbol-function 'my-codex--preview-and-send-prompt)
+                   (lambda (prompt) (setq sent prompt))))
+          (with-temp-buffer
+            (my-codex-explain-buffer-diagnostics))
+          (should (eq observed-buffer subject))
+          (should (string-match-p "message: \"broken\"" sent)))
+      (kill-buffer subject))))
+
 (ert-deftest my-codex-flymake-diagnostics-normalises-diagnostic ()
   (require 'flymake)
   (with-temp-buffer
@@ -537,6 +588,20 @@
               ((symbol-function 'my-codex--flymake-available-p)
                (lambda () t)))
       (should (eq (my-codex--active-diagnostics-provider) 'flymake)))))
+
+(ert-deftest my-codex-diagnostics-availability-uses-subject-buffer ()
+  (let ((my-codex-diagnostics-provider 'auto)
+        (subject (generate-new-buffer " *my-codex-diagnostics-subject*")))
+    (unwind-protect
+        (cl-letf (((symbol-function 'my-codex--subject-buffer)
+                   (lambda () subject))
+                  ((symbol-function 'my-codex--flycheck-available-p)
+                   (lambda () (eq (current-buffer) subject)))
+                  ((symbol-function 'my-codex--flymake-available-p)
+                   (lambda () nil)))
+          (with-temp-buffer
+            (should (my-codex--diagnostics-available-p))))
+      (kill-buffer subject))))
 
 (ert-deftest my-codex-explain-buffer-diagnostics-sends-flymake-prompt ()
   (let ((my-codex-diagnostics-provider 'flymake)

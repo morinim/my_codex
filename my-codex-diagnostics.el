@@ -374,6 +374,17 @@ When nil, diagnostics context is not capped by token budget."
             ('flycheck (my-codex--flycheck-diagnostics))
             ('flymake (my-codex--flymake-diagnostics))))))
 
+(defun my-codex--diagnostics-available-p ()
+  "Return non-nil when the diagnostics provider is available for the subject."
+  (my-codex--with-subject-buffer
+   (lambda ()
+     (pcase my-codex-diagnostics-provider
+       ('flycheck (my-codex--flycheck-available-p))
+       ('flymake (my-codex--flymake-available-p))
+       ('auto (or (my-codex--flycheck-available-p)
+                  (my-codex--flymake-available-p)))
+       (_ nil)))))
+
 (defun my-codex--diagnostic-groups-by-file (groups)
   "Return compact diagnostic GROUPS grouped by file."
   (let ((file-groups nil))
@@ -526,21 +537,25 @@ When SELECTED is nil, return one diagnostic if even one exceeds the budget."
 (defun my-codex-explain-diagnostic-at-point ()
   "Ask the agent to explain the diagnostic at point."
   (interactive)
-  (pcase-let ((`(,provider . ,diagnostics)
-               (my-codex--current-diagnostics)))
-    (my-codex--preview-and-send-prompt
-     (my-codex--diagnostic-at-point-prompt
-      (my-codex--diagnostic-at-point diagnostics)
-      provider))))
+  (my-codex--with-subject-buffer
+   (lambda ()
+     (pcase-let ((`(,provider . ,diagnostics)
+                  (my-codex--current-diagnostics)))
+       (my-codex--preview-and-send-prompt
+        (my-codex--diagnostic-at-point-prompt
+         (my-codex--diagnostic-at-point diagnostics)
+         provider))))))
 
 ;;;###autoload
 (defun my-codex-explain-buffer-diagnostics ()
   "Ask the agent to analyse current buffer diagnostics as a batch."
   (interactive)
-  (pcase-let ((`(,provider . ,diagnostics)
-               (my-codex--current-diagnostics)))
-    (my-codex--preview-and-send-prompt
-     (my-codex--diagnostic-batch-prompt diagnostics provider))))
+  (my-codex--with-subject-buffer
+   (lambda ()
+     (pcase-let ((`(,provider . ,diagnostics)
+                  (my-codex--current-diagnostics)))
+       (my-codex--preview-and-send-prompt
+        (my-codex--diagnostic-batch-prompt diagnostics provider))))))
 
 (provide 'my-codex-diagnostics)
 

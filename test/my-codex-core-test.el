@@ -41,6 +41,7 @@
                              (nth 1 (symbol-function function))))
                       '(my-codex--request-marked-output
                         my-codex-send-prompt
+                        my-codex--diagnostics-available-p
                         my-codex-explain-diagnostic-at-point
                         my-codex-explain-buffer-diagnostics
                         my-codex--ensure-vterm-scrollback
@@ -56,6 +57,7 @@
               (buffer-string)))))
     (should (equal output
                    (concat "(\"my-codex-prompts\" \"my-codex-prompts\" "
+                           "\"my-codex-diagnostics\" "
                            "\"my-codex-diagnostics\" "
                            "\"my-codex-diagnostics\" \"my-codex-vterm\" "
                            "\"my-codex-ui\")")))))
@@ -266,6 +268,16 @@
   (dolist (entry my-codex-command-catalogue)
     (when (plist-get entry :menu)
       (should (plist-get entry :help)))))
+
+(ert-deftest my-codex-command-catalogue-diagnostics-are-subject-aware ()
+  (dolist (command '(my-codex-explain-diagnostic-at-point
+                     my-codex-explain-buffer-diagnostics))
+    (let ((entry (cl-find command my-codex-command-catalogue
+                          :key (lambda (item)
+                                 (plist-get item :command)))))
+      (should (plist-get entry :help))
+      (should (eq (plist-get entry :available)
+                  'my-codex--diagnostics-available-p)))))
 
 (ert-deftest my-codex-copy-reference-requires-file-buffer ()
   (let ((entry (cl-find 'my-codex-copy-region-reference
