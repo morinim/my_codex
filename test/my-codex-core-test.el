@@ -968,6 +968,16 @@
                                   (my-codex--session-footer))))
       (delete-directory root t))))
 
+(ert-deftest my-codex-session-footer-shows-wait-countdown ()
+  (with-temp-buffer
+    (setq-local my-codex--generated-output-waits
+                (list (list nil nil 160.0)))
+    (cl-letf (((symbol-function 'float-time)
+               (lambda (&optional _time) 100.0)))
+      (should (string-match-p
+               "waiting 1:00"
+               (my-codex--session-footer))))))
+
 (ert-deftest my-codex-track-process-output-time-preserves-filter ()
   (let* ((buffer (generate-new-buffer "*my-codex-output-time*"))
          (process (make-pipe-process :name "my-codex-output-time"

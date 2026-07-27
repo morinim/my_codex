@@ -486,6 +486,9 @@ unlimited."
 (defvar-local my-codex--handoff-wait-timer nil
   "Active timer waiting for a generated session handoff.")
 
+(defvar-local my-codex--generated-output-waits nil
+  "Pending generated-output waits in the current session buffer.")
+
 (defvar-local my-codex-session-id nil
   "Identifier for the agent session owned by the current buffer.")
 
@@ -614,13 +617,19 @@ When PLAIN is non-nil, do not apply text properties."
 (defun my-codex--session-footer ()
   "Return the dynamic footer text for the current agent session."
   (let ((process (get-buffer-process (current-buffer))))
-    (format " %s · %s · %s · %s · last %s"
-            (my-codex--terminal-type-label)
-            (my-codex--short-directory-name
-             (or my-codex-session-project-root default-directory))
-            (my-codex--process-status-label process)
-            (my-codex--last-status-label process)
-            (my-codex--last-output-label))))
+    (concat
+     (format " %s · %s · %s · %s · last %s"
+             (my-codex--terminal-type-label)
+             (my-codex--short-directory-name
+              (or my-codex-session-project-root default-directory))
+             (my-codex--process-status-label process)
+             (my-codex--last-status-label process)
+             (my-codex--last-output-label))
+     (when-let ((wait (car my-codex--generated-output-waits)))
+       (let* ((remaining (max 0 (ceiling (- (nth 2 wait) (float-time)))))
+              (minutes (/ remaining 60))
+              (seconds (% remaining 60)))
+         (format " · waiting %d:%02d" minutes seconds))))))
 
 (defun my-codex--refresh-session-title ()
   "Refresh the current buffer's agent session title surfaces."
@@ -1274,13 +1283,36 @@ empty output and any exact string in IGNORED-VALUES."
   (when (markerp marker)
     (set-marker marker nil)))
 
+(defun my-codex--register-generated-output-wait
+    (buffer marker timer-var duration)
+  "Record in BUFFER a wait using MARKER and TIMER-VAR for DURATION seconds."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (push (list marker timer-var (+ (float-time) duration))
+            my-codex--generated-output-waits)
+      (force-mode-line-update))))
+
+(defun my-codex--clear-generated-output-wait
+    (buffer &optional marker timer-var)
+  "Clear waits in BUFFER matching MARKER or TIMER-VAR."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (setq my-codex--generated-output-waits
+            (cl-delete-if
+             (lambda (wait)
+               (or (and marker (eq (car wait) marker))
+                   (and timer-var (eq (cadr wait) timer-var))))
+             my-codex--generated-output-waits))
+      (force-mode-line-update))))
+
 (defun my-codex--clear-buffer-local-timer (buffer timer-var)
   "Cancel and clear TIMER-VAR in BUFFER when it names a timer."
   (when (buffer-live-p buffer)
     (with-current-buffer buffer
       (when (timerp (symbol-value timer-var))
         (cancel-timer (symbol-value timer-var)))
-      (set timer-var nil))))
+      (set timer-var nil))
+    (my-codex--clear-generated-output-wait buffer nil timer-var)))
 
 (defun my-codex--wait-for-marked-output
     (buffer start-point begin-marker end-marker callback timeout-message
@@ -1289,22 +1321,30 @@ empty output and any exact string in IGNORED-VALUES."
   "Poll BUFFER after START-POINT for marked output, then run CALLBACK.
 BEGIN-MARKER and END-MARKER delimit the output.  CALLBACK receives
 the extracted text.  ATTEMPTS tracks polling cycles."
+  (unless attempts
+    (my-codex--register-generated-output-wait
+     buffer start-point timer-var (* poll-interval poll-attempts)))
   (let ((attempts (or attempts 0))
         (output (my-codex--latest-marked-output-after
                  buffer start-point begin-marker end-marker ignored-values)))
     (cond
      (output
       (my-codex--clear-marker start-point)
-      (when timer-var
-        (my-codex--clear-buffer-local-timer buffer timer-var))
+      (if timer-var
+          (my-codex--clear-buffer-local-timer buffer timer-var)
+        (my-codex--clear-generated-output-wait buffer start-point))
       (funcall callback output)
       (message "%s" ready-message))
      ((>= attempts poll-attempts)
       (my-codex--clear-marker start-point)
-      (when timer-var
-        (my-codex--clear-buffer-local-timer buffer timer-var))
+      (if timer-var
+          (my-codex--clear-buffer-local-timer buffer timer-var)
+        (my-codex--clear-generated-output-wait buffer start-point))
       (message "%s" timeout-message))
      (t
+      (when (buffer-live-p buffer)
+        (with-current-buffer buffer
+          (force-mode-line-update)))
       (let ((timer
              (run-with-timer
               poll-interval nil
