@@ -648,18 +648,20 @@ ATTEMPTS tracks the number of polling cycles to prevent infinite loops."
            (or my-codex--commit-message-request-output-markers
                '("BEGIN_COMMIT_MESSAGE" . "END_COMMIT_MESSAGE")))))
     (my-codex--wait-for-marked-output
-     buffer start-point
-     (car markers)
-     (cdr markers)
+     :buffer buffer
+     :start-point start-point
+     :begin-marker (car markers)
+     :end-marker (cdr markers)
+     :callback
      (lambda (msg)
        (my-codex-edit-git-commit-with-message msg root staged-signature buffer))
-     "Timed out waiting for agent commit message."
-     "Agent commit message is ready for editing."
-     my-codex-commit-message-poll-interval
-     my-codex-commit-message-poll-attempts
-     '("..." "<commit message here>")
-     attempts
-     'my-codex--commit-message-wait-timer)))
+     :timeout-message "Timed out waiting for agent commit message."
+     :ready-message "Agent commit message is ready for editing."
+     :poll-interval my-codex-commit-message-poll-interval
+     :poll-attempts my-codex-commit-message-poll-attempts
+     :ignored-values '("..." "<commit message here>")
+     :attempts attempts
+     :timer-var 'my-codex--commit-message-wait-timer)))
 
 (defun my-codex--request-commit-message-and-wait
     (buffer root staged-signature)

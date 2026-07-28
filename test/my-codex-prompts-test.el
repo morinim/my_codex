@@ -128,16 +128,16 @@
               "fix: preserve request marker\n"
               "END_COMMIT_MESSAGE\n")
       (my-codex--wait-for-marked-output
-       (current-buffer)
-       (copy-marker request-marker)
-       "BEGIN_COMMIT_MESSAGE"
-       "END_COMMIT_MESSAGE"
-       (lambda (message)
-         (setq received message))
-       "Timed out."
-       "Ready."
-       0.1
-       1)
+       :buffer (current-buffer)
+       :start-point (copy-marker request-marker)
+       :begin-marker "BEGIN_COMMIT_MESSAGE"
+       :end-marker "END_COMMIT_MESSAGE"
+       :callback (lambda (message)
+                   (setq received message))
+       :timeout-message "Timed out."
+       :ready-message "Ready."
+       :poll-interval 0.1
+       :poll-attempts 1)
       (should (equal received "fix: preserve request marker"))
       (should (eq (marker-buffer request-marker) (current-buffer))))))
 
@@ -149,18 +149,17 @@
               "fix: accept final poll\n"
               "END_COMMIT_MESSAGE\n")
       (my-codex--wait-for-marked-output
-       (current-buffer)
-       (copy-marker request-marker)
-       "BEGIN_COMMIT_MESSAGE"
-       "END_COMMIT_MESSAGE"
-       (lambda (message)
-         (setq received message))
-       "Timed out."
-       "Ready."
-       0.1
-       1
-       nil
-       1)
+       :buffer (current-buffer)
+       :start-point (copy-marker request-marker)
+       :begin-marker "BEGIN_COMMIT_MESSAGE"
+       :end-marker "END_COMMIT_MESSAGE"
+       :callback (lambda (message)
+                   (setq received message))
+       :timeout-message "Timed out."
+       :ready-message "Ready."
+       :poll-interval 0.1
+       :poll-attempts 1
+       :attempts 1)
       (should (equal received "fix: accept final poll")))))
 
 (ert-deftest my-codex-latest-marked-output-after-uses-latest-block ()

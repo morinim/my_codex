@@ -412,11 +412,19 @@ marker, begin marker and end marker before PROMPT is sent."
      (my-codex--marked-output-prompt prompt begin-marker end-marker placeholder)
      buffer)
     (my-codex--wait-for-marked-output
-     buffer start-point begin-marker end-marker
+     :buffer buffer
+     :start-point start-point
+     :begin-marker begin-marker
+     :end-marker end-marker
+     :callback
      (lambda (output)
        (funcall callback (funcall (or parser #'identity) output)))
-     timeout-message ready-message poll-interval poll-attempts
-     ignored-values nil timer-var)
+     :timeout-message timeout-message
+     :ready-message ready-message
+     :poll-interval poll-interval
+     :poll-attempts poll-attempts
+     :ignored-values ignored-values
+     :timer-var timer-var)
     start-point))
 
 (defun my-codex--marked-output-prompt

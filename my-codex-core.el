@@ -1303,10 +1303,10 @@ empty output and any exact string in IGNORED-VALUES."
       (set timer-var nil))
     (my-codex--clear-generated-output-wait buffer nil timer-var)))
 
-(defun my-codex--wait-for-marked-output
-    (buffer start-point begin-marker end-marker callback timeout-message
-            ready-message poll-interval poll-attempts &optional
-            ignored-values attempts timer-var)
+(cl-defun my-codex--wait-for-marked-output
+    (&key buffer start-point begin-marker end-marker callback timeout-message
+          ready-message poll-interval poll-attempts ignored-values attempts
+          timer-var)
   "Poll BUFFER after START-POINT for marked output, then run CALLBACK.
 BEGIN-MARKER and END-MARKER delimit the output.  CALLBACK receives
 the extracted text.  ATTEMPTS tracks polling cycles."
@@ -1338,9 +1338,18 @@ the extracted text.  ATTEMPTS tracks polling cycles."
              (run-with-timer
               poll-interval nil
               #'my-codex--wait-for-marked-output
-              buffer start-point begin-marker end-marker callback timeout-message
-              ready-message poll-interval poll-attempts ignored-values
-              (1+ attempts) timer-var)))
+              :buffer buffer
+              :start-point start-point
+              :begin-marker begin-marker
+              :end-marker end-marker
+              :callback callback
+              :timeout-message timeout-message
+              :ready-message ready-message
+              :poll-interval poll-interval
+              :poll-attempts poll-attempts
+              :ignored-values ignored-values
+              :attempts (1+ attempts)
+              :timer-var timer-var)))
         (when (and timer-var (buffer-live-p buffer))
           (with-current-buffer buffer
             (set timer-var timer))))))))
