@@ -189,14 +189,23 @@
            (user-error "Failed to display %s" (buffer-name buffer)))))
     (my-codex--set-active-session buffer)))
 
+(defun my-codex-top--session-buffer-at-point ()
+  "Return the session buffer represented by the current dashboard row."
+  (or (and-let* ((name (tabulated-list-get-id)))
+        (get-buffer name))
+      (user-error "No agent session on this line")))
+
+(defun my-codex-top--session-project-root (buffer)
+  "Return the valid project root associated with session BUFFER."
+  (let ((root (buffer-local-value 'my-codex-session-project-root buffer)))
+    (or (and root (file-directory-p root) root)
+        (user-error "Invalid project root directory for session"))))
+
 (defun my-codex-top-visit ()
   "Visit the agent session at point."
   (interactive)
-  (let* ((buffer-name (tabulated-list-get-id))
-         (buffer (and buffer-name (get-buffer buffer-name))))
-    (unless buffer
-      (user-error "No agent session on this line"))
-    (my-codex--switch-active-session-buffer buffer)))
+  (my-codex--switch-active-session-buffer
+   (my-codex-top--session-buffer-at-point)))
 
 (defun my-codex--all-session-buffers ()
   "Return all agent session buffers, including dead ones."
@@ -376,11 +385,8 @@ STATE is one of the strings `clean', `dirty', or `error'."
 (defun my-codex-top-kill-session ()
   "Kill the agent session process and buffer at point."
   (interactive)
-  (let* ((buffer-name (tabulated-list-get-id))
-         (buffer (and buffer-name (get-buffer buffer-name))))
-    (unless buffer
-      (user-error "No agent session on this line"))
-    (when (yes-or-no-p (format "Kill session %s? " buffer-name))
+  (let ((buffer (my-codex-top--session-buffer-at-point)))
+    (when (yes-or-no-p (format "Kill session %s? " (buffer-name buffer)))
       (with-current-buffer buffer
         (when-let ((proc (get-buffer-process buffer)))
           (when (process-live-p proc)
@@ -405,66 +411,44 @@ STATE is one of the strings `clean', `dirty', or `error'."
 (defun my-codex-top-visit-edit-window ()
   "Select the edit window associated with the session at point."
   (interactive)
-  (let* ((buffer-name (tabulated-list-get-id))
-         (buffer (and buffer-name (get-buffer buffer-name)))
-         (window (and buffer
-                      (my-codex--edit-window-for-session-buffer-any-frame
-                       buffer))))
-    (unless buffer
-      (user-error "No agent session on this line"))
+  (let* ((buffer (my-codex-top--session-buffer-at-point))
+         (window (my-codex--edit-window-for-session-buffer-any-frame
+                  buffer)))
     (unless (window-live-p window)
-      (user-error "No edit window associated with %s" buffer-name))
+      (user-error "No edit window associated with %s" (buffer-name buffer)))
     (select-window window)))
 
 (defun my-codex-top-project-diff ()
   "Show git diff for the selected session's project."
   (interactive)
-  (let* ((buffer-name (tabulated-list-get-id))
-         (buffer (and buffer-name (get-buffer buffer-name))))
-    (unless buffer
-      (user-error "No agent session on this line"))
-    (let ((root (with-current-buffer buffer my-codex-session-project-root)))
-      (if (and root (file-directory-p root))
-          (let ((default-directory root))
-            (if (fboundp 'magit-status)
-                (magit-status root)
-              (vc-diff)))
-        (user-error "Invalid project root directory for session")))))
+  (let* ((buffer (my-codex-top--session-buffer-at-point))
+         (root (my-codex-top--session-project-root buffer))
+         (default-directory root))
+    (if (fboundp 'magit-status)
+        (magit-status root)
+      (vc-diff))))
 
 (defun my-codex-top-dired-project ()
   "Open dired at the selected session's project root directory."
   (interactive)
-  (let* ((buffer-name (tabulated-list-get-id))
-         (buffer (and buffer-name (get-buffer buffer-name))))
-    (unless buffer
-      (user-error "No agent session on this line"))
-    (let ((root (with-current-buffer buffer my-codex-session-project-root)))
-      (if (and root (file-directory-p root))
-          (dired root)
-        (user-error "Invalid project root directory for session")))))
+  (dired
+   (my-codex-top--session-project-root
+    (my-codex-top--session-buffer-at-point))))
 
 (defun my-codex-top-build-project ()
   "Run the project build command with `compile` for the selected session."
   (interactive)
-  (let* ((buffer-name (tabulated-list-get-id))
-         (buffer (and buffer-name (get-buffer buffer-name))))
-    (unless buffer
-      (user-error "No agent session on this line"))
-    (let ((root (with-current-buffer buffer my-codex-session-project-root)))
-      (if (and root (file-directory-p root))
-          (let ((default-directory root))
-            (compile (or (with-current-buffer buffer my-codex-project-build-command)
-                         my-codex-project-build-command
-                         compile-command)))
-        (user-error "Invalid project root directory for session")))))
+  (let* ((buffer (my-codex-top--session-buffer-at-point))
+         (root (my-codex-top--session-project-root buffer))
+         (default-directory root))
+    (compile (or (buffer-local-value 'my-codex-project-build-command buffer)
+                 my-codex-project-build-command
+                 compile-command))))
 
 (defun my-codex-top-rename-session ()
   "Rename the session name (my-codex-session-name) for the session at point."
   (interactive)
-  (let* ((buffer-name (tabulated-list-get-id))
-         (buffer (and buffer-name (get-buffer buffer-name))))
-    (unless buffer
-      (user-error "No agent session on this line"))
+  (let ((buffer (my-codex-top--session-buffer-at-point)))
     (with-current-buffer buffer
       (when (equal my-codex-session-id
                    (my-codex--default-session-id
