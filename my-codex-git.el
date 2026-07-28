@@ -287,18 +287,11 @@ Do not modify files."))
     (my-codex--ensure-git-repository)
     (my-codex--preview-and-send-prompt prompt)))
 
-(defun my-codex--commit-message-prompt (&optional begin-marker end-marker)
+(defun my-codex--commit-message-prompt ()
   "Return the prompt for drafting a commit message from staged changes."
-  (let ((prompt
-         (replace-regexp-in-string
-          "%d" (number-to-string my-codex-commit-message-fill-column)
-          my-codex-commit-message-prompt-template t t)))
-    (if (and begin-marker end-marker)
-        (format "%s\n\n%s"
-                prompt
-                (my-codex--marked-output-instructions
-                 begin-marker end-marker "<commit message here>"))
-      prompt)))
+  (replace-regexp-in-string
+   "%d" (number-to-string my-codex-commit-message-fill-column)
+   my-codex-commit-message-prompt-template t t))
 
 (defun my-codex--git-diff-buffer-name (root staged)
   "Return the diff buffer name for ROOT.
