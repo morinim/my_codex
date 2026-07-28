@@ -282,17 +282,43 @@ When nil, diagnostics context is not capped by token budget."
        (require 'flymake nil t)))
 
 (defun my-codex--flymake-severity (type)
-  "Return the generic severity represented by Flymake diagnostic TYPE."
-  (let ((severity (flymake--severity type)))
+  "Return the generic severity represented by Flymake diagnostic TYPE.
+Use Flymake's private resolver to honour custom diagnostic types, falling
+back to its type, compatibility-alist, category, and default resolution order
+when that resolver is absent."
+  (let ((severity
+          (if (fboundp 'flymake--severity)
+              (flymake--severity type)
+            (if (plist-member (symbol-plist type) 'severity)
+                (get type 'severity)
+              (let* ((type-alist
+                      (and (boundp 'flymake-diagnostic-types-alist)
+                           (alist-get type flymake-diagnostic-types-alist)))
+                     (category
+                      (or (get type 'flymake-category)
+                          (alist-get 'flymake-category type-alist))))
+                (cond
+                 ((alist-get 'severity type-alist))
+                 ((and (symbolp category)
+                       (plist-member (symbol-plist category) 'severity))
+                  (get category 'severity))
+                 (t (warning-numeric-level :error))))))))
     (cond
-     ((>= severity (warning-numeric-level :error)) 'error)
-     ((>= severity (warning-numeric-level :warning)) 'warning)
+     ((and (numberp severity)
+           (>= severity (warning-numeric-level :error)))
+      'error)
+     ((and (numberp severity)
+           (>= severity (warning-numeric-level :warning)))
+      'warning)
      (t 'note))))
 
 (defun my-codex--flymake-diagnostic-bounds (diagnostic)
-  "Return current buffer bounds for Flymake DIAGNOSTIC."
+  "Return current buffer bounds for Flymake DIAGNOSTIC.
+Prefer Flymake's private overlay because it tracks edits after DIAGNOSTIC
+was created; fall back to the public, possibly stale diagnostic bounds."
   (let ((overlay (and (fboundp 'flymake--diag-overlay)
-                      (flymake--diag-overlay diagnostic))))
+                      (ignore-errors
+                        (flymake--diag-overlay diagnostic)))))
     (if (and (overlayp overlay) (overlay-buffer overlay))
         (cons (overlay-start overlay) (overlay-end overlay))
       (let ((beg (flymake-diagnostic-beg diagnostic)))

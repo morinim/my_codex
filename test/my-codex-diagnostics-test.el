@@ -544,6 +544,17 @@
                     (list normalised))))))
         (delete-overlay overlay)))))
 
+(ert-deftest my-codex-flymake-diagnostic-bounds-fall-back-without-overlay-helper ()
+  (require 'flymake)
+  (with-temp-buffer
+    (insert "problem\n")
+    (let ((diagnostic
+           (flymake-make-diagnostic
+            (current-buffer) 1 8 :warning "problem")))
+      (cl-letf (((symbol-function 'flymake--diag-overlay) nil))
+        (should (equal (my-codex--flymake-diagnostic-bounds diagnostic)
+                       '(1 . 8)))))))
+
 (ert-deftest my-codex-flymake-severity-honours-custom-types ()
   (require 'flymake)
   (let ((warning-type (make-symbol "custom-warning"))
@@ -564,6 +575,18 @@
              (flymake-category . flymake-note)))))
     (should (eq (my-codex--flymake-severity warning-type) 'warning))
     (should (eq (my-codex--flymake-severity note-type) 'note))))
+
+(ert-deftest my-codex-flymake-severity-falls-back-without-private-resolver ()
+  (require 'flymake)
+  (let ((direct-type (make-symbol "direct-error"))
+        (default-type (make-symbol "default-error")))
+    (put direct-type 'severity (warning-numeric-level :error))
+    (put direct-type 'flymake-category 'flymake-note)
+    (cl-letf (((symbol-function 'flymake--severity) nil))
+      (should (eq (my-codex--flymake-severity direct-type) 'error))
+      (should (eq (my-codex--flymake-severity default-type) 'error))
+      (should (eq (my-codex--flymake-severity :warning) 'warning))
+      (should (eq (my-codex--flymake-severity :note) 'note)))))
 
 (ert-deftest my-codex-diagnostic-at-point-prefers-overlapping-range ()
   (with-temp-buffer
