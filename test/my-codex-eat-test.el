@@ -365,7 +365,7 @@ Set TIMER-COUNT to the number of timers created."
           (callback arguments timer-count)
         (let ((inhibit-modification-hooks t))
           (goto-char (point-min))
-          (delete-region (line-beginning-position) (line-end-position))
+          (delete-region (pos-bol) (pos-eol))
           (insert "plain terminal row"))
         (my-codex--eat-schedule-link-refresh)
         (should (= timer-count 1))

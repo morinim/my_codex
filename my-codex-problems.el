@@ -232,9 +232,7 @@ When DIRECT is non-nil, select the message from BUFFER's point."
   (interactive)
   (if-let ((prompt (my-codex--problem-region-prompt)))
       (my-codex--preview-and-send-prompt prompt)
-    (let ((subject (or (and (fboundp 'my-codex--subject-buffer)
-                            (my-codex--subject-buffer))
-                       (current-buffer))))
+    (let ((subject (my-codex--subject-buffer-or-current)))
       (unless (buffer-live-p subject)
         (user-error "No subject buffer available"))
       (with-current-buffer subject

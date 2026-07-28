@@ -201,11 +201,15 @@ Preserve concrete file names, command names, and technical details. Do not edit 
 
 (declare-function my-codex--subject-buffer "my-codex" ())
 
+(defun my-codex--subject-buffer-or-current ()
+  "Return the current my-codex subject buffer or the current buffer."
+  (or (and (fboundp 'my-codex--subject-buffer)
+           (my-codex--subject-buffer))
+      (current-buffer)))
+
 (defun my-codex--with-subject-buffer (function &rest args)
   "Call FUNCTION with ARGS in the current my-codex subject buffer."
-  (let ((buffer (or (and (fboundp 'my-codex--subject-buffer)
-                         (my-codex--subject-buffer))
-                    (current-buffer))))
+  (let ((buffer (my-codex--subject-buffer-or-current)))
     (unless (buffer-live-p buffer)
       (user-error "No subject buffer available"))
     (with-current-buffer buffer
@@ -751,10 +755,10 @@ With prefix argument SELECT-TEST-FILE, prompt for a specific test file."
              start end)
         (goto-char (point-min))
         (forward-line (1- start-line))
-        (setq start (line-beginning-position))
+        (setq start (pos-bol))
         (goto-char (point-min))
         (forward-line (1- end-line))
-        (setq end (line-end-position))
+        (setq end (pos-eol))
         (my-codex--trim-excerpt-whitespace
          (buffer-substring-no-properties start end))))))
 
@@ -1077,17 +1081,11 @@ PROMPT-FUNCTION builds the prompt from the region bounds."
      (format "%s\n\n%s" my-codex-refactor-plan-prompt context)
      sent-message)))
 
-(defun my-codex--document-subject-buffer ()
-  "Return the buffer document commands should inspect."
-  (or (and (fboundp 'my-codex--subject-buffer)
-           (my-codex--subject-buffer))
-      (current-buffer)))
-
 (defun my-codex--document-command (prompt &optional require-region)
   "Send PROMPT with document context.
 When REQUIRE-REGION is non-nil, require an active region in the subject
 buffer; otherwise use the active region or the whole subject buffer."
-  (let ((buffer (my-codex--document-subject-buffer)))
+  (let ((buffer (my-codex--subject-buffer-or-current)))
     (unless (buffer-live-p buffer)
       (user-error "No document buffer available"))
     (with-current-buffer buffer
@@ -1357,7 +1355,7 @@ When prompt preview is enabled, open it for review first."
 
 (defun my-codex--file-reference-completion-at-point (files)
   "Complete project FILES after an at-sign at the start of a minibuffer line."
-  (let ((line-start (max (line-beginning-position) (minibuffer-prompt-end)))
+  (let ((line-start (max (pos-bol) (minibuffer-prompt-end)))
         (point (point)))
     (when (and (< line-start point)
                (eq (char-after line-start) ?@)
@@ -1382,8 +1380,8 @@ after the at-sign with `completion-at-point'."
           (when (memq (local-key-binding (kbd "TAB"))
                       '(nil self-insert-command))
             (let ((map (copy-keymap (current-local-map))))
-              (define-key map (kbd "TAB") #'completion-at-point)
-              (define-key map (kbd "<tab>") #'completion-at-point)
+              (keymap-set map "TAB" #'completion-at-point)
+              (keymap-set map "<tab>" #'completion-at-point)
               (use-local-map map))))
       (read-string "Additional instructions (optional): "))))
 

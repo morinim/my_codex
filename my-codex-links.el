@@ -18,12 +18,10 @@
 (require 'subr-x)
 (require 'my-codex-core)
 
-(defvar my-codex-session-link-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map [mouse-1] #'my-codex-open-session-link-at-event)
-    (define-key map (kbd "RET") #'my-codex-open-session-link-at-point)
-    map)
-  "Keymap used for clickable agent session links.")
+(defvar-keymap my-codex-session-link-map
+  :doc "Keymap used for clickable agent session links."
+  "<mouse-1>" #'my-codex-open-session-link-at-event
+  "RET" #'my-codex-open-session-link-at-point)
 
 (defvar my-codex-session-links-mode)
 
@@ -145,7 +143,7 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
           (push-mark
            (save-excursion
              (forward-line (- end-line line))
-             (line-end-position))
+             (pos-eol))
            nil t)
         (deactivate-mark)))
     (when column
@@ -180,12 +178,12 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
                    (point)))
           directory)
       (while (and (not directory)
-                  (> (line-beginning-position) limit))
+                  (> (pos-bol) limit))
         (forward-line -1)
         (let ((line (string-trim-right
                      (buffer-substring-no-properties
-                      (line-beginning-position)
-                      (line-end-position)))))
+                      (pos-bol)
+                      (pos-eol)))))
           (when (string-match
                  (concat
                   "\\(?:^\\|[^[:alnum:]_.@+/-]\\)"
@@ -244,11 +242,11 @@ TARGET is a plist containing :file, :line, :column, and :end-line."
      (progn
        (goto-char beg)
        (forward-line (- my-codex--file-reference-context-lines))
-       (line-beginning-position))
+       (pos-bol))
      (progn
        (goto-char end)
        (forward-line my-codex--file-reference-context-lines)
-       (line-end-position)))))
+       (pos-eol)))))
 
 (defun my-codex--clear-session-links (beg end)
   "Remove agent session link properties between BEG and END."

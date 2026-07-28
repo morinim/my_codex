@@ -217,10 +217,10 @@ Do not modify files."))
     (goto-char (point-min))
     (while (re-search-forward
             (regexp-quote my-codex--commit-template-begin) nil t)
-      (let ((beg (line-beginning-position)))
+      (let ((beg (pos-bol)))
         (if (re-search-forward
              (regexp-quote my-codex--commit-template-end) nil t)
-            (delete-region beg (min (point-max) (1+ (line-end-position))))
+            (delete-region beg (min (point-max) (1+ (pos-eol))))
           (delete-region beg (point-max)))))
     (buffer-string)))
 

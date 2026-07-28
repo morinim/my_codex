@@ -345,14 +345,13 @@ directory.  Discovery follows the agent profile's instruction strategy."
            (names (plist-get profile :instruction-files)))
       (pcase (plist-get profile :instruction-strategy)
         ('hierarchical-first
-         (delq nil
-               (mapcar
-                (lambda (directory)
-                  (seq-find #'file-regular-p
-                            (mapcar (lambda (name)
-                                      (expand-file-name name directory))
-                                    names)))
-                (my-codex--directories-to root target))))
+         (seq-keep
+          (lambda (directory)
+            (seq-find #'file-regular-p
+                      (mapcar (lambda (name)
+                                (expand-file-name name directory))
+                              names)))
+          (my-codex--directories-to root target)))
         ('root-all
          (seq-filter
           #'file-regular-p

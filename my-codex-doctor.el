@@ -49,10 +49,6 @@
   '((t :inherit error))
   "Face used for FAIL labels in `my-codex-doctor'.")
 
-(defun my-codex--version>= (version minimum)
-  "Return non-nil when VERSION is greater than or equal to MINIMUM."
-  (not (version< version minimum)))
-
 (defun my-codex--doctor-command-assignment-token-p (token)
   "Return non-nil when TOKEN is a shell environment assignment."
   (and (stringp token)
@@ -331,8 +327,8 @@ VALUE-READER receives a line and KEY.  The result is a cons of
     (goto-char (point-min))
     (while (not (eobp))
       (let ((line (buffer-substring-no-properties
-                   (line-beginning-position)
-                   (line-end-position))))
+                   (pos-bol)
+                   (pos-eol))))
         (cond
          ((or (string-blank-p line)
               (string-match-p "\\`[[:space:]]*#" line)))
@@ -524,7 +520,7 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
     (append
      (list
       (list "Emacs version"
-            (if (my-codex--version>= emacs-version "29.1") 'ok 'fail)
+            (if (version<= "29.1" emacs-version) 'ok 'fail)
             (format "%s (requires 29.1 or newer)" emacs-version))
       (list (format "%s executable" (or agent-exec (symbol-name my-codex-agent)))
             (if agent-path 'ok 'fail)

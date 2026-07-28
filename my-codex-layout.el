@@ -165,7 +165,6 @@
 (defun my-codex--refresh-edit-fill-column-indicator ()
   "Refresh the fill-column indicator after window layout changes."
   (when (and my-codex--edit-fill-column-indicator-state
-             (fboundp 'display-fill-column-indicator-mode)
              (bound-and-true-p display-fill-column-indicator-mode))
     (display-fill-column-indicator-mode -1)
     (display-fill-column-indicator-mode 1)))
@@ -180,8 +179,7 @@
   "Restore BUFFER's fill-column indicator state saved by my-codex."
   (setq my-codex--edit-fill-column-indicator-buffers
         (delq buffer my-codex--edit-fill-column-indicator-buffers))
-  (when (and (buffer-live-p buffer)
-             (fboundp 'display-fill-column-indicator-mode))
+  (when (buffer-live-p buffer)
     (with-current-buffer buffer
       (when my-codex--edit-fill-column-indicator-state
         (let ((mode (plist-get my-codex--edit-fill-column-indicator-state
@@ -203,8 +201,7 @@
 
 (defun my-codex--apply-edit-fill-column-indicator (window)
   "Show a fill-column indicator in WINDOW's buffer."
-  (when (and (fboundp 'display-fill-column-indicator-mode)
-             (window-live-p window))
+  (when (window-live-p window)
     (with-current-buffer (window-buffer window)
       (unless my-codex--edit-fill-column-indicator-state
         (setq-local my-codex--edit-fill-column-indicator-state
@@ -290,8 +287,7 @@
 
 (defun my-codex--enable-edit-fill-column-indicator (edit-window term-window)
   "Show a fill-column indicator in EDIT-WINDOW."
-  (when (and (fboundp 'display-fill-column-indicator-mode)
-             (window-live-p edit-window)
+  (when (and (window-live-p edit-window)
              (window-live-p term-window)
              (not (eq (window-buffer edit-window)
                       (window-buffer term-window))))
