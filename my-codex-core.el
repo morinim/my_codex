@@ -26,7 +26,6 @@
 (require 'subr-x)
 
 (declare-function markdown-mode "markdown-mode")
-(defvar vterm-max-scrollback)
 
 (defun my-codex--prepare-edit-buffer
     (text root mode header accept-command cancel-command)
@@ -687,9 +686,6 @@ This operation must not change backend or session state.")
   "Return BACKEND's Eat buffer name."
   (my-codex-eat-backend-buffer-name backend))
 
-(autoload 'vterm-send-string "vterm")
-(autoload 'vterm-send-return "vterm")
-
 (defun my-codex--terminal-backend-loadable-p (backend)
   "Return non-nil when BACKEND can be loaded."
   (condition-case nil
@@ -723,7 +719,10 @@ the platform default and falls back to the other supported backend."
   "Return BACKEND for BUFFER-NAME.
 When BACKEND is nil, use `my-codex-terminal-backend'."
   (pcase (my-codex--resolve-terminal-backend backend)
-    ('vterm (my-codex--make-vterm-backend buffer-name))
+    ('vterm
+     (unless (require 'my-codex-vterm nil t)
+       (user-error "vterm backend is selected but my-codex-vterm is unavailable"))
+     (my-codex--make-vterm-backend buffer-name))
     ('eat
      (unless (require 'my-codex-eat nil t)
        (user-error "Eat backend is selected but my-codex-eat is unavailable"))
@@ -787,26 +786,6 @@ Existing session buffers keep their recorded terminal backend."
       "Agent: "
       (mapcar #'symbol-name (my-codex--agent-ids))
       nil t nil nil (symbol-name my-codex-agent)))))
-
-(cl-defmethod my-codex-backend-live-p ((backend my-codex-vterm-backend))
-  "Return non-nil when BACKEND's vterm process is live."
-  (when-let (buffer (my-codex--backend-buffer backend))
-    (process-live-p (get-buffer-process buffer))))
-
-(cl-defmethod my-codex-backend-send
-  ((backend my-codex-vterm-backend) prompt)
-  "Send PROMPT through BACKEND's vterm buffer."
-  (let ((buffer (or (my-codex--backend-buffer backend)
-                    (user-error "No %s buffer found"
-                                (my-codex-backend-buffer-name backend)))))
-    (with-current-buffer buffer
-      (goto-char (point-max))
-      (vterm-send-string prompt t)
-      (vterm-send-return)
-      (my-codex--record-outbound-prompt buffer prompt)
-      (setq my-codex-session-last-activity (current-time))
-      (setq my-codex-session-prompt-count
-            (1+ (or my-codex-session-prompt-count 0))))))
 
 (defun my-codex--track-process-output-time (process)
   "Record output timestamps for PROCESS without replacing its behaviour."

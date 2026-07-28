@@ -31,15 +31,11 @@
 (require 'subr-x)
 (require 'transient)
 
-(autoload 'vterm-send-string "vterm")
-(autoload 'vterm-send-return "vterm")
 (autoload 'my-codex-session-links-mode "my-codex-links" nil t)
 (autoload 'my-codex-vterm-integration-mode "my-codex-vterm" nil t)
 (autoload 'my-codex-eat-integration-mode "my-codex-eat" nil t)
 (autoload 'my-codex--doctor-command-executable-token "my-codex-doctor")
 (autoload 'my-codex-doctor "my-codex-doctor" nil t)
-(autoload 'my-codex--vterm-mode-with-scrollback-floor "my-codex-vterm")
-(autoload 'my-codex--ensure-vterm-scrollback "my-codex-vterm")
 (autoload 'my-codex--current-or-left-file-available-p "my-codex-git")
 (autoload 'my-codex--request-marked-output "my-codex-prompts")
 (autoload 'my-codex-send-prompt "my-codex-prompts")
@@ -79,55 +75,12 @@
            (my-codex-list-open-issues . "my-codex-github")
            (my-codex-summarise-session-to-github-issue . "my-codex-github")))
   (autoload (car autoload-entry) (cdr autoload-entry) nil t))
-(declare-function my-codex--enable-vterm-buffer-integration "my-codex-vterm")
-(cl-defmethod my-codex-backend-start
-  ((backend my-codex-vterm-backend) project-root command
-   &optional session-name agent access-mode)
-  "Start BACKEND's vterm process in PROJECT-ROOT with COMMAND."
-  (let* ((default-directory project-root)
-         (buffer-name (my-codex-backend-buffer-name backend))
-         (buffer (get-buffer-create buffer-name)))
-    (with-current-buffer buffer
-      (unless (derived-mode-p 'vterm-mode)
-        (my-codex--vterm-mode-with-scrollback-floor))
-      (my-codex--ensure-vterm-scrollback)
-      (setq-local show-trailing-whitespace nil)
-      (when my-codex-enable-session-links
-        (my-codex-session-links-mode 1))
-      (my-codex--prepare-backend-session
-       buffer project-root command session-name agent access-mode 'vterm)
-      (goto-char (point-max))
-      (vterm-send-string (my-codex--shell-command-and-exit command))
-      (vterm-send-return))
-    (when (bound-and-true-p my-codex-vterm-integration-mode)
-      (with-current-buffer buffer
-        (my-codex--enable-vterm-buffer-integration)))
-    buffer))
 
 (defun my-codex--selected-window-is-codex-p ()
   "Return non-nil if the selected window shows the active agent."
   (eq (selected-window)
       (ignore-errors
         (my-codex-visible-window))))
-
-(defun my-codex--vterm-shell-name ()
-  "Return the configured vterm shell executable name, if known."
-  (let ((shell (or (and (boundp 'vterm-shell)
-                        (let ((value (symbol-value 'vterm-shell)))
-                          (and (stringp value)
-                               (not (string-empty-p value))
-                               value)))
-                   shell-file-name
-                   "")))
-    (file-name-nondirectory
-     (replace-regexp-in-string "\\\\" "/" shell))))
-
-(defun my-codex--shell-command-and-exit (command)
-  "Return shell text that runs COMMAND, then exits with its status."
-  (my-codex--shell-command-and-exit-for-shell
-   command
-   (my-codex--vterm-shell-name)))
-
 
 ;;;###autoload
 (defun my-codex-hide-window ()

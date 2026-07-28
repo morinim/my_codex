@@ -16,10 +16,32 @@
 
 (require 'my-codex-core)
 
+(autoload 'my-codex-session-links-mode "my-codex-links" nil t)
 (defvar vterm-copy-mode)
 (defvar vterm-max-scrollback)
+(defvar my-codex-vterm-integration-mode)
 (defvar hack-local-variables-hook)
 (declare-function vterm-mode "vterm" ())
+(declare-function vterm-send-string "vterm" (string &optional paste-p))
+(declare-function vterm-send-return "vterm" ())
+
+(defun my-codex--vterm-shell-name ()
+  "Return the configured vterm shell executable name, if known."
+  (let ((shell (or (and (boundp 'vterm-shell)
+                        (let ((value (symbol-value 'vterm-shell)))
+                          (and (stringp value)
+                               (not (string-empty-p value))
+                               value)))
+                   shell-file-name
+                   "")))
+    (file-name-nondirectory
+     (replace-regexp-in-string "\\\\" "/" shell))))
+
+(defun my-codex--vterm-command-and-exit (command)
+  "Return shell text that runs COMMAND, then exits with its status for vterm."
+  (my-codex--shell-command-and-exit-for-shell
+   command
+   (my-codex--vterm-shell-name)))
 
 (defun my-codex--ensure-vterm-scrollback ()
   "Raise `vterm-max-scrollback' in the current agent buffer when needed."
@@ -52,6 +74,50 @@
          (cons #'my-codex--floor-vterm-scrollback
                hack-local-variables-hook)))
     (vterm-mode)))
+
+(cl-defmethod my-codex-backend-start
+  ((backend my-codex-vterm-backend) project-root command
+   &optional session-name agent access-mode)
+  "Start BACKEND's vterm process in PROJECT-ROOT with COMMAND."
+  (let* ((default-directory project-root)
+         (buffer-name (my-codex-backend-buffer-name backend))
+         (buffer (get-buffer-create buffer-name)))
+    (with-current-buffer buffer
+      (unless (derived-mode-p 'vterm-mode)
+        (my-codex--vterm-mode-with-scrollback-floor))
+      (my-codex--ensure-vterm-scrollback)
+      (setq-local show-trailing-whitespace nil)
+      (when my-codex-enable-session-links
+        (my-codex-session-links-mode 1))
+      (my-codex--prepare-backend-session
+       buffer project-root command session-name agent access-mode 'vterm)
+      (goto-char (point-max))
+      (vterm-send-string (my-codex--vterm-command-and-exit command))
+      (vterm-send-return))
+    (when (bound-and-true-p my-codex-vterm-integration-mode)
+      (with-current-buffer buffer
+        (my-codex--enable-vterm-buffer-integration)))
+    buffer))
+
+(cl-defmethod my-codex-backend-live-p ((backend my-codex-vterm-backend))
+  "Return non-nil when BACKEND's vterm process is live."
+  (when-let (buffer (my-codex--backend-buffer backend))
+    (process-live-p (get-buffer-process buffer))))
+
+(cl-defmethod my-codex-backend-send
+  ((backend my-codex-vterm-backend) prompt)
+  "Send PROMPT through BACKEND's vterm buffer."
+  (let ((buffer (or (my-codex--backend-buffer backend)
+                    (user-error "No %s buffer found"
+                                (my-codex-backend-buffer-name backend)))))
+    (with-current-buffer buffer
+      (goto-char (point-max))
+      (vterm-send-string prompt t)
+      (vterm-send-return)
+      (my-codex--record-outbound-prompt buffer prompt)
+      (setq my-codex-session-last-activity (current-time))
+      (setq my-codex-session-prompt-count
+            (1+ (or my-codex-session-prompt-count 0))))))
 
 (autoload 'my-codex-transient-preserve-selection "my-codex" nil t)
 (declare-function vterm-yank "vterm" ())

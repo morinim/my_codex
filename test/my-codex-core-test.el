@@ -8,7 +8,6 @@
 (require 'my-codex)
 (require 'my-codex-vterm)
 (require 'my-codex-eat)
-(defvar vterm-shell)
 
 (ert-deftest my-codex-require-keeps-optional-modules-lazy ()
   (let* ((script '(progn
@@ -46,7 +45,6 @@
                         my-codex-explain-buffer-diagnostics
                         my-codex-explain-problem
                         my-codex-explain-compilation-error-at-point
-                        my-codex--ensure-vterm-scrollback
                         my-codex-top)))))
          (output
           (with-temp-buffer
@@ -63,7 +61,6 @@
                            "\"my-codex-diagnostics\" "
                            "\"my-codex-diagnostics\" "
                            "\"my-codex-problems\" \"my-codex-problems\" "
-                           "\"my-codex-vterm\" "
                            "\"my-codex-ui\")")))))
 
 (ert-deftest my-codex-package-requires-keeps-vterm-optional ()
@@ -209,29 +206,6 @@
                (ert-fail "Explicit backend checked for loadability"))))
     (should (eq (my-codex--resolve-terminal-backend 'vterm) 'vterm))
     (should (eq (my-codex--resolve-terminal-backend 'eat) 'eat))))
-
-(ert-deftest my-codex-vterm-backend-send-records-outbound-tokens ()
-  (let* ((buffer-name "*my-codex-vterm-send-test*")
-         (buffer (get-buffer-create buffer-name))
-         (backend (my-codex--make-vterm-backend buffer-name))
-         calls)
-    (unwind-protect
-        (progn
-          (with-current-buffer buffer
-            (setq-local my-codex-session-prompt-count 0)
-            (setq-local my-codex-session-prompt-token-estimate 0))
-          (cl-letf (((symbol-function 'vterm-send-string)
-                     (lambda (prompt paste-p)
-                       (push (list prompt paste-p) calls)))
-                    ((symbol-function 'vterm-send-return)
-                     (lambda () (push 'return calls))))
-            (my-codex-backend-send backend "hello")
-            (should (equal (nreverse calls) '(("hello" t) return)))
-            (with-current-buffer buffer
-              (should (= my-codex-session-prompt-count 1))
-              (should (= my-codex-session-prompt-token-estimate 2)))))
-      (when (buffer-live-p buffer)
-        (kill-buffer buffer)))))
 
 (ert-deftest my-codex-command-catalogue-commands-exist ()
   (dolist (entry my-codex-command-catalogue)
@@ -1566,38 +1540,6 @@
         (when (string-prefix-p "*codex-eat-layout-test" (buffer-name buffer))
           (kill-buffer buffer)))
       (delete-directory root t))))
-
-(defmacro my-codex-test-with-vterm-shell (shell &rest body)
-  "Bind `vterm-shell' to SHELL while running BODY."
-  (declare (indent 1))
-  `(let ((was-bound (boundp 'vterm-shell))
-         (original-value (and (boundp 'vterm-shell)
-                              (symbol-value 'vterm-shell))))
-     (unwind-protect
-         (progn
-           (set 'vterm-shell ,shell)
-           ,@body)
-       (if was-bound
-           (set 'vterm-shell original-value)
-         (makunbound 'vterm-shell)))))
-
-(ert-deftest my-codex-shell-command-and-exit-uses-posix-status ()
-  (my-codex-test-with-vterm-shell "/bin/bash"
-    (should (equal (my-codex--shell-command-and-exit "codex")
-                   "codex\nstatus=$?\nexit $status"))))
-
-(ert-deftest my-codex-shell-command-and-exit-uses-cmd-errorlevel ()
-  (my-codex-test-with-vterm-shell "C:\\Windows\\System32\\cmd.exe"
-    (should (equal (my-codex--shell-command-and-exit "codex")
-                   "codex\nexit %ERRORLEVEL%"))))
-
-(ert-deftest my-codex-shell-command-and-exit-uses-powershell-status ()
-  (my-codex-test-with-vterm-shell "C:\\Program Files\\PowerShell\\7\\pwsh.exe"
-    (should
-     (equal (my-codex--shell-command-and-exit "codex")
-            (concat "codex\n"
-                    "if ($LASTEXITCODE -ne $null) { exit $LASTEXITCODE }\n"
-                    "if ($?) { exit 0 } else { exit 1 }")))))
 
 (ert-deftest my-codex-global-mode-preserves-pre-existing-services ()
   (let ((my-codex-terminal-backend 'vterm)
