@@ -199,7 +199,6 @@ Preserve concrete file names, command names, and technical details. Do not edit 
   :type 'string
   :group 'my-codex-sessions)
 
-(declare-function my-codex--project-files "my-codex-git" (root))
 (declare-function my-codex--subject-buffer "my-codex" ())
 
 (defun my-codex--with-subject-buffer (function &rest args)
@@ -1364,7 +1363,6 @@ When prompt preview is enabled, open it for review first."
   "Read optional additional instructions with project file completion.
 When a minibuffer line starts with @, complete project-relative file names
 after the at-sign with `completion-at-point'."
-  (require 'my-codex-git)
   (let* ((root (my-codex-project-root))
          (files (my-codex--project-files root)))
     (minibuffer-with-setup-hook

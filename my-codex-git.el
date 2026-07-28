@@ -181,20 +181,6 @@ are appended for each request."
       (user-error "Unable to determine Git repository toplevel"))
     (file-name-as-directory (string-trim (buffer-string)))))
 
-(defun my-codex--project-files (root)
-  "Return project files relative to ROOT."
-  (let ((default-directory root))
-    (let ((files
-           (if (my-codex--git-repository-p)
-             (my-codex--process-output-lines
-              "git" "ls-files" "--cached" "--others" "--exclude-standard")
-             (when-let (project (project-current nil root))
-               (ignore-errors
-                 (mapcar (lambda (file)
-                           (file-relative-name file root))
-                         (project-files project)))))))
-      (sort (or files nil) #'string<))))
-
 ;;;###autoload
 (defun my-codex-send-project-overview ()
   "Ask the agent to inspect the current project for orientation."

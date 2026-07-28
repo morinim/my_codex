@@ -247,52 +247,6 @@
       (when (buffer-live-p agent-buffer)
         (kill-buffer agent-buffer)))))
 
-(ert-deftest my-codex-preset-command-loads-git-helpers-without-main-package ()
-  (let ((load-path-root default-directory)
-        (root (file-name-as-directory (make-temp-file "my-codex-preset" t))))
-    (unwind-protect
-        (let* ((script
-                `(progn
-                   (setq load-prefer-newer t)
-                   (setq default-directory ,root)
-                   (require 'cl-lib)
-                   (require 'my-codex-prompts)
-                   (setq my-codex-prompt-presets
-                         '(("Refactor" . "Refactor prompt")))
-                   (cl-letf (((symbol-function 'completing-read)
-                              (lambda (&rest _args) "Refactor"))
-                             ((symbol-function 'read-string)
-                              (lambda (&rest _args) ""))
-                             ((symbol-function 'my-codex-project-root)
-                              (lambda () default-directory))
-                             ((symbol-function 'my-codex--preview-and-send-prompt)
-                              (lambda (prompt &optional _sent-message)
-                                (princ prompt)))
-                             ((symbol-function 'use-region-p)
-                              (lambda () nil)))
-                     (my-codex-ask-with-preset))
-                   (princ (if (featurep 'my-codex-git)
-                              "git-loaded"
-                            "git-missing"))
-                   (princ (if (featurep 'my-codex)
-                              " feature-loaded"
-                            " feature-missing"))))
-               (output
-                (with-temp-buffer
-                  (let ((exit-code
-                         (let ((default-directory root))
-                           (call-process invocation-name nil t nil
-                                         "--batch" "-Q" "-L" load-path-root
-                                         "--eval" (prin1-to-string script)))))
-                    (unless (zerop exit-code)
-                      (error "Nested Emacs failed: %s" (buffer-string)))
-                    (buffer-string)))))
-          (should (string-match-p "Refactor prompt" output))
-          (should (string-match-p "git-loaded" output))
-          (should (string-match-p "feature-missing" output))
-          (should-not (string-match-p "void-function" output)))
-      (delete-directory root t))))
-
 (defun my-codex-test--init-git-repository ()
   "Initialize a Git repository in `default-directory'."
   (unless (executable-find "git")

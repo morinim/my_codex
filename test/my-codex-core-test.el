@@ -80,6 +80,15 @@
   (let ((system-type 'gnu/linux))
     (should (eq (my-codex-default-terminal-backend) 'vterm))))
 
+(ert-deftest my-codex-project-files-returns-sorted-relative-paths ()
+  (cl-letf (((symbol-function 'project-current)
+             (lambda (&rest _args) 'test-project))
+            ((symbol-function 'project-files)
+             (lambda (_project)
+               '("/project/z.el" "/project/lib/a.el"))))
+    (should (equal (my-codex--project-files "/project/")
+                   '("lib/a.el" "z.el")))))
+
 (ert-deftest my-codex-setup-detects-available-agent-executables ()
   (let ((my-codex-agent-profiles
          '((first :commands ((read-only . "first --safe")))

@@ -928,6 +928,16 @@ PROJECT-ROOT.  SESSION-NAME selects a named rather than default session."
        (project-root project)
      default-directory)))
 
+(defun my-codex--project-files (root)
+  "Return project files relative to ROOT."
+  (let ((files
+         (when-let (project (project-current nil root))
+           (ignore-errors
+             (mapcar (lambda (file)
+                       (file-relative-name file root))
+                     (project-files project))))))
+    (sort (or files nil) #'string<)))
+
 (defun my-codex--project-key (&optional root)
   "Return the stable project key for ROOT or the current project."
   (file-name-as-directory
