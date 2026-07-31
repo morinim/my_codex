@@ -527,71 +527,36 @@
     (should (string-match-p "System\\\\ policy\\." command))
     (should (string-match-p "User\\\\ question\\." command))))
 
-(ert-deftest my-codex-command-with-initial-prompt-keeps-codex-args-for-antigravity ()
-  (let ((command (my-codex--command-with-initial-prompt
-                  'antigravity
-                  "codex --sandbox read-only"
-                  "User question.")))
-    (should (string-match-p "\\`codex --sandbox read-only " command))
-    (should (string-match-p "User\\\\ question\\." command))
-    (should-not (string-match-p "--prompt-interactive" command))))
+(ert-deftest my-codex-command-with-initial-prompt-uses-generic-default ()
+  (let ((my-codex-agent-profiles '((example :label "Example"))))
+    (should
+     (equal (my-codex--command-with-initial-prompt
+             'example "example --flag" "User question.")
+            "example --flag User\\ question."))))
 
-(ert-deftest my-codex-command-with-initial-prompt-keeps-env-codex-args-for-antigravity ()
-  (let ((command (my-codex--command-with-initial-prompt
-                  'antigravity
-                  "env FOO=1 codex --sandbox read-only"
-                  "User question.")))
-    (should (string-match-p "\\`env .* codex --sandbox read-only " command))
-    (should (string-match-p "User\\\\ question\\." command))
-    (should-not (string-match-p "--prompt-interactive" command))))
+(ert-deftest my-codex-command-with-initial-prompt-uses-profile-function ()
+  (let ((my-codex-agent-profiles
+         '((example
+            :label "Example"
+            :initial-prompt-function
+            (lambda (command prompt)
+              (format "%s --ask=%s" command prompt))))))
+    (should
+     (equal (my-codex--command-with-initial-prompt
+             'example "example" "Question")
+            "example --ask=Question"))))
 
-(ert-deftest my-codex-command-with-initial-prompt-ignores-env-option-value ()
-  (let ((command (my-codex--command-with-initial-prompt
-                  'antigravity
-                  "env -u codex agy --sandbox"
-                  "User question.")))
-    (should (string-match-p "\\`env -u codex agy --sandbox " command))
-    (should (string-match-p "--prompt-interactive" command))
-    (should (string-match-p "User\\\\ question\\." command))))
+(ert-deftest my-codex-command-with-initial-prompt-rejects-shell-pipeline ()
+  (should-error
+   (my-codex--command-with-initial-prompt
+    'codex "codex --some-option | tee session.log" "the prompt")
+   :type 'user-error))
 
-(ert-deftest my-codex-command-with-initial-prompt-preserves-shell-syntax-for-agy ()
-  (let ((command (my-codex--command-with-initial-prompt
-                  'antigravity
-                  "cd /repo && agy --sandbox"
-                  "User question.")))
-    (should (string-match-p "\\`cd /repo && agy --sandbox " command))
-    (should (string-match-p "--prompt-interactive" command))
-    (should (string-match-p "User\\\\ question\\." command))
-    (should-not (string-match-p "\\\\&\\\\&" command))))
-
-(ert-deftest my-codex-command-with-initial-prompt-preserves-shell-syntax-for-codex ()
-  (let ((command (my-codex--command-with-initial-prompt
-                  'codex
-                  "cd /repo && codex --sandbox read-only"
-                  "User question.")))
-    (should (string-match-p "\\`cd /repo && codex --sandbox read-only " command))
-    (should (string-match-p "User\\\\ question\\." command))
-    (should-not (string-match-p "\\\\&\\\\&" command))))
-
-(ert-deftest my-codex-command-with-initial-prompt-keeps-shell-codex-args-for-antigravity ()
-  (let ((command (my-codex--command-with-initial-prompt
-                  'antigravity
-                  "cd /repo && codex --sandbox read-only"
-                  "User question.")))
-    (should (string-match-p "\\`cd /repo && codex --sandbox read-only " command))
-    (should (string-match-p "User\\\\ question\\." command))
-    (should-not (string-match-p "--prompt-interactive" command))
-    (should-not (string-match-p "\\\\&\\\\&" command))))
-
-(ert-deftest my-codex-command-with-initial-prompt-ignores-codex-option-value ()
-  (let ((command (my-codex--command-with-initial-prompt
-                  'antigravity
-                  "cd /repo && agy --profile codex"
-                  "User question.")))
-    (should (string-match-p "\\`cd /repo && agy --profile codex " command))
-    (should (string-match-p "--prompt-interactive" command))
-    (should (string-match-p "User\\\\ question\\." command))
-    (should-not (string-match-p "\\\\&\\\\&" command))))
+(ert-deftest my-codex-command-with-initial-prompt-rejects-shell-chain ()
+  (should-error
+   (my-codex--command-with-initial-prompt
+    'antigravity "cd /repo && agy --sandbox" "User question.")
+   :type 'user-error))
 
 (ert-deftest my-codex-ask-secondary-remark-uses-secondary-prompt-label ()
   (let* ((root (file-name-as-directory (make-temp-file "my-codex-remark" t)))
@@ -603,6 +568,7 @@
             (antigravity
              :label "Antigravity"
              :buffer-prefix "agy"
+             :initial-prompt-function my-codex--antigravity-initial-prompt
              :commands ((read-only . "agy-ro")))))
          (primary (get-buffer-create "*my-codex-primary-remark*"))
          read-prompt)
@@ -654,6 +620,7 @@
             (antigravity
              :label "Antigravity"
              :buffer-prefix "agy"
+             :initial-prompt-function my-codex--antigravity-initial-prompt
              :commands ((read-only . "agy-ro")))))
          (my-codex-secondary-remark-session-name "remark")
          (primary (get-buffer-create "*my-codex-primary-remark*"))
@@ -720,6 +687,7 @@
             (antigravity
              :label "Antigravity"
              :buffer-prefix "agy"
+             :initial-prompt-function my-codex--antigravity-initial-prompt
              :commands ((read-only . "agy-ro")))))
          (my-codex-secondary-remark-session-name "remark")
          (primary (get-buffer-create "*my-codex-primary-remark*"))

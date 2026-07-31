@@ -106,6 +106,42 @@ different profile interactively."
   :type 'symbol
   :group 'my-codex-sessions)
 
+(defun my-codex--simple-command-args (command)
+  "Return argv parsed from simple shell COMMAND.
+Signal a user error when COMMAND contains shell syntax or cannot be parsed."
+  (when (string-match-p "[;&|<>`$()]" command)
+    (user-error "Initial prompts require a simple agent command"))
+  (condition-case nil
+      (split-string-and-unquote command)
+    (error
+     (user-error "Cannot parse agent command for an initial prompt"))))
+
+(defun my-codex--append-initial-prompt (command prompt)
+  "Return simple COMMAND with PROMPT appended as one argument."
+  (mapconcat #'shell-quote-argument
+             (append (my-codex--simple-command-args command) (list prompt))
+             " "))
+
+(defun my-codex--antigravity-initial-prompt (command prompt)
+  "Return simple Antigravity COMMAND configured with initial PROMPT."
+  (let ((args (my-codex--simple-command-args command))
+        done)
+    (cl-loop for tail on args
+             for arg = (car tail)
+             until done
+             do (cond
+                 ((member arg '("-i" "--prompt-interactive"))
+                  (if (cdr tail)
+                      (setcar (cdr tail) (concat (cadr tail) "\n\n" prompt))
+                    (setcdr tail (list prompt)))
+                  (setq done t))
+                 ((string-prefix-p "--prompt-interactive=" arg)
+                  (setcar tail (concat arg "\n\n" prompt))
+                  (setq done t))))
+    (unless done
+      (setq args (append args (list "--prompt-interactive" prompt))))
+    (mapconcat #'shell-quote-argument args " ")))
+
 (defcustom my-codex-agent-profiles
   '((codex
      :label "Codex"
@@ -120,6 +156,7 @@ different profile interactively."
      ("AGENTS.override.md" "AGENTS.md" "CODEX.md" ".codex/instructions.md")
      :instruction-strategy hierarchical-first
      :file-reference-format "@%s"
+     :initial-prompt-function my-codex--append-initial-prompt
      :doctor-function my-codex--doctor-codex-rows)
     (antigravity
      :label "Antigravity"
@@ -133,6 +170,7 @@ different profile interactively."
      ("ANTIGRAVITY.md" ".antigravity/instructions.md")
      :instruction-strategy root-all
      :file-reference-format "%s"
+     :initial-prompt-function my-codex--antigravity-initial-prompt
      :doctor-function nil))
   "Agent profiles available to my-codex.
 Each entry has the form:
@@ -146,16 +184,20 @@ Each entry has the form:
       :instruction-files (FILE ...)
       :instruction-strategy STRATEGY
       :file-reference-format FORMAT
+      :initial-prompt-function FUNCTION
       :doctor-function FUNCTION)
 
 ID is a symbol used for configuration and session metadata.  PREFIX is
 used in buffer names, so different agents can have sessions with the
 same project and session name without colliding.  STRATEGY is either
 `hierarchical-first' (select the first matching file in each directory)
-or `root-all' (select every matching file at the project root).  FUNCTION
-may be nil or a function returning backend-specific doctor rows.  FORMAT
-is a `format' string used for project-relative file references.  Each
-profile must contain exactly one command for every listed access mode."
+or `root-all' (select every matching file at the project root).  FORMAT
+is a `format' string used for project-relative file references.
+INITIAL-PROMPT-FUNCTION receives the configured command and prompt and
+returns the command to run; nil uses the generic argument-appending function.
+DOCTOR-FUNCTION may be nil or a function returning backend-specific doctor
+rows.  Each profile must contain exactly one command for every listed access
+mode."
   :type '(repeat
           (list :tag "Agent profile"
                 (symbol :tag "Identifier")
@@ -184,6 +226,10 @@ profile must contain exactly one command for every listed access mode."
                         (const root-all))
                 (const :format "" :value :file-reference-format)
                 (string :tag "File reference format")
+                (const :format "" :value :initial-prompt-function)
+                (choice :tag "Initial prompt function"
+                        (const :tag "Generic" nil)
+                        (function :tag "Function"))
                 (const :format "" :value :doctor-function)
                 (choice :tag "Doctor function"
                         (const :tag "None" nil)
@@ -193,7 +239,7 @@ profile must contain exactly one command for every listed access mode."
 (cl-defun my-codex-define-agent
     (id &key label buffer-prefix commands session-actions instruction-files
         (instruction-strategy 'root-all) (file-reference-format "%s")
-        doctor-function)
+        initial-prompt-function doctor-function)
   "Define or replace agent profile ID and return ID.
 COMMANDS is an alist containing exactly one shell command for each
 supported access mode: `read-only', `workspace-write', and `resume'.
@@ -227,6 +273,11 @@ keywords correspond to properties documented by
   (unless (and (stringp file-reference-format)
                (not (string-empty-p file-reference-format)))
     (error "Agent %s file reference format must be a non-empty string" id))
+  (unless (or (null initial-prompt-function)
+              (symbolp initial-prompt-function)
+              (functionp initial-prompt-function))
+    (error "Invalid initial prompt function for agent %s: %S"
+           id initial-prompt-function))
   (unless (or (null doctor-function) (symbolp doctor-function)
               (functionp doctor-function))
     (error "Invalid doctor function for agent %s: %S" id doctor-function))
@@ -238,6 +289,7 @@ keywords correspond to properties documented by
                :instruction-files instruction-files
                :instruction-strategy instruction-strategy
                :file-reference-format file-reference-format
+               :initial-prompt-function initial-prompt-function
                :doctor-function doctor-function)))
     (unless (stringp (plist-get profile :label))
       (error "Agent %s label must be a string" id))

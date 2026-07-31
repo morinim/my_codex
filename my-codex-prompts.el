@@ -1178,99 +1178,13 @@ When prompt preview is enabled, open it for review first."
          (mapcar #'symbol-name choices)
          nil t))))))
 
-(defun my-codex--shell-command-args (command)
-  "Return shell-like argv for COMMAND, or nil when it cannot be parsed."
-  (condition-case nil
-      (split-string-and-unquote command)
-    (error nil)))
-
-(defun my-codex--join-shell-command-args (args)
-  "Return shell command text for ARGS."
-  (mapconcat #'shell-quote-argument args " "))
-
-(defun my-codex--shell-command-has-syntax-p (command)
-  "Return non-nil if COMMAND appears to use shell syntax."
-  (string-match-p "[;&|<>`$()]" command))
-
-(defun my-codex--shell-command-runs-program-p (args program)
-  "Return non-nil if ARGS run PROGRAM in command position."
-  (let ((command-position t)
-        (env-args nil)
-        (skip-env-option-value nil)
-        found)
-    (while (and args (not found))
-      (let ((arg (pop args)))
-        (cond
-         ((member arg '(";" "&&" "||" "|"))
-          (setq command-position t
-                env-args nil
-                skip-env-option-value nil))
-         ((and command-position (string= arg "env"))
-          (setq env-args t))
-         (skip-env-option-value
-          (setq skip-env-option-value nil))
-         ((and env-args
-               (member arg '("-u" "--unset" "-C" "--chdir")))
-          (setq skip-env-option-value t))
-         ((and env-args
-               (or (string-prefix-p "-" arg)
-                   (string-match-p "\\`[[:alnum:]_]+=" arg)))
-          nil)
-         (env-args
-          (setq found (string= (file-name-nondirectory arg) program)
-                command-position nil
-                env-args nil))
-         (command-position
-          (setq found (string= (file-name-nondirectory arg) program)
-                command-position nil)))))
-    found))
-
-(defun my-codex--agy-args-with-initial-prompt (args prompt)
-  "Return AGY ARGS with PROMPT passed as the interactive initial prompt."
-  (let ((args (copy-sequence args))
-        done)
-    (cl-loop for tail on args
-             for arg = (car tail)
-             until done
-             do (cond
-                 ((or (string= arg "-i")
-                      (string= arg "--prompt-interactive"))
-                  (if (cdr tail)
-                      (setcar (cdr tail)
-                              (concat (cadr tail) "\n\n" prompt))
-                    (setcdr tail (list prompt)))
-                  (setq done t))
-                 ((string-prefix-p "--prompt-interactive=" arg)
-                  (setcar tail
-                          (concat arg "\n\n" prompt))
-                  (setq done t))))
-    (if done
-        args
-      (append args (list "--prompt-interactive" prompt)))))
-
 (defun my-codex--command-with-initial-prompt (agent command prompt)
   "Return AGENT COMMAND adjusted to start with initial PROMPT."
-  (let* ((args (my-codex--shell-command-args command))
-         (program (and args (file-name-nondirectory (car args)))))
-    (cond
-     ((null args)
-      (concat command " " (shell-quote-argument prompt)))
-     ((my-codex--shell-command-has-syntax-p command)
-      (concat command " "
-              (if (and (eq agent 'antigravity)
-                       (not (my-codex--shell-command-runs-program-p
-                             args "codex")))
-                  (concat "--prompt-interactive "
-                          (shell-quote-argument prompt))
-                (shell-quote-argument prompt))))
-     ((or (string= program "agy")
-          (and (eq agent 'antigravity)
-               (not (my-codex--shell-command-runs-program-p
-                     args "codex"))))
-      (my-codex--join-shell-command-args
-       (my-codex--agy-args-with-initial-prompt args prompt)))
-     (t
-      (my-codex--join-shell-command-args (append args (list prompt)))))))
+  (let ((function
+         (or (plist-get (my-codex--agent-profile agent)
+                        :initial-prompt-function)
+             #'my-codex--append-initial-prompt)))
+    (funcall function command prompt)))
 
 (defun my-codex--secondary-ask-prompt (prompt primary-buffer)
   "Return secondary-agent prompt for PROMPT from PRIMARY-BUFFER."

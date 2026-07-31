@@ -647,9 +647,23 @@
     (should (equal (my-codex--agent-buffer-prefix 'example) "example"))
     (should (equal (my-codex--agent-command 'example 'resume)
                    "example resume"))
+    (should-not (plist-get (my-codex--agent-profile 'example)
+                           :initial-prompt-function))
     (should (equal (plist-get (my-codex--agent-profile 'example)
                               :instruction-strategy)
                    'root-all))))
+
+(ert-deftest my-codex-define-agent-stores-initial-prompt-function ()
+  (let (my-codex-agent-profiles)
+    (my-codex-define-agent
+     'example
+     :commands '((read-only . "example --read-only")
+                 (workspace-write . "example")
+                 (resume . "example resume"))
+     :initial-prompt-function #'my-codex--append-initial-prompt)
+    (should (eq (plist-get (my-codex--agent-profile 'example)
+                           :initial-prompt-function)
+                #'my-codex--append-initial-prompt))))
 
 (ert-deftest my-codex-agent-profile-custom-type-accepts-command-orderings ()
   (require 'wid-edit)
@@ -684,6 +698,13 @@
     (should-error
      (my-codex-define-agent
       'example :commands '((unknown . "example"))))
+    (should-error
+     (my-codex-define-agent
+      'example
+      :commands '((read-only . "example --read-only")
+                  (workspace-write . "example")
+                  (resume . "example resume"))
+      :initial-prompt-function 42))
     (dolist (commands
              '(((workspace-write . "example")
                 (resume . "example resume"))
