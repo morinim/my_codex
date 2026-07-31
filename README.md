@@ -122,7 +122,7 @@ refresh Git information.
 ### Prompts & Refactoring
 
 - `F8 a` / `F8 A` : ask a free-form question or open the Ask menu.
-- `F8 A s` : ask a secondary agent; the Ask menu also contains customisable prompt presets.
+- `F8 A e` / `F8 A s` : edit and resend the last prompt, or ask a secondary agent; the Ask menu also contains customisable prompt presets. Prompt histories remain in memory and are excluded from `savehist`.
 - `F8 s` / `F8 Right` : send the selected region when active, otherwise inspect the current file.
 - `F8 r` : draft a low-risk refactoring plan for the selected region.
 - `F8 Left` / `F8 TAB` : insert agent text into code, or toggle focus between code and agent.

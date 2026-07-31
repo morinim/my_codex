@@ -327,6 +327,91 @@
           (should (equal (oref secondary-suffix key) "s")))
       (transient-quit-all))))
 
+(ert-deftest my-codex-prompt-preset-transient-includes-edit-last-prompt ()
+  (let ((my-codex-prompt-presets
+         (cl-loop for index from 1 to 15
+                  collect (cons (format "Preset %d" index) "Prompt"))))
+    (transient-setup 'my-codex-ask-preset-transient)
+    (unwind-protect
+        (let ((suffix
+               (seq-find
+                (lambda (item)
+                  (and (slot-exists-p item 'command)
+                       (eq (oref item command) 'my-codex-edit-last-prompt)))
+                transient--suffixes)))
+          (should suffix)
+          (should (equal (oref suffix key) "e")))
+      (transient-quit-all))))
+
+(ert-deftest my-codex-prompt-preset-keys-reserve-edit-last-key ()
+  (should-not (member "e" my-codex--preset-transient-keys)))
+
+(ert-deftest my-codex-prompt-histories-are-excluded-from-savehist ()
+  (require 'savehist)
+  (should (memq 'my-codex-prompt-history savehist-ignored-variables))
+  (should (memq 'my-codex-additional-instructions-history
+                savehist-ignored-variables)))
+
+(ert-deftest my-codex-ask-uses-prompt-history ()
+  (let (history sent)
+    (cl-letf (((symbol-function 'read-string)
+               (lambda (_prompt _initial history-variable &rest _args)
+                 (setq history history-variable)
+                 "Question"))
+              ((symbol-function 'my-codex--ask-prompt-label)
+               (lambda () "Codex"))
+              ((symbol-function 'my-codex--preview-and-send-prompt)
+               (lambda (prompt &rest _args) (setq sent prompt))))
+      (call-interactively #'my-codex-ask)
+      (should (eq history 'my-codex-prompt-history))
+      (should (equal sent "Question")))))
+
+(ert-deftest my-codex-edit-last-prompt-forces-preview ()
+  (let ((my-codex-prompt-history '("Previous question"))
+        call)
+    (cl-letf (((symbol-function 'my-codex--preview-and-send-prompt)
+               (lambda (&rest args) (setq call args))))
+      (my-codex-edit-last-prompt)
+      (should (equal call
+                     '("Previous question" nil t
+                       my-codex-prompt-history))))))
+
+(ert-deftest my-codex-edit-last-prompt-requires-history ()
+  (let ((my-codex-prompt-history nil))
+    (should-error (my-codex-edit-last-prompt) :type 'user-error)))
+
+(ert-deftest my-codex-finish-prompt-preview-records-edited-prompt ()
+  (let ((buffer (generate-new-buffer " *my-codex-edited-prompt*"))
+        (my-codex-prompt-history '("Original prompt"))
+        sent)
+    (unwind-protect
+        (progn
+          (with-current-buffer buffer
+            (insert "Edited prompt")
+            (setq-local my-codex--prompt-preview-history-variable
+                        'my-codex-prompt-history)
+            (cl-letf (((symbol-function 'my-codex-send-prompt)
+                       (lambda (prompt &optional _target)
+                         (setq sent prompt))))
+              (my-codex--finish-prompt-preview)))
+          (should (equal sent "Edited prompt"))
+          (should (equal (car my-codex-prompt-history) "Edited prompt")))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
+
+(ert-deftest my-codex-additional-instructions-use-separate-history ()
+  (let (history)
+    (cl-letf (((symbol-function 'my-codex-project-root)
+               (lambda () default-directory))
+              ((symbol-function 'my-codex--project-files)
+               (lambda (_root) nil))
+              ((symbol-function 'read-string)
+               (lambda (_prompt _initial history-variable &rest _args)
+                 (setq history history-variable)
+                 "Extra")))
+      (should (equal (my-codex--read-additional-instructions) "Extra"))
+      (should (eq history 'my-codex-additional-instructions-history)))))
+
 (ert-deftest my-codex-display-buffer-action-alist-returns-action-alist ()
   (let ((my-codex-display-buffer-action
          '((display-buffer-in-side-window)
@@ -571,7 +656,7 @@
              :initial-prompt-function my-codex--antigravity-initial-prompt
              :commands ((read-only . "agy-ro")))))
          (primary (get-buffer-create "*my-codex-primary-remark*"))
-         read-prompt)
+         read-prompt read-history)
     (unwind-protect
         (let ((default-directory root))
           (my-codex--mark-named-session
@@ -584,8 +669,9 @@
                     ((symbol-function 'process-live-p)
                      (lambda (process) process))
                     ((symbol-function 'read-string)
-                     (lambda (prompt &rest _args)
+                     (lambda (prompt _initial history &rest _args)
                        (setq read-prompt prompt)
+                       (setq read-history history)
                        "How should this be designed?"))
                     ((symbol-function 'my-codex--read-secondary-agent)
                      (lambda (&optional _primary-agent) 'antigravity))
@@ -599,7 +685,8 @@
                     ((symbol-function 'my-codex--request-marked-output)
                      (lambda (&rest _args))))
             (call-interactively #'my-codex-ask-secondary-remark)
-            (should (equal read-prompt "Ask secondary agent: "))))
+            (should (equal read-prompt "Ask secondary agent: "))
+            (should (eq read-history 'my-codex-prompt-history))))
       (set-window-parameter (selected-window) 'my-codex-term-buffer nil)
       (when (buffer-live-p primary)
         (kill-buffer primary))

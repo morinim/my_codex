@@ -23,11 +23,24 @@
 (require 'my-codex-core)
 (require 'my-codex-layout)
 
+(defvar savehist-ignored-variables)
+(defvar my-codex-prompt-history nil
+  "History of prompts entered through my-codex commands.")
+(defvar my-codex-additional-instructions-history nil
+  "History of additional instructions entered for prompt presets.")
+
+(with-eval-after-load 'savehist
+  (add-to-list 'savehist-ignored-variables 'my-codex-prompt-history)
+  (add-to-list 'savehist-ignored-variables
+               'my-codex-additional-instructions-history))
+
 (defvar my-codex--prompt-preview-origin-window)
 (defvar-local my-codex--prompt-preview-target-buffer nil
   "Agent session buffer targeted by the current prompt preview.")
 (defvar-local my-codex--prompt-preview-sent-message nil
   "Message to display after sending the current prompt preview.")
+(defvar-local my-codex--prompt-preview-history-variable nil
+  "History variable to update after sending the current prompt preview.")
 (defvar my-codex--region-send-override nil
   "Dynamically override region delivery with `reference' or `inline'.")
 (defcustom my-codex-test-coverage-prompt
@@ -485,6 +498,8 @@ marker, begin marker and end marker before PROMPT is sent."
       (user-error "Prompt is empty"))
     (let ((default-directory root))
       (my-codex-send-prompt prompt my-codex--prompt-preview-target-buffer))
+    (when my-codex--prompt-preview-history-variable
+      (add-to-history my-codex--prompt-preview-history-variable prompt))
     (when my-codex--prompt-preview-sent-message
       (message "%s" my-codex--prompt-preview-sent-message))
     (when (buffer-live-p buffer)
@@ -499,13 +514,16 @@ marker, begin marker and end marker before PROMPT is sent."
       (select-window origin-window)))
   (message "Agent prompt cancelled."))
 
-(defun my-codex--preview-and-send-prompt (prompt &optional sent-message)
+(defun my-codex--preview-and-send-prompt
+    (prompt &optional sent-message force-preview history-variable)
   "Preview PROMPT before sending it to the agent when enabled.
-Display SENT-MESSAGE after the prompt is sent."
+Display SENT-MESSAGE after the prompt is sent.  When FORCE-PREVIEW is
+non-nil, show the preview regardless of `my-codex-enable-prompt-preview'.
+When previewing, add the final sent text to HISTORY-VARIABLE when non-nil."
   (let* ((root (my-codex-project-root))
          (origin-window (selected-window))
          (target-buffer (my-codex--prompt-target-buffer origin-window)))
-    (if my-codex-enable-prompt-preview
+    (if (or force-preview my-codex-enable-prompt-preview)
         (let ((buffer (get-buffer-create
                        (my-codex--prompt-preview-buffer-name root))))
           (my-codex--display-prompt-preview-buffer buffer origin-window)
@@ -518,6 +536,8 @@ Display SENT-MESSAGE after the prompt is sent."
           (setq-local my-codex--prompt-preview-origin-window origin-window)
           (setq-local my-codex--prompt-preview-target-buffer target-buffer)
           (setq-local my-codex--prompt-preview-sent-message sent-message)
+          (setq-local my-codex--prompt-preview-history-variable
+                      history-variable)
           (my-codex--update-prompt-preview-header)
           (add-hook 'after-change-functions
                     #'my-codex--update-prompt-preview-header nil t)
@@ -1157,10 +1177,21 @@ buffer; otherwise use the active region or the whole subject buffer."
   "Read PROMPT in the minibuffer and submit it to the active agent.
 When prompt preview is enabled, open it for review first."
   (interactive
-   (list (read-string (format "Ask %s: " (my-codex--ask-prompt-label)))))
+   (list (read-string (format "Ask %s: " (my-codex--ask-prompt-label))
+                      nil 'my-codex-prompt-history)))
   (when (string-blank-p prompt)
     (user-error "Prompt cannot be empty"))
-  (my-codex--preview-and-send-prompt prompt))
+  (my-codex--preview-and-send-prompt
+   prompt nil nil 'my-codex-prompt-history))
+
+;;;###autoload
+(defun my-codex-edit-last-prompt ()
+  "Edit and resend the latest prompt entered through a my-codex command."
+  (interactive)
+  (unless my-codex-prompt-history
+    (user-error "No previous prompt to edit"))
+  (my-codex--preview-and-send-prompt
+   (car my-codex-prompt-history) nil t 'my-codex-prompt-history))
 
 (defun my-codex--read-secondary-agent (&optional primary-agent)
   "Read an agent profile other than PRIMARY-AGENT."
@@ -1211,7 +1242,8 @@ When prompt preview is enabled, open it for review first."
   "Ask SECONDARY-AGENT PROMPT without waiting for its answer."
   (interactive
    (let* ((prompt (read-string
-                   "Ask secondary agent: "))
+                   "Ask secondary agent: " nil
+                   'my-codex-prompt-history))
           (primary-buffer (my-codex-active-session-buffer t)))
      (when (string-blank-p prompt)
        (user-error "Prompt cannot be empty"))
@@ -1297,7 +1329,8 @@ after the at-sign with `completion-at-point'."
               (keymap-set map "TAB" #'completion-at-point)
               (keymap-set map "<tab>" #'completion-at-point)
               (use-local-map map))))
-      (read-string "Additional instructions (optional): "))))
+      (read-string "Additional instructions (optional): " nil
+                   'my-codex-additional-instructions-history))))
 
 (defun my-codex--ask-with-prompt-preset (preset)
   "Send PRESET, optionally including extra instructions and the active region."
@@ -1326,7 +1359,7 @@ When a region is active, include exact file and line context for it."
 
 (defconst my-codex--preset-transient-keys
   '("1" "2" "3" "4" "5" "6" "7" "8" "9" "0"
-    "a" "b" "c" "d" "e" "f" "g" "h" "j" "k" "l" "n" "u" "v" "x" "y" "z")
+    "a" "b" "c" "d" "f" "g" "h" "j" "k" "l" "n" "u" "v" "x" "y" "z")
   "Keys used for dynamically generated prompt preset transient suffixes.")
 
 (defvar my-codex--prompt-preset-transient-presets nil
@@ -1380,7 +1413,8 @@ When a region is active, include exact file and line context for it."
   "Show additional ways to ask agents."
   [:description my-codex--transient-target-description]
   ["Ask"
-   ("s" "Secondary agent" my-codex-ask-secondary-remark)]
+   ("s" "Secondary agent" my-codex-ask-secondary-remark)
+   ("e" "Edit last prompt" my-codex-edit-last-prompt)]
   [:class transient-column
    :description "Presets"
    :setup-children my-codex--prompt-preset-transient-suffixes

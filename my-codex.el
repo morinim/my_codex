@@ -5,7 +5,7 @@
 ;; Author: Manlio Morini
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/morinim/my_codex
-;; Version: 0.105.0
+;; Version: 0.106.0
 ;; Package-Requires: ((emacs "29.1") (transient "0"))
 
 ;; This file is not part of GNU Emacs.
@@ -60,6 +60,7 @@
            (my-codex-summarise-document . "my-codex-prompts")
            (my-codex-open-project-instructions . "my-codex-prompts")
            (my-codex-ask . "my-codex-prompts")
+           (my-codex-edit-last-prompt . "my-codex-prompts")
            (my-codex-ask-secondary-remark . "my-codex-prompts")
            (my-codex-ask-preset-transient . "my-codex-prompts")
            (my-codex-send-project-overview . "my-codex-git")
@@ -396,6 +397,7 @@ computed from the subject buffer unless the predicate is itself left-aware."
       (:command my-codex-toggle-focus :key "TAB")
       (:command my-codex-ask :key "a" :label "Ask" :group "Send" :menu "Ask agent..." :help "Prompt for a question and send it to the active agent")
       (:command my-codex-ask-preset-transient :key "A" :label "Ask menu" :group "Send" :menu "Ask menu" :help "Open secondary-agent and prompt preset commands")
+      (:command my-codex-edit-last-prompt :key "e" :label "Edit last prompt" :prefix my-codex-ask-preset-transient :menu "Edit last prompt..." :help "Edit and resend the latest prompt entered through a my-codex command")
       (:command my-codex-ask-secondary-remark :key "s" :label "Secondary agent" :prefix my-codex-ask-preset-transient :menu "Ask secondary agent..." :help "Ask another agent the same question in a secondary session")
       (:command my-codex-send-region-or-current-file :key "s" :label "Region or file" :group "Send" :contexts (code unknown) :help "Send the selected region, or ask the active agent to inspect the current file")
       (:command my-codex-send-region-or-current-file :key "s" :label "Region or doc" :group "Send" :contexts (document) :help "Send the selected region, or ask the active agent to inspect the current document")
