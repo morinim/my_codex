@@ -1714,6 +1714,54 @@
               '((vterm . 1) (eat . 1) (vterm . -1) (eat . -1))))
       (should (equal (nreverse auto-revert-calls) '(1 -1))))))
 
+(ert-deftest my-codex-unsaved-project-buffers-policy-can-ignore ()
+  (let ((my-codex-warn-about-unsaved-project-buffers nil))
+    (cl-letf (((symbol-function 'my-codex-modified-project-buffers)
+               (lambda () (ert-fail "Inspected buffers while policy was nil"))))
+      (should-not (my-codex--check-unsaved-project-buffers)))))
+
+(ert-deftest my-codex-unsaved-project-buffers-policy-warns-persistently ()
+  (let ((my-codex-warn-about-unsaved-project-buffers 'warning)
+        (buffer (get-buffer-create "*my-codex-unsaved-test*"))
+        warning)
+    (unwind-protect
+        (cl-letf (((symbol-function 'my-codex-modified-project-buffers)
+                   (lambda () (list buffer)))
+                  ((symbol-function 'display-warning)
+                   (lambda (type message level &rest _)
+                     (setq warning (list type message level)))))
+          (my-codex--check-unsaved-project-buffers)
+          (should
+           (equal warning
+                  '(my-codex
+                    "Unsaved project buffer(s): *my-codex-unsaved-test*"
+                    :warning))))
+      (kill-buffer buffer))))
+
+(ert-deftest my-codex-unsaved-project-buffers-policy-confirms ()
+  (let ((my-codex-warn-about-unsaved-project-buffers 'confirm)
+        (buffer (get-buffer-create "*my-codex-unsaved-test*")))
+    (unwind-protect
+        (cl-letf (((symbol-function 'my-codex-modified-project-buffers)
+                   (lambda () (list buffer)))
+                  ((symbol-function 'y-or-n-p) (lambda (_prompt) nil)))
+          (should-error (my-codex--check-unsaved-project-buffers)
+                        :type 'user-error))
+      (kill-buffer buffer))))
+
+(ert-deftest my-codex-unsaved-project-buffers-policy-supports-legacy-t ()
+  (let ((my-codex-warn-about-unsaved-project-buffers t)
+        (buffer (get-buffer-create "*my-codex-unsaved-test*"))
+        warned)
+    (unwind-protect
+        (cl-letf (((symbol-function 'my-codex-modified-project-buffers)
+                   (lambda () (list buffer)))
+                  ((symbol-function 'display-warning)
+                   (lambda (&rest _) (setq warned t))))
+          (my-codex--check-unsaved-project-buffers)
+          (should warned))
+      (kill-buffer buffer))))
+
 (provide 'my-codex-core-test)
 
 ;;; my-codex-core-test.el ends here

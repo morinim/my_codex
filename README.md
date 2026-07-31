@@ -147,7 +147,7 @@ Only active in document buffers (e.g. Markdown, Org, txt):
 - `F8 g d` / `F8 g D` : ediff the current or a changed file against `HEAD`.
 - `F8 c` : draft or reuse an agent-generated commit message, edit it, then commit.
 - `F8 M` : summarise the session to Markdown notes.
-- `F8 t l` / `F8 t d` : list open GitHub issues, or draft a GitHub issue from the session.
+- `F8 t l` / `F8 t d` : list open GitHub issues (`RET` views, `b` browses, `g` refreshes), or draft an issue from the session.
 
 ### Diagnostics, Build & Instructions
 

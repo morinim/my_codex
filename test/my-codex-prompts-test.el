@@ -855,7 +855,7 @@
         (progn
           (my-codex--mark-named-session
            target "review" root 'workspace-write 'antigravity 'vterm)
-          (cl-letf (((symbol-function 'my-codex--warn-about-unsaved-project-buffers)
+          (cl-letf (((symbol-function 'my-codex--check-unsaved-project-buffers)
                      #'ignore)
                     ((symbol-function 'get-buffer-process)
                      (lambda (buffer) (eq buffer target)))
@@ -881,7 +881,7 @@
 (ert-deftest my-codex-send-prompt-explains-how-to-start-session ()
   (let ((my-codex-prompt-warning-tokens nil))
     (cl-letf (((symbol-function
-                'my-codex--warn-about-unsaved-project-buffers)
+                'my-codex--check-unsaved-project-buffers)
                #'ignore)
               ((symbol-function 'my-codex-active-session-buffer)
                (lambda (&rest _args) nil)))
@@ -914,7 +914,7 @@
         (cl-letf (((symbol-function 'project-current)
                    (lambda (&rest _args) nil))
                   ((symbol-function
-                    'my-codex--warn-about-unsaved-project-buffers)
+                    'my-codex--check-unsaved-project-buffers)
                    #'ignore))
           (condition-case err
               (progn
@@ -996,7 +996,7 @@
           (my-codex--mark-named-session
            target "review" root 'workspace-write 'antigravity)
           (cl-letf (((symbol-function
-                      'my-codex--warn-about-unsaved-project-buffers)
+                      'my-codex--check-unsaved-project-buffers)
                      #'ignore)
                     ((symbol-function 'get-buffer-process)
                      (lambda (buffer) (eq buffer target)))
@@ -1139,7 +1139,7 @@
           (set-window-parameter (selected-window) 'my-codex-term-buffer target)
           (cl-letf (((symbol-function 'project-current)
                      (lambda (&rest _args) nil))
-                    ((symbol-function 'my-codex--warn-about-unsaved-project-buffers)
+                    ((symbol-function 'my-codex--check-unsaved-project-buffers)
                      #'ignore)
                     ((symbol-function 'get-buffer-process)
                      (lambda (buffer) (eq buffer target)))

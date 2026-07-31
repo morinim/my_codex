@@ -425,9 +425,15 @@ When nil, use `compile-command'."
                  string)
   :group 'my-codex-integrations)
 
-(defcustom my-codex-warn-about-unsaved-project-buffers t
-  "When non-nil, warn before sending prompts if project buffers are unsaved."
-  :type 'boolean
+(defcustom my-codex-warn-about-unsaved-project-buffers 'warning
+  "How to handle unsaved project buffers before sending a prompt.
+When nil, ignore them.  When `warning', display a persistent warning.  When
+`confirm', ask before sending the prompt.  The legacy value t is treated as
+`warning'."
+  :type '(choice
+          (const :tag "Ignore" nil)
+          (const :tag "Show warning" warning)
+          (const :tag "Ask before sending" confirm))
   :group 'my-codex-sessions)
 
 (defun my-codex-modified-project-buffers ()
@@ -445,11 +451,32 @@ When nil, use `compile-command'."
                   (buffer-list)))))
 
 (defun my-codex--warn-about-unsaved-project-buffers ()
-  "Display a non-blocking warning if project buffers have unsaved changes."
+  "Display a persistent warning if project buffers have unsaved changes."
   (when my-codex-warn-about-unsaved-project-buffers
     (when-let (buffers (my-codex-modified-project-buffers))
-      (message "Agent warning: unsaved buffer(s): %s"
-               (mapconcat #'buffer-name buffers ", ")))))
+      (display-warning
+       'my-codex
+       (format "Unsaved project buffer(s): %s"
+               (mapconcat #'buffer-name buffers ", "))
+       :warning))))
+
+(defun my-codex--check-unsaved-project-buffers ()
+  "Apply the unsaved project buffer policy before sending."
+  (when-let (buffers (and my-codex-warn-about-unsaved-project-buffers
+                          (my-codex-modified-project-buffers)))
+    (let ((names (mapconcat #'buffer-name buffers ", ")))
+      (pcase my-codex-warn-about-unsaved-project-buffers
+        ((pred (lambda (policy) (memq policy '(warning t))))
+         (display-warning 'my-codex
+                          (format "Unsaved project buffer(s): %s" names)
+                          :warning))
+        ('confirm
+         (unless (y-or-n-p
+                  (format "Send with unsaved project buffer(s) (%s)? " names))
+           (user-error "Prompt cancelled due to unsaved project buffers")))
+        (_
+         (error "Unknown unsaved project buffers policy: %S"
+                my-codex-warn-about-unsaved-project-buffers))))))
 
 (defcustom my-codex-enable-global-auto-revert t
   "When non-nil, enable `global-auto-revert-mode' with `my-codex-global-mode'.

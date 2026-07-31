@@ -14,7 +14,10 @@
 
 ;;; Code:
 
+(require 'browse-url)
+(require 'json)
 (require 'subr-x)
+(require 'tabulated-list)
 (require 'my-codex-core)
 (require 'my-codex-prompts)
 
@@ -23,6 +26,15 @@
 
 (defvar-local my-codex--github-issue-repository nil
   "GitHub repository selected for the current issue draft.")
+
+(defvar-local my-codex--github-issue-list-process nil
+  "Current refresh process for a GitHub issue list buffer.")
+
+(defvar-local my-codex--github-issue-list-items nil
+  "Alist of issue numbers and data in a GitHub issue list buffer.")
+
+(defvar-local my-codex--github-issue-view-process nil
+  "Current `gh issue view' process for a GitHub issue buffer.")
 
 (defcustom my-codex-github-issue-summary-prompt
   "Summarise our conversation so far as a GitHub issue draft.
@@ -58,30 +70,193 @@ Preserve concrete file names, command names, and technical details. Do not edit 
                                   purpose)))))
     (format "*%s %s:%s*" label description (my-codex--safe-root-name root))))
 
+(defun my-codex--github-issue-list-entry (issue)
+  "Return a tabulated list entry for ISSUE."
+  (let* ((number (alist-get 'number issue))
+         (author (alist-get 'author issue))
+         (updated (or (alist-get 'updatedAt issue) "")))
+    (list number
+          (vector (number-to-string number)
+                  (or (alist-get 'title issue) "")
+                  (or (alist-get 'login author) "")
+                  (substring updated 0 (min 10 (length updated)))))))
+
+(defun my-codex--github-parse-issue-list-buffer ()
+  "Parse issue data in the current JSON buffer."
+  (goto-char (point-min))
+  (json-parse-buffer :object-type 'alist :array-type 'list
+                     :null-object nil :false-object nil))
+
+(defun my-codex--github-issue-list-show-error (buffer status stderr)
+  "Display failed issue-list output from BUFFER with exit STATUS and STDERR."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (goto-char (point-max))
+      (when (and (buffer-live-p stderr)
+                 (not (with-current-buffer stderr (= (buffer-size) 0))))
+        (insert "\nstderr:\n"
+                (with-current-buffer stderr (buffer-string))))
+      (insert (format "\nProcess exited with status %s\n" status))
+      (special-mode)
+      (rename-buffer "*my-codex open issues error*" t))
+    (display-buffer buffer)))
+
 (defun my-codex--github-issue-list-sentinel (proc _event)
   "Handle completion of open issue list process PROC."
   (when-let ((result (my-codex--process-result proc)))
     (let ((status (car result))
-          (buffer (cdr result))
-          (content-start (process-get proc 'my-codex-content-start)))
+          (output (cdr result))
+          (target (process-get proc 'my-codex-target-buffer))
+          (stderr (process-get proc 'my-codex-stderr-buffer))
+          keep-output)
+      (when (and (buffer-live-p target)
+                 (with-current-buffer target
+                   (eq proc my-codex--github-issue-list-process)))
+        (with-current-buffer target
+          (setq my-codex--github-issue-list-process nil))
+        (if (zerop status)
+            (condition-case err
+                (let ((issues (with-current-buffer output
+                                (my-codex--github-parse-issue-list-buffer))))
+                  (with-current-buffer target
+                    (setq my-codex--github-issue-list-items
+                          (mapcar (lambda (issue)
+                                    (cons (alist-get 'number issue) issue))
+                                  issues))
+                    (setq tabulated-list-entries
+                          (mapcar #'my-codex--github-issue-list-entry issues))
+                    (tabulated-list-print t))
+                  (message "Open issue list updated."))
+              (error
+               (setq keep-output t)
+               (my-codex--github-issue-list-show-error
+                output "invalid JSON" stderr)
+               (message "Unable to parse open issue list: %s"
+                        (error-message-string err))))
+          (setq keep-output t)
+          (my-codex--github-issue-list-show-error output status stderr)
+          (message "Open issue list failed.")))
+      (unless keep-output
+        (when (buffer-live-p output)
+          (kill-buffer output)))
+      (when (buffer-live-p stderr)
+        (kill-buffer stderr)))))
+
+(defun my-codex--github-issue-at-point ()
+  "Return issue data for the tabulated row at point."
+  (or (alist-get (tabulated-list-get-id)
+                 my-codex--github-issue-list-items)
+      (user-error "No GitHub issue on this row")))
+
+(defun my-codex-github-browse-issue ()
+  "Open the GitHub issue at point in a browser."
+  (interactive)
+  (browse-url (alist-get 'url (my-codex--github-issue-at-point))))
+
+(defun my-codex--github-issue-view-sentinel (proc _event)
+  "Finish displaying the issue viewed by PROC."
+  (when-let ((result (my-codex--process-result proc)))
+    (let ((status (car result))
+          (buffer (cdr result)))
       (when (buffer-live-p buffer)
         (with-current-buffer buffer
-          (let ((inhibit-read-only t))
-            (goto-char (point-max))
-            (cond
-             ((zerop status)
-              (when (and content-start (= (point-max) content-start))
-                (insert "No open issues.\n")))
-             (t
-              (insert (format "\nProcess %s exited with status %s\n"
-                              (process-name proc)
-                              status)))))
-          (goto-char (point-min))
-          (special-mode))
-        (unless (zerop status)
-          (display-buffer buffer))
-        (message "Open issue list %s."
-                 (if (zerop status) "updated" "failed"))))))
+          (when (eq proc my-codex--github-issue-view-process)
+            (setq my-codex--github-issue-view-process nil)
+            (let ((inhibit-read-only t))
+              (goto-char (point-max))
+              (unless (zerop status)
+                (insert (format "\nProcess exited with status %s\n" status))))
+            (goto-char (point-min))
+            (special-mode)
+            (message "GitHub issue view %s."
+                     (if (zerop status) "updated" "failed"))))))))
+
+(defun my-codex-github-view-issue ()
+  "View the GitHub issue at point in an Emacs buffer."
+  (interactive)
+  (let* ((issue (my-codex--github-issue-at-point))
+         (number (alist-get 'number issue))
+         (root default-directory)
+         (buffer (get-buffer-create
+                  (format "*GitHub issue #%s:%s*" number
+                          (my-codex--safe-root-name root)))))
+    (with-current-buffer buffer
+      (when-let ((old-process my-codex--github-issue-view-process))
+        (setq my-codex--github-issue-view-process nil)
+        (when (process-live-p old-process)
+          (delete-process old-process)))
+      (let ((inhibit-read-only t))
+        (erase-buffer))
+      (setq default-directory root))
+    (pop-to-buffer buffer)
+    (let ((process
+           (let ((default-directory root))
+             (make-process
+              :name (format "my-codex-github-issue-%s" number)
+              :buffer buffer
+              :command (list "gh" "issue" "view" (number-to-string number)
+                             "--comments")
+              :connection-type 'pipe
+              :noquery t
+              :sentinel #'my-codex--github-issue-view-sentinel))))
+      (with-current-buffer buffer
+        (setq my-codex--github-issue-view-process process))
+      process)))
+
+(defun my-codex--github-issue-number-less-p (first second)
+  "Return non-nil when issue entry FIRST has a lower number than SECOND."
+  (< (string-to-number (aref (cadr first) 0))
+     (string-to-number (aref (cadr second) 0))))
+
+(defvar-keymap my-codex-github-issue-list-mode-map
+  :parent tabulated-list-mode-map
+  "RET" #'my-codex-github-view-issue
+  "b" #'my-codex-github-browse-issue)
+
+(define-derived-mode my-codex-github-issue-list-mode tabulated-list-mode
+  "GitHub Issues"
+  "Major mode for browsing open GitHub issues."
+  (setq tabulated-list-format
+        [("#" 7 my-codex--github-issue-number-less-p)
+         ("Title" 50 t)
+         ("Author" 20 t)
+         ("Updated" 10 t)])
+  (setq tabulated-list-padding 1)
+  (setq revert-buffer-function #'my-codex--github-refresh-issue-list)
+  (setq-local header-line-format
+              "Open GitHub issues  [RET:View  b:Browser  g:Refresh]")
+  (tabulated-list-init-header))
+
+(defun my-codex--github-refresh-issue-list (&rest _)
+  "Refresh open issues in the current GitHub issue list buffer."
+  (unless (derived-mode-p 'my-codex-github-issue-list-mode)
+    (user-error "Not in a GitHub issue list buffer"))
+  (when-let ((old-process my-codex--github-issue-list-process))
+    (setq my-codex--github-issue-list-process nil)
+    (when (process-live-p old-process)
+      (delete-process old-process)))
+  (let* ((target (current-buffer))
+         (root default-directory)
+         (output (generate-new-buffer " *my-codex open issues output*"))
+         (stderr (generate-new-buffer " *my-codex open issues stderr*"))
+         (default-directory root)
+         (process
+          (make-process
+           :name "my-codex-open-issues"
+           :buffer output
+           :stderr stderr
+           :command (list "gh" "issue" "list"
+                          "--state" "open"
+                          "--limit" "100"
+                          "--json" "number,title,url,author,updatedAt")
+           :connection-type 'pipe
+           :noquery t
+           :sentinel #'my-codex--github-issue-list-sentinel)))
+    (process-put process 'my-codex-target-buffer target)
+    (process-put process 'my-codex-stderr-buffer stderr)
+    (setq my-codex--github-issue-list-process process)
+    (message "Listing open issues with gh...")
+    process))
 
 ;;;###autoload
 (defun my-codex-list-open-issues ()
@@ -93,27 +268,12 @@ Preserve concrete file names, command names, and technical details. Do not edit 
          (buffer
           (get-buffer-create (my-codex--github-buffer-name root 'issue-list))))
     (with-current-buffer buffer
-      (read-only-mode -1)
-      (let ((inhibit-read-only t))
-        (erase-buffer)
-        (insert (format "Open issues for %s\n\n" root)))
-      (setq default-directory root))
+      (setq default-directory root)
+      (unless (derived-mode-p 'my-codex-github-issue-list-mode)
+        (my-codex-github-issue-list-mode)))
     (pop-to-buffer buffer)
-    (let ((process
-           (let ((default-directory root))
-             (make-process
-              :name "my-codex-open-issues"
-              :buffer buffer
-              :command (list "gh" "issue" "list"
-                             "--state" "open"
-                             "--limit" "100")
-              :connection-type 'pipe
-              :noquery t
-              :sentinel #'my-codex--github-issue-list-sentinel))))
-      (process-put process 'my-codex-content-start
-                   (with-current-buffer buffer (point-max)))
-      (message "Listing open issues with gh...")
-      process)))
+    (with-current-buffer buffer
+      (my-codex--github-refresh-issue-list))))
 
 (defun my-codex--github-repository-name (root)
   "Return the GitHub repository name resolved by `gh' from ROOT."

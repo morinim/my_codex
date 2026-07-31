@@ -392,7 +392,7 @@ session is available."
 
 (defun my-codex-send-prompt (prompt &optional target-buffer)
   "Send PROMPT to the agent backend buffer and display it as configured."
-  (my-codex--warn-about-unsaved-project-buffers)
+  (my-codex--check-unsaved-project-buffers)
   (my-codex--check-prompt-size prompt)
   (let* ((buffer
           (or target-buffer
