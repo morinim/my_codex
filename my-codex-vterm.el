@@ -114,10 +114,7 @@
       (goto-char (point-max))
       (vterm-send-string prompt t)
       (vterm-send-return)
-      (my-codex--record-outbound-prompt buffer prompt)
-      (setq my-codex-session-last-activity (current-time))
-      (setq my-codex-session-prompt-count
-            (1+ (or my-codex-session-prompt-count 0))))))
+      (my-codex--record-outbound-prompt buffer prompt))))
 
 (autoload 'my-codex-transient-preserve-selection "my-codex" nil t)
 (declare-function vterm-yank "vterm" ())

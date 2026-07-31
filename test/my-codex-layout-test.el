@@ -245,6 +245,8 @@
                          (let ((buffer (get-buffer-create buffer-name)))
                            (my-codex--mark-named-session
                             buffer session project-root access agent)
+                           (with-current-buffer buffer
+                             (setq my-codex-session-last-activity nil))
                            buffer)))
                       ((symbol-function 'display-buffer)
                        (lambda (buffer &rest _args)
@@ -256,7 +258,9 @@
           (with-current-buffer buffer-name
             (should
              (= my-codex-session-prompt-token-estimate
-                (my-codex--approx-token-count prompt)))))
+                (my-codex--approx-token-count prompt)))
+            (should (= my-codex-session-prompt-count 1))
+            (should my-codex-session-last-activity)))
       (when-let ((buffer (get-buffer buffer-name)))
         (kill-buffer buffer))
       (delete-directory root t))))

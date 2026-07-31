@@ -587,7 +587,10 @@ unlimited."
   "Record PROMPT as outbound Emacs text for session BUFFER."
   (with-current-buffer buffer
     (cl-incf my-codex-session-prompt-token-estimate
-             (my-codex--approx-token-count prompt))))
+             (my-codex--approx-token-count prompt))
+    (setq my-codex-session-last-activity (current-time))
+    (setq my-codex-session-prompt-count
+          (1+ (or my-codex-session-prompt-count 0)))))
 
 (defface my-codex-workspace-write-face
   '((t :inherit warning :weight bold))

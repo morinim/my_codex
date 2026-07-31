@@ -181,10 +181,7 @@ When either bound is nil, use the corresponding buffer boundary."
       (if (fboundp 'eat-term-input-event)
           (eat-term-input-event eat-terminal 1 'return)
         (eat-term-send-string eat-terminal "\n"))
-      (my-codex--record-outbound-prompt buffer prompt)
-      (setq my-codex-session-last-activity (current-time))
-      (setq my-codex-session-prompt-count
-            (1+ (or my-codex-session-prompt-count 0))))))
+      (my-codex--record-outbound-prompt buffer prompt))))
 
 (autoload 'my-codex-transient-preserve-selection "my-codex" nil t)
 
