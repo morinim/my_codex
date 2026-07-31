@@ -154,7 +154,8 @@ same project and session name without colliding.  STRATEGY is either
 `hierarchical-first' (select the first matching file in each directory)
 or `root-all' (select every matching file at the project root).  FUNCTION
 may be nil or a function returning backend-specific doctor rows.  FORMAT
-is a `format' string used for project-relative file references."
+is a `format' string used for project-relative file references.  Each
+profile must contain exactly one command for every listed access mode."
   :type '(repeat
           (list :tag "Agent profile"
                 (symbol :tag "Identifier")
@@ -164,6 +165,9 @@ is a `format' string used for project-relative file references."
                 (string :tag "Buffer prefix")
                 (const :format "" :value :commands)
                 (alist :tag "Commands"
+                       :options ((read-only string)
+                                 (workspace-write string)
+                                 (resume string))
                        :key-type (choice (const read-only)
                                          (const workspace-write)
                                          (const resume))
@@ -191,8 +195,8 @@ is a `format' string used for project-relative file references."
         (instruction-strategy 'root-all) (file-reference-format "%s")
         doctor-function)
   "Define or replace agent profile ID and return ID.
-COMMANDS is an alist mapping access modes to shell commands.  Supported
-access modes are `read-only', `workspace-write', and `resume'.
+COMMANDS is an alist containing exactly one shell command for each
+supported access mode: `read-only', `workspace-write', and `resume'.
 SESSION-ACTIONS maps action symbols to text sent to the agent.
 INSTRUCTION-FILES lists project instruction file names.  The remaining
 keywords correspond to properties documented by
@@ -207,6 +211,9 @@ keywords correspond to properties documented by
                  (stringp (cdr command))
                  (not (string-empty-p (cdr command))))
       (error "Invalid command in agent %s: %S" id command)))
+  (dolist (access-mode '(read-only workspace-write resume))
+    (unless (= (cl-count access-mode commands :key #'car :test #'eq) 1)
+      (error "Agent %s must define exactly one %s command" id access-mode)))
   (dolist (action session-actions)
     (unless (and (consp action) (symbolp (car action))
                  (stringp (cdr action)) (not (string-empty-p (cdr action))))

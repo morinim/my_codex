@@ -651,12 +651,27 @@
                               :instruction-strategy)
                    'root-all))))
 
+(ert-deftest my-codex-agent-profile-custom-type-accepts-command-orderings ()
+  (require 'wid-edit)
+  (let* ((profile-type (cadr (get 'my-codex-agent-profiles 'custom-type)))
+         (commands-type
+          (seq-find (lambda (type)
+                      (and (listp type)
+                           (equal (plist-get (cdr type) :tag) "Commands")))
+                    (cdr profile-type)))
+         (commands '((resume . "example resume")
+                     (read-only . "example --read-only")
+                     (workspace-write . "example"))))
+    (should commands-type)
+    (should (widget-apply (widget-convert commands-type) :match commands))))
+
 (ert-deftest my-codex-define-agent-replaces-profile ()
   (let ((my-codex-agent-profiles '((example :label "Old"))))
     (my-codex-define-agent
      'example :label "New" :buffer-prefix "new"
      :commands '((read-only . "new --read-only")
-                 (workspace-write . "new")))
+                 (workspace-write . "new")
+                 (resume . "new resume")))
     (should (= (length my-codex-agent-profiles) 1))
     (should (equal (my-codex--agent-label 'example) "New"))))
 
@@ -668,7 +683,24 @@
     (should-error (my-codex-define-agent 'example :commands nil))
     (should-error
      (my-codex-define-agent
-      'example :commands '((unknown . "example"))))))
+      'example :commands '((unknown . "example"))))
+    (dolist (commands
+             '(((workspace-write . "example")
+                (resume . "example resume"))
+               ((read-only . "example --read-only")
+                (resume . "example resume"))
+               ((read-only . "example --read-only")
+                (workspace-write . "example"))))
+      (should-error (my-codex-define-agent 'example :commands commands)))
+    (dolist (access-mode '(read-only workspace-write resume))
+      (should-error
+       (my-codex-define-agent
+        'example
+        :commands
+        (cons (cons access-mode "example duplicate")
+              '((read-only . "example --read-only")
+                (workspace-write . "example")
+                (resume . "example resume"))))))))
 
 (ert-deftest my-codex-project-instruction-files-follow-codex-scope ()
   (let* ((root (file-name-as-directory
