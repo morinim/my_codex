@@ -49,39 +49,9 @@
   '((t :inherit error))
   "Face used for FAIL labels in `my-codex-doctor'.")
 
-(defun my-codex--doctor-command-assignment-token-p (token)
-  "Return non-nil when TOKEN is a shell environment assignment."
-  (and (stringp token)
-       (string-match-p "\\`[[:alpha:]_][[:alnum:]_]*=" token)))
-
-(defun my-codex--doctor-command-executable-token (command)
-  "Return the executable shell token in COMMAND, or nil."
-  (when (and (stringp command)
-             (not (string-blank-p command)))
-    (let ((tokens (ignore-errors (split-string-shell-command command))))
-      (while (and tokens
-                  (my-codex--doctor-command-assignment-token-p (car tokens)))
-        (setq tokens (cdr tokens)))
-      (when (member (car tokens) '("command" "exec"))
-        (setq tokens (cdr tokens))
-        (while (and tokens
-                    (string-prefix-p "-" (car tokens)))
-          (when (member (car tokens) '("-a"))
-            (setq tokens (cdr tokens)))
-          (setq tokens (cdr tokens))))
-      (when (and tokens (string= (car tokens) "env"))
-        (setq tokens (cdr tokens))
-        (while (and tokens
-                    (or (my-codex--doctor-command-assignment-token-p (car tokens))
-                        (string-prefix-p "-" (car tokens))))
-          (when (member (car tokens) '("-u" "--unset" "-C" "--chdir"))
-            (setq tokens (cdr tokens)))
-          (setq tokens (cdr tokens))))
-      (car tokens))))
-
 (defun my-codex--doctor-command-status (label command)
   "Return a diagnostic row for configured shell COMMAND named LABEL."
-  (let* ((token (my-codex--doctor-command-executable-token command))
+  (let* ((token (my-codex--command-executable-token command))
          (available (and token (executable-find token))))
     (list (format "command: %s" label)
           (cond
@@ -92,12 +62,6 @@
            (available (format "%s (program found at %s)" command available))
            (token (format "%s (program `%s' not found)" command token))
            (t "Not configured")))))
-
-(defun my-codex--doctor-process-output (program &rest args)
-  "Run PROGRAM with ARGS and return a cons of exit status and output."
-  (with-temp-buffer
-    (let ((status (apply #'process-file program nil t nil args)))
-      (cons status (string-trim (buffer-string))))))
 
 (defun my-codex--doctor-require-vterm ()
   "Return a cons describing whether `vterm' can be loaded.
@@ -513,7 +477,7 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
   (let* ((root (my-codex-project-root))
          (project (project-current nil default-directory))
          (agent-cmd (my-codex--agent-command my-codex-agent 'read-only))
-         (agent-exec (my-codex--doctor-command-executable-token agent-cmd))
+         (agent-exec (my-codex--command-executable-token agent-cmd))
          (agent-path (and agent-exec (executable-find agent-exec)))
          (git (executable-find "git"))
          (gh (executable-find "gh")))
@@ -527,13 +491,13 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
             (or agent-path "Not found in exec-path"))
       (if agent-path
           (pcase-let ((`(,status . ,output)
-                       (my-codex--doctor-process-output
+                       (my-codex--process-output-result
                         agent-exec "--version")))
             (list (format "%s --version" agent-exec)
                   (if (eq status 0) 'ok 'fail)
-                  (if (string-empty-p output)
+                  (if (null output)
                       (format "Exited with status %s and no output" status)
-                    output)))
+                    (string-join output "\n"))))
         (list (format "%s --version" (or agent-exec "agent"))
               'fail
               (format "Skipped; %s not found" (or agent-exec "executable"))))
@@ -542,26 +506,26 @@ When FILE is nil, inspect `CODEX_HOME'/config.toml or ~/.codex/config.toml."
             (or git "Not found in exec-path"))
       (if git
           (pcase-let ((`(,status . ,output)
-                       (my-codex--doctor-process-output
+                       (my-codex--process-output-result
                         "git" "--version")))
             (list "Git version"
                   (if (eq status 0) 'ok 'fail)
-                  (if (string-empty-p output)
+                  (if (null output)
                       (format "Exited with status %s and no output" status)
-                    output)))
+                    (string-join output "\n"))))
         (list "Git version" 'fail "Skipped; git not found"))
       (list "GitHub CLI executable"
             (if gh 'ok 'warn)
             (or gh "Not found in exec-path; GitHub issue commands will fail"))
       (if gh
           (pcase-let ((`(,status . ,output)
-                       (my-codex--doctor-process-output
+                       (my-codex--process-output-result
                         "gh" "--version")))
             (list "gh --version"
                   (if (eq status 0) 'ok 'warn)
-                  (if (string-empty-p output)
+                  (if (null output)
                       (format "Exited with status %s and no output" status)
-                    (car (split-string output "\n")))))
+                    (car output))))
         (list "gh --version" 'warn "Skipped; gh not found"))
       (list "current directory is a project"
             (if project 'ok 'warn)

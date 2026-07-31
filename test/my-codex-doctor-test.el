@@ -9,16 +9,6 @@
 (defvar vterm-max-scrollback)
 (defvar explicit-shell-file-name)
 
-(ert-deftest my-codex-doctor-command-executable-token-handles-shell-prefixes ()
-  (should
-   (equal
-    (my-codex--doctor-command-executable-token
-     "FOO=1 command -v env BAR=2 --unset BAZ codex exec")
-    "codex")))
-
-(ert-deftest my-codex-doctor-command-executable-token-returns-nil-for-blank ()
-  (should-not (my-codex--doctor-command-executable-token "  ")))
-
 (ert-deftest my-codex-doctor-vterm-scrollback-warns-when-disabled ()
   (let ((my-codex-vterm-min-scrollback nil))
     (should

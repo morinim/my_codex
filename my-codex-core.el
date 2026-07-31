@@ -1171,6 +1171,36 @@ process.  When NOERROR is non-nil, return nil if no suitable session exists."
     (`(0 . ,lines) lines)
     (_ nil)))
 
+(defun my-codex--command-assignment-token-p (token)
+  "Return non-nil when TOKEN is a shell environment assignment."
+  (and (stringp token)
+       (string-match-p "\\`[[:alpha:]_][[:alnum:]_]*=" token)))
+
+(defun my-codex--command-executable-token (command)
+  "Return the executable shell token in COMMAND, or nil."
+  (when (and (stringp command)
+             (not (string-blank-p command)))
+    (let ((tokens (ignore-errors (split-string-shell-command command))))
+      (while (and tokens
+                  (my-codex--command-assignment-token-p (car tokens)))
+        (setq tokens (cdr tokens)))
+      (when (member (car tokens) '("command" "exec"))
+        (setq tokens (cdr tokens))
+        (while (and tokens
+                    (string-prefix-p "-" (car tokens)))
+          (when (member (car tokens) '("-a"))
+            (setq tokens (cdr tokens)))
+          (setq tokens (cdr tokens))))
+      (when (and tokens (string= (car tokens) "env"))
+        (setq tokens (cdr tokens))
+        (while (and tokens
+                    (or (my-codex--command-assignment-token-p (car tokens))
+                        (string-prefix-p "-" (car tokens))))
+          (when (member (car tokens) '("-u" "--unset" "-C" "--chdir"))
+            (setq tokens (cdr tokens)))
+          (setq tokens (cdr tokens))))
+      (car tokens))))
+
 (defun my-codex--process-output-result (program &rest args)
   "Run PROGRAM with ARGS and return (STATUS . LINES).
 

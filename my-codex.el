@@ -34,7 +34,6 @@
 (autoload 'my-codex-session-links-mode "my-codex-links" nil t)
 (autoload 'my-codex-vterm-integration-mode "my-codex-vterm" nil t)
 (autoload 'my-codex-eat-integration-mode "my-codex-eat" nil t)
-(autoload 'my-codex--doctor-command-executable-token "my-codex-doctor")
 (autoload 'my-codex-doctor "my-codex-doctor" nil t)
 (autoload 'my-codex--current-or-left-file-available-p "my-codex-git")
 (autoload 'my-codex--request-marked-output "my-codex-prompts")
@@ -611,7 +610,7 @@ When RESOLVE is non-nil, also require availability predicates to be defined."
    (lambda (agent)
      (ignore-errors
        (when-let ((program
-                   (my-codex--doctor-command-executable-token
+                   (my-codex--command-executable-token
                     (my-codex--agent-command agent 'read-only))))
          (executable-find program))))
    (my-codex--agent-ids)))

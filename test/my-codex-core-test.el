@@ -9,10 +9,21 @@
 (require 'my-codex-vterm)
 (require 'my-codex-eat)
 
-(ert-deftest my-codex-require-keeps-optional-modules-lazy ()
+(ert-deftest my-codex-command-executable-token-handles-shell-prefixes ()
+  (should
+   (equal
+    (my-codex--command-executable-token
+     "FOO=1 command -v env BAR=2 --unset BAZ codex exec")
+    "codex")))
+
+(ert-deftest my-codex-command-executable-token-returns-nil-for-blank ()
+  (should-not (my-codex--command-executable-token "  ")))
+
+(ert-deftest my-codex-setup-keeps-optional-modules-lazy ()
   (let* ((script '(progn
                     (setq load-prefer-newer t)
                     (require 'my-codex)
+                    (my-codex--setup-available-agents)
                     (prin1
                      (mapcar #'featurep
                              '(my-codex-prompts my-codex-diagnostics my-codex-git
